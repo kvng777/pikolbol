@@ -5,13 +5,15 @@ import { DayPicker } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/style.css'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ClosedDate } from '@/types/booking'
 
 interface CalendarPickerProps {
   selected: Date
   onSelect: (date: Date) => void
+  closedDates?: ClosedDate[]
 }
 
-export function CalendarPicker({ selected, onSelect }: CalendarPickerProps) {
+export function CalendarPicker({ selected, onSelect, closedDates = [] }: CalendarPickerProps) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -36,7 +38,19 @@ export function CalendarPicker({ selected, onSelect }: CalendarPickerProps) {
       <DayPicker
         mode="single"
         selected={selected}
-        onSelect={(date) => date && onSelect(date)}
+        // disable closed date ranges
+        disabled={closedDates.map(cd => ({ from: new Date(cd.start_date + 'T00:00:00'), to: new Date(cd.end_date + 'T00:00:00') }))}
+        onSelect={(date) => {
+          if (!date) return
+          const d = new Date(date)
+          d.setHours(0,0,0,0)
+          const isClosed = closedDates.some(cd => {
+            const from = new Date(cd.start_date + 'T00:00:00')
+            const to = new Date(cd.end_date + 'T00:00:00')
+            return d >= from && d <= to
+          })
+          if (!isClosed) onSelect(date)
+        }}
         fromDate={today}
         className="!font-sans"
         components={{
@@ -136,6 +150,9 @@ export function CalendarPicker({ selected, onSelect }: CalendarPickerProps) {
             outline: 'none',
             boxShadow: 'none',
           },
+          disabled: {
+            backgroundColor: 'lightgrey'
+          }
         }}
       />
       <style jsx global>{`

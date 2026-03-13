@@ -1,10 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
 import { format, addDays } from 'date-fns'
-import { useRouter } from 'next/navigation'
-import { useAllBookings, useAllDisabledSlots, useAddDisabledSlot, useRemoveDisabledSlot, useClosedDates, useAddClosedDate, useRemoveClosedDate } from '@/hooks/useBookings'
-import { useAuth } from '@/components/AuthProvider'
+import { useAdminPage } from '@/hooks/useAdminPage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -16,121 +13,49 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Trash2, Calendar, Clock, List, ArrowUpDown, Ban, Plus, Lock, LogOut } from 'lucide-react'
-import { toast } from 'sonner'
 import { generateTimeSlots } from '@/lib/timeSlotGenerator'
-import { deleteBookingAction } from '@/actions/bookings'
-
-type SortField = 'date' | 'time_slot' | 'name' | 'created_at'
-type SortOrder = 'asc' | 'desc'
-
-interface GroupedBooking {
-  key: string
-  name: string
-  email: string
-  phone: string
-  date: string
-  timeSlots: string[]
-  bookingIds: string[]
-  created_at: string
-}
 
 export default function AdminPage() {
-  const { user, loading: authLoading, signOut } = useAuth()
-  const router = useRouter()
-  const { data: bookings = [], isLoading: bookingsLoading, refetch } = useAllBookings()
-  const { data: allDisabledSlots = [], refetch: refetchDisabledSlots } = useAllDisabledSlots()
-  const { data: closedDates = [], refetch: refetchClosedDates } = useClosedDates()
-  const addDisabledSlot = useAddDisabledSlot()
-  const removeDisabledSlot = useRemoveDisabledSlot()
-  const addClosedDate = useAddClosedDate()
-  const removeClosedDate = useRemoveClosedDate()
-  
-  const [sortField, setSortField] = useState<SortField>('date')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
-  const [filterDate, setFilterDate] = useState<string>('')
-  
-  const [activeTab, setActiveTab] = useState<'bookings' | 'slots' | 'closed'>('bookings')
-  const [selectedDateForSlots, setSelectedDateForSlots] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
-  const [selectedSlots, setSelectedSlots] = useState<string[]>([])
-  const [closeStartDate, setCloseStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
-  const [closeEndDate, setCloseEndDate] = useState<string>(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
-  const [closeReason, setCloseReason] = useState<string>('')
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/admin/login')
-    }
-  }, [user, authLoading, router])
-
-  const handleSignOut = async () => {
-    await signOut()
-    router.push('/admin/login')
-  }
-
-  const allTimeSlots = generateTimeSlots()
-
-  // Group bookings by same person (name + email + phone + date)
-  const groupedBookings = useMemo(() => {
-    const filtered = bookings.filter((booking) => {
-      if (!filterDate) return true
-      return booking.date === filterDate
-    })
-
-    const groups = new Map<string, GroupedBooking>()
-    
-    filtered.forEach((booking) => {
-      const key = `${booking.name}-${booking.email}-${booking.phone}-${booking.date}`
-      
-      if (groups.has(key)) {
-        const group = groups.get(key)!
-        group.timeSlots.push(booking.time_slot)
-        group.bookingIds.push(booking.id)
-      } else {
-        groups.set(key, {
-          key,
-          name: booking.name,
-          email: booking.email,
-          phone: booking.phone,
-          date: booking.date,
-          timeSlots: [booking.time_slot],
-          bookingIds: [booking.id],
-          created_at: booking.created_at,
-        })
-      }
-    })
-
-    // Sort time slots within each group
-    groups.forEach((group) => {
-      group.timeSlots.sort()
-    })
-
-    return Array.from(groups.values())
-  }, [bookings, filterDate])
-
-  const sortedBookings = useMemo(() => {
-    return [...groupedBookings].sort((a, b) => {
-      let comparison = 0
-      switch (sortField) {
-        case 'date':
-          comparison = a.date.localeCompare(b.date)
-          break
-        case 'time_slot':
-          comparison = (a.timeSlots[0] || '').localeCompare(b.timeSlots[0] || '')
-          break
-        case 'name':
-          comparison = a.name.localeCompare(b.name)
-          break
-        case 'created_at':
-          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          break
-      }
-      return sortOrder === 'asc' ? comparison : -comparison
-    })
-  }, [groupedBookings, sortField, sortOrder])
-
-  const disabledSlotsForDate = useMemo(() => {
-    return allDisabledSlots.filter(s => s.date === selectedDateForSlots)
-  }, [allDisabledSlots, selectedDateForSlots])
+  const {
+    user,
+    authLoading,
+    handleSignOut,
+    // filters / sorting
+    sortField,
+    sortOrder,
+    handleSort,
+    filterDate,
+    setFilterDate,
+    // tabs / UI state
+    activeTab,
+    setActiveTab,
+    selectedDateForSlots,
+    setSelectedDateForSlots,
+    selectedSlots,
+    toggleSlotSelection,
+    closeStartDate,
+    setCloseStartDate,
+    closeEndDate,
+    setCloseEndDate,
+    closeReason,
+    setCloseReason,
+    // data
+    allTimeSlots,
+    groupedBookings,
+    sortedBookings,
+    disabledSlotsForDate,
+    allDisabledSlots,
+    closedDates,
+    // actions
+    handleDeleteBooking,
+    handleDeleteGroupedBooking,
+    handleAddDisabledSlots,
+    handleRemoveDisabledSlot,
+    handleAddClosedDate,
+    handleRemoveClosedDate,
+    addDisabledSlot,
+    addClosedDate,
+  } = useAdminPage()
 
   if (authLoading) {
     return (
@@ -149,121 +74,16 @@ export default function AdminPage() {
     )
   }
 
-  if (!user) {
-    return null
-  }
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortField(field)
-      setSortOrder('asc')
-    }
-  }
-
-  const handleDeleteBooking = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this booking?')) return
-    const result = await deleteBookingAction(id)
-    if (result.success) {
-      toast.success('Booking deleted')
-      refetch()
-    } else {
-      toast.error(result.error || 'Failed to delete')
-    }
-  }
-
-  const handleDeleteGroupedBooking = async (bookingIds: string[]) => {
-    const slotCount = bookingIds.length
-    const message = slotCount === 1 
-      ? 'Are you sure you want to delete this booking?' 
-      : `Are you sure you want to delete all ${slotCount} time slots for this booking?`
-    
-    if (!confirm(message)) return
-    
-    let successCount = 0
-    for (const id of bookingIds) {
-      const result = await deleteBookingAction(id)
-      if (result.success) successCount++
-    }
-    
-    if (successCount === slotCount) {
-      toast.success(slotCount === 1 ? 'Booking deleted' : `All ${slotCount} bookings deleted`)
-      refetch()
-    } else if (successCount > 0) {
-      toast.success(`${successCount} of ${slotCount} bookings deleted`)
-      refetch()
-    } else {
-      toast.error('Failed to delete bookings')
-    }
-  }
-
-  const handleAddDisabledSlots = async () => {
-    if (!selectedDateForSlots || selectedSlots.length === 0) {
-      toast.error('Please select a date and at least one time slot')
-      return
-    }
-    
-    for (const slot of selectedSlots) {
-      await addDisabledSlot.mutateAsync({ date: selectedDateForSlots, timeSlot: slot })
-    }
-    toast.success('Time slots disabled')
-    setSelectedSlots([])
-    refetchDisabledSlots()
-  }
-
-  const handleRemoveDisabledSlot = async (id: string) => {
-    const result = await removeDisabledSlot.mutateAsync(id)
-    if (result.success) {
-      toast.success('Time slot enabled')
-      refetchDisabledSlots()
-    } else {
-      toast.error(result.error || 'Failed to enable slot')
-    }
-  }
-
-  const handleAddClosedDate = async () => {
-    if (!closeStartDate || !closeEndDate) {
-      toast.error('Please select start and end dates')
-      return
-    }
-    
-    const result = await addClosedDate.mutateAsync({ 
-      startDate: closeStartDate, 
-      endDate: closeEndDate, 
-      reason: closeReason 
-    })
-    if (result.success) {
-      toast.success('Date range closed')
-      refetchClosedDates()
-      setCloseReason('')
-    } else {
-      toast.error(result.error || 'Failed to close dates')
-    }
-  }
-
-  const handleRemoveClosedDate = async (id: string) => {
-    const result = await removeClosedDate.mutateAsync(id)
-    if (result.success) {
-      toast.success('Date range opened')
-      refetchClosedDates()
-    } else {
-      toast.error(result.error || 'Failed to open dates')
-    }
-  }
-
-  const toggleSlotSelection = (slot: string) => {
-    setSelectedSlots(prev => 
-      prev.includes(slot) 
-        ? prev.filter(s => s !== slot)
-        : [...prev, slot]
-    )
-  }
+  if (!user) return null
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-teal-50">
       <div className="relative z-10 min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
+          <div className='pb-2 text-2xl'>
+            Hi! {user.email}
+          </div>
+
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
@@ -274,10 +94,11 @@ export default function AdminPage() {
               </h1>
               <p className="text-gray-500 mt-1">Manage all court bookings</p>
             </div>
+
             <div className="flex items-center gap-3">
               <div className="px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm">
                 <span className="text-gray-500">Total:</span>
-                <span className="text-gray-900 font-semibold ml-2">{bookings.length} bookings</span>
+                <span className="text-gray-900 font-semibold ml-2">{groupedBookings.length} bookings</span>
               </div>
               <Button variant="outline" size="sm" onClick={handleSignOut} className="text-gray-600">
                 <LogOut className="w-4 h-4 mr-2" />
@@ -325,12 +146,14 @@ export default function AdminPage() {
                       Filter by date
                     </label>
                   </div>
+
                   <input
                     type="date"
                     value={filterDate}
                     onChange={(e) => setFilterDate(e.target.value)}
                     className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                   />
+
                   {filterDate && (
                     <Button variant="ghost" size="sm" onClick={() => setFilterDate('')} className="text-gray-500 hover:text-gray-900">
                       Clear
@@ -352,11 +175,13 @@ export default function AdminPage() {
                       <TableHead className="cursor-pointer text-gray-500 hover:text-gray-900" onClick={() => handleSort('name')}>
                         <div className="flex items-center gap-2">Name <ArrowUpDown className="w-3 h-3" /></div>
                       </TableHead>
+                      <TableHead className="text-gray-500">Players</TableHead>
                       <TableHead className="text-gray-500">Phone</TableHead>
                       <TableHead className="text-gray-500">Email</TableHead>
                       <TableHead className="text-gray-500">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
+
                   <TableBody>
                     {sortedBookings.length === 0 ? (
                       <TableRow className="border-gray-100">
@@ -365,35 +190,35 @@ export default function AdminPage() {
                     ) : (
                       sortedBookings.map((group) => (
                         <TableRow key={group.key} className="border-gray-100 hover:bg-gray-50">
-                          <TableCell className="text-gray-900">{format(new Date(group.date + 'T00:00:00'), 'MMM d, yyyy')}</TableCell>
+                          <TableCell className="text-gray-900">
+                            <div className="flex flex-col">
+                              <span className="text-xs text-gray-400">ID: <span title={group.bookingIds[0] ?? ''} className="font-mono">
+                                {group.bookingIds[0]
+                                  ? (group.bookingIds[0].length > 8 ? `${group.bookingIds[0].slice(0,8)}...` : group.bookingIds[0])
+                                  : '—'
+                                }
+                              </span></span>
+                              <span className="mt-1">{format(new Date(group.date + 'T00:00:00'), 'MMM d, yyyy')}</span>
+                            </div>
+                          </TableCell>
+
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {group.timeSlots.map((slot) => (
-                                <span 
-                                  key={slot} 
-                                  className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium"
-                                >
-                                  {slot}
-                                </span>
+                                <span key={slot} className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">{slot}</span>
                               ))}
                             </div>
                           </TableCell>
+
                           <TableCell className="text-gray-900 font-medium">{group.name}</TableCell>
+                          <TableCell className="text-gray-900">{group.players ?? '-'}</TableCell>
                           <TableCell className="text-gray-500">{group.phone}</TableCell>
                           <TableCell className="text-gray-500">{group.email}</TableCell>
+
                           <TableCell>
-                            {user ? (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                onClick={() => handleDeleteGroupedBooking(group.bookingIds)} 
-                                className="text-gray-400 hover:text-red-600 hover:bg-red-50"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-gray-400">Login required</span>
-                            )}
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteGroupedBooking(group.bookingIds)} className="text-gray-400 hover:text-red-600 hover:bg-red-50">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))
@@ -418,6 +243,7 @@ export default function AdminPage() {
                       className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900"
                     />
                   </div>
+
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">Select Time Slots</label>
                     <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
@@ -443,18 +269,14 @@ export default function AdminPage() {
                       })}
                     </div>
                   </div>
+
                   {selectedSlots.length > 0 && (
                     <div className="p-3 bg-red-50 rounded-lg">
-                      <p className="text-sm text-red-700">
-                        {selectedSlots.length} slot(s) will be disabled: {selectedSlots.join(', ')}
-                      </p>
+                      <p className="text-sm text-red-700">{selectedSlots.length} slot(s) will be disabled: {selectedSlots.join(', ')}</p>
                     </div>
                   )}
-                  <Button 
-                    onClick={handleAddDisabledSlots} 
-                    disabled={selectedSlots.length === 0 || addDisabledSlot.isPending}
-                    className="w-full bg-red-500 hover:bg-red-600"
-                  >
+
+                  <Button onClick={handleAddDisabledSlots} disabled={selectedSlots.length === 0 || addDisabledSlot.isPending} className="w-full bg-red-500 hover:bg-red-600">
                     <Ban className="w-4 h-4 mr-2" />
                     {addDisabledSlot.isPending ? 'Disabling...' : 'Disable Selected Slots'}
                   </Button>
@@ -492,37 +314,20 @@ export default function AdminPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-gray-700 mb-2 block">Start Date</label>
-                      <input
-                        type="date"
-                        value={closeStartDate}
-                        onChange={(e) => setCloseStartDate(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900"
-                      />
+                      <input type="date" value={closeStartDate} onChange={(e) => setCloseStartDate(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900" />
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-700 mb-2 block">End Date</label>
-                      <input
-                        type="date"
-                        value={closeEndDate}
-                        onChange={(e) => setCloseEndDate(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900"
-                      />
+                      <input type="date" value={closeEndDate} onChange={(e) => setCloseEndDate(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900" />
                     </div>
                   </div>
+
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">Reason (optional)</label>
-                    <Input
-                      placeholder="e.g., Maintenance, Private event..."
-                      value={closeReason}
-                      onChange={(e) => setCloseReason(e.target.value)}
-                      className="bg-gray-50 border-gray-200"
-                    />
+                    <Input placeholder="e.g., Maintenance, Private event..." value={closeReason} onChange={(e) => setCloseReason(e.target.value)} className="bg-gray-50 border-gray-200" />
                   </div>
-                  <Button 
-                    onClick={handleAddClosedDate} 
-                    disabled={addClosedDate.isPending}
-                    className="w-full bg-red-500 hover:bg-red-600"
-                  >
+
+                  <Button onClick={handleAddClosedDate} disabled={addClosedDate.isPending} className="w-full bg-red-500 hover:bg-red-600">
                     <Lock className="w-4 h-4 mr-2" />
                     {addClosedDate.isPending ? 'Closing...' : 'Close Court'}
                   </Button>

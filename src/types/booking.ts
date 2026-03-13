@@ -7,6 +7,7 @@ export interface Booking {
   time_slot: string
   court_number: number
   created_at: string
+  players: number
 }
 
 export interface TimeSlot {
@@ -21,6 +22,7 @@ export interface BookingFormData {
   date: string
   timeSlot: string
   courtNumber: number
+  players?: number
 }
 
 export interface CreateBookingResult {

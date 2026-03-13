@@ -50,6 +50,16 @@ export function BookingCard({ bookings }: BookingCardProps) {
           </div>
 
           <div className="space-y-4">
+            {/* Players (optional) - show if booking record contains players field */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+              <div className="p-2 rounded-lg bg-emerald-100">
+                <User className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Players</p>
+                <p className="text-gray-900 font-medium">{firstBooking.players}</p>
+              </div>
+            </div>
             <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
               <div className="p-2 rounded-lg bg-emerald-100">
                 <Calendar className="w-5 h-5 text-emerald-600" />

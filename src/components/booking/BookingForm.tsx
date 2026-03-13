@@ -13,6 +13,7 @@ const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   phone: z.string().min(10, 'Please enter a valid phone number'),
   email: z.string().email('Please enter a valid email address'),
+  players: z.number().min(2, 'Minimum of 2 players'),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -34,8 +35,11 @@ export function BookingForm({
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
+    watch,
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
+    defaultValues: { players: 2 },
   })
 
   const handleFormSubmit = async (data: FormData) => {
@@ -65,6 +69,42 @@ export function BookingForm({
         </div>
         {errors.name && (
           <p className="text-sm text-red-500">{errors.name.message}</p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="players" className="text-gray-700 text-sm">Players</Label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const current = Number(watch('players') ?? 2)
+              setValue('players', Math.max(2, current - 1), { shouldValidate: true, shouldDirty: true })
+            }}
+            className="w-10 h-10 bg-gray-50 border border-gray-200 rounded text-gray-700"
+          >-
+          </button>
+
+          <Input
+            id="players"
+            type="number"
+            min={2}
+            className="w-20 text-center bg-gray-50 border-gray-200 text-gray-900"
+            {...register('players', { valueAsNumber: true })}
+          />
+
+          <button
+            type="button"
+            onClick={() => {
+              const current = Number(watch('players') ?? 2)
+              setValue('players', current + 1, { shouldValidate: true, shouldDirty: true })
+            }}
+            className="w-10 h-10 bg-gray-50 border border-gray-200 rounded text-gray-700"
+          >+
+          </button>
+        </div>
+        {errors.players && (
+          <p className="text-sm text-red-500">{errors.players.message}</p>
         )}
       </div>
 

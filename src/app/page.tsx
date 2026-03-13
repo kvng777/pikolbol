@@ -49,19 +49,6 @@ export default function Home() {
     }
   }
 
-  const handleBookMultiple = async () => {
-    for (const slot of selectedSlots) {
-      await handleSubmit({
-        name: '',
-        phone: '',
-        email: '',
-        date: dateString,
-        timeSlot: slot,
-        courtNumber: 1,
-      } as BookingFormData)
-    }
-  }
-
   const handleNewBooking = () => {
     setSelectedSlots([])
     setConfirmedBookings([])
@@ -115,6 +102,7 @@ export default function Home() {
                 <CalendarPicker
                   selected={selectedDate}
                   onSelect={setSelectedDate}
+                  closedDates={closedDates}
                 />
               </div>
             </div>

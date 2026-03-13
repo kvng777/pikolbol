@@ -41,6 +41,7 @@ export async function createBooking(booking: BookingFormData): Promise<CreateBoo
       date: booking.date,
       time_slot: booking.timeSlot,
       court_number: booking.courtNumber,
+      players: booking.players,
     })
     .select()
     .single()
@@ -66,6 +67,13 @@ export async function createBooking(booking: BookingFormData): Promise<CreateBoo
 
 export async function deleteBooking(id: string): Promise<{ success: boolean; error?: string }> {
   console.log('Deleting booking with id:', id)
+  // Debug: check whether the booking exists and is accessible before attempting delete
+  try {
+    const existing = await getBookingById(id)
+    console.log('Existing booking before delete:', existing)
+  } catch (err) {
+    console.log('Error fetching existing booking before delete:', err)
+  }
   const { error, data } = await supabase
     .from('bookings')
     .delete()
