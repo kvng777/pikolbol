@@ -130,8 +130,8 @@ export function CalendarPicker({ selected, onSelect }: CalendarPickerProps) {
             boxShadow: 'none',
           },
           selected: {
-            backgroundColor: 'transparent',
-            color: '#059669',
+            backgroundColor: '#10b981',
+            color: 'white',
             fontWeight: '600',
             outline: 'none',
             boxShadow: 'none',
@@ -153,20 +153,17 @@ export function CalendarPicker({ selected, onSelect }: CalendarPickerProps) {
         }
         .rdp-root {
           --rdp-accent-color: transparent !important;
-          --rdp-accent-background-color: transparent !important;
+          // --rdp-accent-background-color: transparent !important;
         }
         .rdp-selected .rdp-day_button {
           background-color: transparent !important;
-          color: #059669 !important;
+          // color: #059669 !important;
           font-weight: 600 !important;
         }
         .rdp-selected {
-          background-color: transparent !important;
         }
         .rdp-day_button[aria-selected="true"] {
-          background-color: transparent !important;
-          color: #059669 !important;
-          font-weight: 600 !important;
+
         }
         .rdp-chevron {
           fill: #059669 !important;

@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { format, addDays } from 'date-fns'
 import { useRouter } from 'next/navigation'
 import { useAllBookings, useAllDisabledSlots, useAddDisabledSlot, useRemoveDisabledSlot, useClosedDates, useAddClosedDate, useRemoveClosedDate } from '@/hooks/useBookings'
-import { deleteBookingAction } from '@/actions/bookings'
 import { useAuth } from '@/components/AuthProvider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,12 +15,24 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Trash2, Calendar, Clock, List, ArrowUpDown, Ban, Plus, X, Lock, LogOut } from 'lucide-react'
+import { Trash2, Calendar, Clock, List, ArrowUpDown, Ban, Plus, Lock, LogOut } from 'lucide-react'
 import { toast } from 'sonner'
 import { generateTimeSlots } from '@/lib/timeSlotGenerator'
+import { deleteBookingAction } from '@/actions/bookings'
 
 type SortField = 'date' | 'time_slot' | 'name' | 'created_at'
 type SortOrder = 'asc' | 'desc'
+
+interface GroupedBooking {
+  key: string
+  name: string
+  email: string
+  phone: string
+  date: string
+  timeSlots: string[]
+  bookingIds: string[]
+  created_at: string
+}
 
 export default function AdminPage() {
   const { user, loading: authLoading, signOut } = useAuth()
@@ -57,6 +68,69 @@ export default function AdminPage() {
   }
 
   const allTimeSlots = generateTimeSlots()
+
+  // Group bookings by same person (name + email + phone + date)
+  const groupedBookings = useMemo(() => {
+    const filtered = bookings.filter((booking) => {
+      if (!filterDate) return true
+      return booking.date === filterDate
+    })
+
+    const groups = new Map<string, GroupedBooking>()
+    
+    filtered.forEach((booking) => {
+      const key = `${booking.name}-${booking.email}-${booking.phone}-${booking.date}`
+      
+      if (groups.has(key)) {
+        const group = groups.get(key)!
+        group.timeSlots.push(booking.time_slot)
+        group.bookingIds.push(booking.id)
+      } else {
+        groups.set(key, {
+          key,
+          name: booking.name,
+          email: booking.email,
+          phone: booking.phone,
+          date: booking.date,
+          timeSlots: [booking.time_slot],
+          bookingIds: [booking.id],
+          created_at: booking.created_at,
+        })
+      }
+    })
+
+    // Sort time slots within each group
+    groups.forEach((group) => {
+      group.timeSlots.sort()
+    })
+
+    return Array.from(groups.values())
+  }, [bookings, filterDate])
+
+  const sortedBookings = useMemo(() => {
+    return [...groupedBookings].sort((a, b) => {
+      let comparison = 0
+      switch (sortField) {
+        case 'date':
+          comparison = a.date.localeCompare(b.date)
+          break
+        case 'time_slot':
+          comparison = (a.timeSlots[0] || '').localeCompare(b.timeSlots[0] || '')
+          break
+        case 'name':
+          comparison = a.name.localeCompare(b.name)
+          break
+        case 'created_at':
+          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          break
+      }
+      return sortOrder === 'asc' ? comparison : -comparison
+    })
+  }, [groupedBookings, sortField, sortOrder])
+
+  const disabledSlotsForDate = useMemo(() => {
+    return allDisabledSlots.filter(s => s.date === selectedDateForSlots)
+  }, [allDisabledSlots, selectedDateForSlots])
 
   if (authLoading) {
     return (
@@ -96,6 +170,31 @@ export default function AdminPage() {
       refetch()
     } else {
       toast.error(result.error || 'Failed to delete')
+    }
+  }
+
+  const handleDeleteGroupedBooking = async (bookingIds: string[]) => {
+    const slotCount = bookingIds.length
+    const message = slotCount === 1 
+      ? 'Are you sure you want to delete this booking?' 
+      : `Are you sure you want to delete all ${slotCount} time slots for this booking?`
+    
+    if (!confirm(message)) return
+    
+    let successCount = 0
+    for (const id of bookingIds) {
+      const result = await deleteBookingAction(id)
+      if (result.success) successCount++
+    }
+    
+    if (successCount === slotCount) {
+      toast.success(slotCount === 1 ? 'Booking deleted' : `All ${slotCount} bookings deleted`)
+      refetch()
+    } else if (successCount > 0) {
+      toast.success(`${successCount} of ${slotCount} bookings deleted`)
+      refetch()
+    } else {
+      toast.error('Failed to delete bookings')
     }
   }
 
@@ -160,32 +259,6 @@ export default function AdminPage() {
         : [...prev, slot]
     )
   }
-
-  const filteredBookings = bookings.filter((booking) => {
-    if (!filterDate) return true
-    return booking.date === filterDate
-  })
-
-  const sortedBookings = [...filteredBookings].sort((a, b) => {
-    let comparison = 0
-    switch (sortField) {
-      case 'date':
-        comparison = a.date.localeCompare(b.date)
-        break
-      case 'time_slot':
-        comparison = a.time_slot.localeCompare(b.time_slot)
-        break
-      case 'name':
-        comparison = a.name.localeCompare(b.name)
-        break
-      case 'created_at':
-        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        break
-    }
-    return sortOrder === 'asc' ? comparison : -comparison
-  })
-
-  const disabledSlotsForDate = allDisabledSlots.filter(s => s.date === selectedDateForSlots)
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-teal-50">
@@ -290,17 +363,37 @@ export default function AdminPage() {
                         <TableCell colSpan={6} className="text-center py-12 text-gray-500">No bookings found</TableCell>
                       </TableRow>
                     ) : (
-                      sortedBookings.map((booking) => (
-                        <TableRow key={booking.id} className="border-gray-100 hover:bg-gray-50">
-                          <TableCell className="text-gray-900">{format(new Date(booking.date + 'T00:00:00'), 'MMM d, yyyy')}</TableCell>
-                          <TableCell className="text-gray-600">{booking.time_slot}</TableCell>
-                          <TableCell className="text-gray-900 font-medium">{booking.name}</TableCell>
-                          <TableCell className="text-gray-500">{booking.phone}</TableCell>
-                          <TableCell className="text-gray-500">{booking.email}</TableCell>
+                      sortedBookings.map((group) => (
+                        <TableRow key={group.key} className="border-gray-100 hover:bg-gray-50">
+                          <TableCell className="text-gray-900">{format(new Date(group.date + 'T00:00:00'), 'MMM d, yyyy')}</TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteBooking(booking.id)} className="text-gray-400 hover:text-red-600 hover:bg-red-50">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <div className="flex flex-wrap gap-1">
+                              {group.timeSlots.map((slot) => (
+                                <span 
+                                  key={slot} 
+                                  className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium"
+                                >
+                                  {slot}
+                                </span>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-gray-900 font-medium">{group.name}</TableCell>
+                          <TableCell className="text-gray-500">{group.phone}</TableCell>
+                          <TableCell className="text-gray-500">{group.email}</TableCell>
+                          <TableCell>
+                            {user ? (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => handleDeleteGroupedBooking(group.bookingIds)} 
+                                className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-gray-400">Login required</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))

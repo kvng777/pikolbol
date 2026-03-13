@@ -20,7 +20,7 @@ type FormData = z.infer<typeof formSchema>
 interface BookingFormProps {
   selectedDate: string
   selectedSlots: string[]
-  onSubmit: (data: BookingFormData) => void
+  onSubmit: (data: BookingFormData) => Promise<void>
   isSubmitting?: boolean
 }
 
@@ -38,13 +38,16 @@ export function BookingForm({
     resolver: zodResolver(formSchema),
   })
 
-  const handleFormSubmit = (data: FormData) => {
-    onSubmit({
-      ...data,
-      date: selectedDate,
-      timeSlot: selectedSlots[0],
-      courtNumber: 1,
-    })
+  const handleFormSubmit = async (data: FormData) => {
+    // Create a booking for each selected slot
+    for (const slot of selectedSlots) {
+      await onSubmit({
+        ...data,
+        date: selectedDate,
+        timeSlot: slot,
+        courtNumber: 1,
+      })
+    }
   }
 
   return (

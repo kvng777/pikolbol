@@ -1,3 +1,5 @@
+'use client'
+
 import { createClient as _createClient, SupabaseClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!

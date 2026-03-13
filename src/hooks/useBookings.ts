@@ -9,7 +9,8 @@ import {
   getAllDisabledSlotsAction,
   getClosedDatesAction,
   addClosedDateAction,
-  removeClosedDateAction
+  removeClosedDateAction,
+  deleteBookingAction,
 } from '@/actions/bookings'
 
 const CACHE_TIME = 5 * 60 * 1000 // 5 minutes
@@ -108,6 +109,18 @@ export function useRemoveClosedDate() {
     mutationFn: (id: string) => removeClosedDateAction(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['closedDates'] })
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
+    },
+  })
+}
+
+export function useDeleteBooking() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => deleteBookingAction(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['allBookings'] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
     },
   })

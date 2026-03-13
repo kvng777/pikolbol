@@ -72,9 +72,7 @@ export default function Home() {
       <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-teal-50">
         <main className="relative z-10 min-h-screen flex items-center justify-center py-12 px-4">
           <div className="max-w-lg w-full space-y-4">
-            {confirmedBookings.map((booking, idx) => (
-              <BookingCard key={idx} booking={booking} />
-            ))}
+            <BookingCard bookings={confirmedBookings} />
             <div className="text-center mt-8">
               <button
                 onClick={handleNewBooking}
