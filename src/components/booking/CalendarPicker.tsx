@@ -38,7 +38,6 @@ export function CalendarPicker({ selected, onSelect, closedDates = [] }: Calenda
       <DayPicker
         mode="single"
         selected={selected}
-        // disable closed date ranges
         disabled={closedDates.map(cd => ({ from: new Date(cd.start_date + 'T00:00:00'), to: new Date(cd.end_date + 'T00:00:00') }))}
         onSelect={(date) => {
           if (!date) return
@@ -151,7 +150,11 @@ export function CalendarPicker({ selected, onSelect, closedDates = [] }: Calenda
             boxShadow: 'none',
           },
           disabled: {
-            backgroundColor: 'lightgrey'
+            // diagonal slashes using a repeating linear gradient — more obvious than a flat gray
+            backgroundImage: 'repeating-linear-gradient(135deg, rgba(203,213,225,0.7) 0 6px, transparent 6px 12px)',
+            backgroundColor: '#e5e7eb',
+            backgroundRepeat: 'repeat',
+            color: '#9ca3af',
           }
         }}
       />

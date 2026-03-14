@@ -37,6 +37,7 @@ export function BookingForm({
     formState: { errors },
     setValue,
     watch,
+    getValues,
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: { players: 2 },
@@ -53,6 +54,13 @@ export function BookingForm({
       })
     }
   }
+
+  // Dynamic pricing: base Php200 covers up to 4 players; +50 per extra player
+  const playersCount = Number(watch('players') ?? 2)
+  const basePrice = 200
+  const extra = Math.max(0, playersCount - 4)
+  const totalCost = basePrice + extra * 50
+  const formattedTotal = `Php${totalCost.toLocaleString()}`
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
@@ -73,35 +81,39 @@ export function BookingForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="players" className="text-gray-700 text-sm">Players</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="players" className="text-gray-700 text-sm">Players</Label>
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => {
-              const current = Number(watch('players') ?? 2)
+              const current = Number(getValues('players') ?? 2)
               setValue('players', Math.max(2, current - 1), { shouldValidate: true, shouldDirty: true })
             }}
-            className="w-10 h-10 bg-gray-50 border border-gray-200 rounded text-gray-700"
+            className="w-8 h-8 bg-gray-50 border border-gray-200 rounded text-gray-700"
           >-
           </button>
 
           <Input
             id="players"
             type="number"
+            disabled
             min={2}
-            className="w-20 text-center bg-gray-50 border-gray-200 text-gray-900"
+            className="w-10 text-center bg-gray-50 border-gray-200 text-gray-900"
             {...register('players', { valueAsNumber: true })}
           />
 
           <button
             type="button"
             onClick={() => {
-              const current = Number(watch('players') ?? 2)
+              const current = Number(getValues('players') ?? 2)
               setValue('players', current + 1, { shouldValidate: true, shouldDirty: true })
             }}
-            className="w-10 h-10 bg-gray-50 border border-gray-200 rounded text-gray-700"
+            className="w-8 h-8 bg-gray-50 border border-gray-200 rounded text-gray-700"
           >+
           </button>
+          <span className="text-s text-gray-500">If {'>'} 4 players, additional Php50 per player</span>
         </div>
         {errors.players && (
           <p className="text-sm text-red-500">{errors.players.message}</p>
@@ -156,9 +168,13 @@ export function BookingForm({
       <Button 
         type="submit" 
         disabled={isSubmitting}
-        className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-0 h-11 font-medium"
+        className="text-lg w-full bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-0 h-11 font-medium"
       >
-        {isSubmitting ? 'Booking...' : selectedSlots.length > 1 ? `Book ${selectedSlots.length} Slots` : 'Confirm Booking'}
+        {isSubmitting ? 'Booking...' : (
+          selectedSlots.length > 1 
+            ? `Book ${selectedSlots.length} Slots — ${formattedTotal}` 
+            : `Confirm Booking — ${formattedTotal}`
+        )}
       </Button>
     </form>
   )
