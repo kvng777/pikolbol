@@ -5,11 +5,15 @@ import { format } from 'date-fns'
 import { CheckCircle2, Calendar, Clock, MapPin, User, Phone, Mail } from 'lucide-react'
 
 interface BookingCardProps {
-  booking: Booking
+  bookings: Booking[]
 }
 
-export function BookingCard({ booking }: BookingCardProps) {
-  const formattedDate = format(new Date(booking.date + 'T00:00:00'), 'EEEE, MMMM d, yyyy')
+export function BookingCard({ bookings }: BookingCardProps) {
+  if (bookings.length === 0) return null
+
+  const firstBooking = bookings[0]
+  const formattedDate = format(new Date(firstBooking.date + 'T00:00:00'), 'EEEE, MMMM d, yyyy')
+  const timeSlots = bookings.map(b => b.time_slot).sort()
 
   return (
     <div className="relative">
@@ -20,7 +24,11 @@ export function BookingCard({ booking }: BookingCardProps) {
             <CheckCircle2 className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900">Booking Confirmed!</h2>
-          <p className="text-gray-500 mt-1">Your reservation has been saved</p>
+          <p className="text-gray-500 mt-1">
+            {bookings.length === 1 
+              ? 'Your reservation has been saved' 
+              : `${bookings.length} time slots have been reserved`}
+          </p>
         </div>
 
         <div className="p-8">
@@ -29,19 +37,29 @@ export function BookingCard({ booking }: BookingCardProps) {
               <User className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-gray-900 font-semibold text-lg">{booking.name}</p>
+              <p className="text-gray-900 font-semibold text-lg">{firstBooking.name}</p>
               <div className="flex items-center gap-2 text-gray-500 text-sm">
                 <Mail className="w-3 h-3" />
-                {booking.email}
+                {firstBooking.email}
               </div>
               <div className="flex items-center gap-2 text-gray-500 text-sm">
                 <Phone className="w-3 h-3" />
-                {booking.phone}
+                {firstBooking.phone}
               </div>
             </div>
           </div>
 
           <div className="space-y-4">
+            {/* Players (optional) - show if booking record contains players field */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+              <div className="p-2 rounded-lg bg-emerald-100">
+                <User className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Players</p>
+                <p className="text-gray-900 font-medium">{firstBooking.players}</p>
+              </div>
+            </div>
             <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
               <div className="p-2 rounded-lg bg-emerald-100">
                 <Calendar className="w-5 h-5 text-emerald-600" />
@@ -52,25 +70,36 @@ export function BookingCard({ booking }: BookingCardProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-50">
               <div className="p-2 rounded-lg bg-emerald-100">
                 <Clock className="w-5 h-5 text-emerald-600" />
               </div>
-              <div>
-                <p className="text-xs text-gray-500">Time</p>
-                <p className="text-gray-900 font-medium">{booking.time_slot}</p>
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 mb-1">
+                  {timeSlots.length === 1 ? 'Time' : `Time Slots (${timeSlots.length})`}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {timeSlots.map((slot) => (
+                    <span 
+                      key={slot} 
+                      className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium"
+                    >
+                      {slot}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+            {/* <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
               <div className="p-2 rounded-lg bg-emerald-100">
                 <MapPin className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
                 <p className="text-xs text-gray-500">Court</p>
-                <p className="text-gray-900 font-medium">Court {booking.court_number}</p>
+                <p className="text-gray-900 font-medium">Court {firstBooking.court_number}</p>
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

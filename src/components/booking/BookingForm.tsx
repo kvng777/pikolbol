@@ -13,6 +13,7 @@ const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   phone: z.string().min(10, 'Please enter a valid phone number'),
   email: z.string().email('Please enter a valid email address'),
+  players: z.number().min(2, 'Minimum of 2 players'),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -20,7 +21,7 @@ type FormData = z.infer<typeof formSchema>
 interface BookingFormProps {
   selectedDate: string
   selectedSlots: string[]
-  onSubmit: (data: BookingFormData) => void
+  onSubmit: (data: BookingFormData) => Promise<void>
   isSubmitting?: boolean
 }
 
@@ -34,18 +35,32 @@ export function BookingForm({
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
+    watch,
+    getValues,
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
+    defaultValues: { players: 2 },
   })
 
-  const handleFormSubmit = (data: FormData) => {
-    onSubmit({
-      ...data,
-      date: selectedDate,
-      timeSlot: selectedSlots[0],
-      courtNumber: 1,
-    })
+  const handleFormSubmit = async (data: FormData) => {
+    // Create a booking for each selected slot
+    for (const slot of selectedSlots) {
+      await onSubmit({
+        ...data,
+        date: selectedDate,
+        timeSlot: slot,
+        courtNumber: 1,
+      })
+    }
   }
+
+  // Dynamic pricing: base Php200 covers up to 4 players; +50 per extra player
+  const playersCount = Number(watch('players') ?? 2)
+  const basePrice = 200
+  const extra = Math.max(0, playersCount - 4)
+  const totalCost = basePrice + extra * 50
+  const formattedTotal = `Php${totalCost.toLocaleString()}`
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
@@ -62,6 +77,46 @@ export function BookingForm({
         </div>
         {errors.name && (
           <p className="text-sm text-red-500">{errors.name.message}</p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="players" className="text-gray-700 text-sm">Players</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const current = Number(getValues('players') ?? 2)
+              setValue('players', Math.max(2, current - 1), { shouldValidate: true, shouldDirty: true })
+            }}
+            className="w-8 h-8 bg-gray-50 border border-gray-200 rounded text-gray-700"
+          >-
+          </button>
+
+          <Input
+            id="players"
+            type="number"
+            disabled
+            min={2}
+            className="w-10 text-center bg-gray-50 border-gray-200 text-gray-900"
+            {...register('players', { valueAsNumber: true })}
+          />
+
+          <button
+            type="button"
+            onClick={() => {
+              const current = Number(getValues('players') ?? 2)
+              setValue('players', current + 1, { shouldValidate: true, shouldDirty: true })
+            }}
+            className="w-8 h-8 bg-gray-50 border border-gray-200 rounded text-gray-700"
+          >+
+          </button>
+          <span className="text-s text-gray-500">If {'>'} 4 players, additional Php50 per player</span>
+        </div>
+        {errors.players && (
+          <p className="text-sm text-red-500">{errors.players.message}</p>
         )}
       </div>
 
@@ -113,9 +168,13 @@ export function BookingForm({
       <Button 
         type="submit" 
         disabled={isSubmitting}
-        className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-0 h-11 font-medium"
+        className="text-lg w-full bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-0 h-11 font-medium"
       >
-        {isSubmitting ? 'Booking...' : selectedSlots.length > 1 ? `Book ${selectedSlots.length} Slots` : 'Confirm Booking'}
+        {isSubmitting ? 'Booking...' : (
+          selectedSlots.length > 1 
+            ? `Book ${selectedSlots.length} Slots — ${formattedTotal}` 
+            : `Confirm Booking — ${formattedTotal}`
+        )}
       </Button>
     </form>
   )

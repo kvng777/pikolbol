@@ -10,12 +10,13 @@ interface TimeSlotPickerProps {
   isLoading?: boolean
 }
 
-export function TimeSlotPicker({ slots, selectedSlots, onSelectSlots, isLoading }: TimeSlotPickerProps) {
+export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoading = false }: TimeSlotPickerProps) {
   const toggleSlot = (slot: string) => {
-    if (selectedSlots.includes(slot)) {
-      onSelectSlots(selectedSlots.filter(s => s !== slot))
+    const current = selectedSlots
+    if (current.includes(slot)) {
+      onSelectSlots(current.filter(s => s !== slot))
     } else {
-      onSelectSlots([...selectedSlots, slot])
+      onSelectSlots([...current, slot])
     }
   }
 

@@ -5,13 +5,15 @@ import { DayPicker } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/style.css'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ClosedDate } from '@/types/booking'
 
 interface CalendarPickerProps {
   selected: Date
   onSelect: (date: Date) => void
+  closedDates?: ClosedDate[]
 }
 
-export function CalendarPicker({ selected, onSelect }: CalendarPickerProps) {
+export function CalendarPicker({ selected, onSelect, closedDates = [] }: CalendarPickerProps) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -36,7 +38,18 @@ export function CalendarPicker({ selected, onSelect }: CalendarPickerProps) {
       <DayPicker
         mode="single"
         selected={selected}
-        onSelect={(date) => date && onSelect(date)}
+        disabled={closedDates.map(cd => ({ from: new Date(cd.start_date + 'T00:00:00'), to: new Date(cd.end_date + 'T00:00:00') }))}
+        onSelect={(date) => {
+          if (!date) return
+          const d = new Date(date)
+          d.setHours(0,0,0,0)
+          const isClosed = closedDates.some(cd => {
+            const from = new Date(cd.start_date + 'T00:00:00')
+            const to = new Date(cd.end_date + 'T00:00:00')
+            return d >= from && d <= to
+          })
+          if (!isClosed) onSelect(date)
+        }}
         fromDate={today}
         className="!font-sans"
         components={{
@@ -130,12 +143,19 @@ export function CalendarPicker({ selected, onSelect }: CalendarPickerProps) {
             boxShadow: 'none',
           },
           selected: {
-            backgroundColor: 'transparent',
-            color: '#059669',
+            backgroundColor: '#10b981',
+            color: 'white',
             fontWeight: '600',
             outline: 'none',
             boxShadow: 'none',
           },
+          disabled: {
+            // diagonal slashes using a repeating linear gradient — more obvious than a flat gray
+            backgroundImage: 'repeating-linear-gradient(135deg, rgba(203,213,225,0.7) 0 6px, transparent 6px 12px)',
+            backgroundColor: '#e5e7eb',
+            backgroundRepeat: 'repeat',
+            color: '#9ca3af',
+          }
         }}
       />
       <style jsx global>{`
@@ -153,20 +173,17 @@ export function CalendarPicker({ selected, onSelect }: CalendarPickerProps) {
         }
         .rdp-root {
           --rdp-accent-color: transparent !important;
-          --rdp-accent-background-color: transparent !important;
+          // --rdp-accent-background-color: transparent !important;
         }
         .rdp-selected .rdp-day_button {
           background-color: transparent !important;
-          color: #059669 !important;
+          // color: #059669 !important;
           font-weight: 600 !important;
         }
         .rdp-selected {
-          background-color: transparent !important;
         }
         .rdp-day_button[aria-selected="true"] {
-          background-color: transparent !important;
-          color: #059669 !important;
-          font-weight: 600 !important;
+
         }
         .rdp-chevron {
           fill: #059669 !important;

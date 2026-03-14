@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase } from './supabase-server'
 import { Booking, BookingFormData, CreateBookingResult, DisabledSlot, ClosedDate } from '@/types/booking'
 
 export async function getBookingsByDate(date: string): Promise<Booking[]> {
@@ -41,6 +41,7 @@ export async function createBooking(booking: BookingFormData): Promise<CreateBoo
       date: booking.date,
       time_slot: booking.timeSlot,
       court_number: booking.courtNumber,
+      players: booking.players,
     })
     .select()
     .single()
@@ -65,15 +66,34 @@ export async function createBooking(booking: BookingFormData): Promise<CreateBoo
 }
 
 export async function deleteBooking(id: string): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabase
+  console.log('Deleting booking with id:', id)
+  // Debug: check whether the booking exists and is accessible before attempting delete
+  try {
+    const existing = await getBookingById(id)
+    console.log('Existing booking before delete:', existing)
+  } catch (err) {
+    console.log('Error fetching existing booking before delete:', err)
+  }
+  const { error, data } = await supabase
     .from('bookings')
     .delete()
     .eq('id', id)
+    .select()
+
+  console.log('Supabase delete result:', { error, data })
 
   if (error) {
     return {
       success: false,
       error: error.message,
+    }
+  }
+
+  // Check if data is empty (no row deleted)
+  if (!data || data.length === 0) {
+    return {
+      success: false,
+      error: 'No booking deleted. ID may be incorrect.',
     }
   }
 
@@ -184,4 +204,19 @@ export async function isDateClosed(date: string): Promise<boolean> {
   }
 
   return (data?.length ?? 0) > 0
+}
+
+export async function getBookingById(id: string): Promise<Booking | null> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    console.error('Error fetching booking by ID:', error)
+    return null
+  }
+
+  return data || null
 }
