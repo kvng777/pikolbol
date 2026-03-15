@@ -1,11 +1,11 @@
 'use client'
 
 import Image from "next/image"
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, User } from 'lucide-react'
 
 export default function HeroSection({
   // title = 'Pikolbol',
-  subtitle = 'Book your pickleball court in seconds',
+  // subtitle = 'Book your pickleball court in seconds',
 }: {
   title?: string
   subtitle?: string
@@ -25,33 +25,44 @@ export default function HeroSection({
         />
 
         {/* dark overlay to improve text contrast */}
-        <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
+        <div className="absolute inset-0 bg-black/60" aria-hidden="true" />
 
         {/* logo + content overlay (clickable to scroll to booking) */}
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center px-4 cursor-pointer"
-          role="button"
-          tabIndex={0}
-          aria-label="Scroll to booking section"
-          onClick={() => {
-            const el = document.getElementById('book')
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              const el = document.getElementById('book')
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }
-          }}
-        >
-          <div className="inline-flex items-center justify-center w-32 h-32 rounded-full mb-6 shadow-lg shadow-emerald-500/25 bg-white/40">
-            <Image src="/logo-color.png" alt="Pikolbol logo" width={128} height={128} className="object-contain" />
+        <div className="absolute inset-0 flex items-center justify-center px-4">
+          <div
+            className="w-full max-w-5xl mx-auto flex  flex-col sm:flex-row items-center md:gap-8 gap:4 md:items-stretch"
+            role="group"
+            aria-label="Hero content"
+          >
+            {/* logo column */}
+            <div
+              className="items-center justify-center md:justify-start cursor-pointer"
+              onClick={() => {
+                const el = document.getElementById('book')
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  const el = document.getElementById('book')
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              }}
+              tabIndex={0}
+            >
+              <div className="inline-flex items-center justify-center md:w-36 md:h-36 w-18 h-18 rounded-full mb-2">
+                <Image src="/logo-color.png" alt="Pikolbol logo" width={144} height={144} className="object-contain" />
+              </div>
+            </div>
+            <div className="text-white  text-left ">
+              <h1 className="text-md  md:text-3xl">
+                Enjoy the fresh air and peaceful surroundings while playing your favorite game. Perfect for friends, families, and pickleball lovers of all levels!
+              </h1>
+              <h2 className="mt-4 text-sm md:text-lg">
+                Grab your paddle, bring your friends, and let&apos;s rally! See you on the court!
+              </h2>
+            </div>
           </div>
-          {/* optional title if you want to enable later */}
-          {/* <h1 className="text-4xl sm:text-5xl font-bold text-white mb-3">Pikolbol</h1> */}
-          <p className="text-2xl text-white max-w-md mx-auto">{subtitle}</p>
-          <ChevronDown className="w-8 h-8 mt-6 text-white animate-bounce" />
         </div>
       </div>
     </header>

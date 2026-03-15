@@ -65,6 +65,32 @@ export async function createBooking(booking: BookingFormData): Promise<CreateBoo
   }
 }
 
+export async function createBookings(payload: { name: string; phone: string; email: string; date: string; timeSlots: string[]; court_number: number; players?: number }): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+  const rows = payload.timeSlots.map((ts) => ({
+    name: payload.name,
+    phone: payload.phone,
+    email: payload.email,
+    date: payload.date,
+    time_slot: ts,
+    court_number: payload.court_number,
+    players: payload.players,
+  }))
+
+  const { data, error } = await supabase
+    .from('bookings')
+    .insert(rows)
+    .select()
+
+  if (error) {
+    if (error.code === '23505') {
+      return { success: false, error: 'One or more selected time slots are already booked. Please refresh and try again.' }
+    }
+    return { success: false, error: error.message || 'Failed to create bookings' }
+  }
+
+  return { success: true, bookings: data }
+}
+
 export async function deleteBooking(id: string): Promise<{ success: boolean; error?: string }> {
   console.log('Deleting booking with id:', id)
   // Debug: check whether the booking exists and is accessible before attempting delete

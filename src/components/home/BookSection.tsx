@@ -34,12 +34,8 @@ export default function BookSection({
   closedDates,
 }: BookSectionProps) {
   return (
-    <>
-      <section id="book" className="mb-12">
-        <h3 className="text-lg font-semibold text-gray-900">Book</h3>
-        <p className="text-sm text-gray-500 mb-6">Select a date and time to reserve a court.</p>
-      </section>
-
+    <section id="book" style={{ scrollMarginTop: '5rem' }}>
+      <h2 className="text-2xl font-semibold text-gray-900 mb-8 mt-8">Booking Form</h2>
       <div className="grid lg:grid-cols-5 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
@@ -58,7 +54,7 @@ export default function BookSection({
         </div>
 
         <div className="lg:col-span-3 space-y-6">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl min-h-125">
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl min-h-110">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-emerald-100">
@@ -105,6 +101,6 @@ export default function BookSection({
           </div>
         </div>
       </div>
-    </>
+    </section>
   )
 }

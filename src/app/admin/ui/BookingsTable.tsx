@@ -68,7 +68,7 @@ export default function BookingsTable({ table }: { table: TableUI }) {
                   </TableCell>
 
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-col gap-2">
                       {group.timeSlots.map((slot: string) => (
                         <span key={slot} className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">{slot}</span>
                       ))}
