@@ -6,6 +6,72 @@ import { Input } from '@/components/ui/input'
 import type { TableUI } from '@/app/admin/hooks/useAdminTable'
 
 export default function AdminControls({ table }: { table: TableUI }) {
+  const handleExportCSV = () => {
+    const rows = table.filteredBookings.map((g) => ({
+      Name: g.name,
+      Email: g.email,
+      Phone: g.phone,
+      Date: g.date,
+      TimeSlots: (g.timeSlots || []).join('; '),
+      Players: g.players ?? '',
+      BookingIDs: (g.bookingIds || []).join('; '),
+      CreatedAt: g.created_at,
+    }))
+
+    const headers = ['Name', 'Email', 'Phone', 'Date', 'TimeSlots', 'Players', 'BookingIDs', 'CreatedAt']
+
+    const escape = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`
+
+    const csv = [headers.map(escape).join(',')]
+      .concat(rows.map(r => headers.map(h => escape((r as any)[h])).join(',')))
+      .join('\n')
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const date = new Date().toISOString().slice(0,10)
+    a.href = url
+    a.download = `bookings-${date}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportXLSX = async () => {
+    try {
+      const XLSX = await import('xlsx')
+      const rows = table.filteredBookings.map((g) => ({
+        Name: g.name,
+        Email: g.email,
+        Phone: g.phone,
+        Date: g.date,
+        TimeSlots: (g.timeSlots || []).join('; '),
+        Players: g.players ?? '',
+        BookingIDs: (g.bookingIds || []).join('; '),
+        CreatedAt: g.created_at,
+      }))
+
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Bookings')
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+      const blob = new Blob([wbout], { type: 'application/octet-stream' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const date = new Date().toISOString().slice(0,10)
+      a.href = url
+      a.download = `bookings-${date}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('XLSX export failed', err)
+      alert("XLSX export requires the 'xlsx' package. Install it with 'npm install xlsx' or 'bun add xlsx'.")
+    }
+  }
+
   return (
     <div className="flex flex-row justify-between p-6 border-b border-gray-100">
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -42,6 +108,12 @@ export default function AdminControls({ table }: { table: TableUI }) {
             Clear
           </Button>
         )}
+        <Button size="sm" onClick={handleExportCSV} className="ml-2">
+          Export CSV
+        </Button>
+        <Button size="sm" onClick={handleExportXLSX} className="ml-2">
+          Export XLSX
+        </Button>
       </div>
 
       <div className=" ">

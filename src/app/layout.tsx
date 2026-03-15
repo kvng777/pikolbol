@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { AuthProvider } from "@/components/AuthProvider";
 import { Toaster } from "@/components/ui/sonner";
+import { Analytics } from "@vercel/analytics/next"
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -28,6 +29,7 @@ export default function RootLayout({
         <Providers>
           <AuthProvider>
             {children}
+            <Analytics />
             <Toaster />
           </AuthProvider>
         </Providers>
