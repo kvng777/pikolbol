@@ -155,11 +155,11 @@ export default function Home() {
   return (
     <div className="min-h-screen relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-teal-50">
       <NavBar />
-      <main className="relative z-10 min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+      <main className="relative z-10 min-h-screen py-12 pt-0 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
           <HeroSection />
 
-          <AboutSection />
+          {/* <AboutSection /> */}
 
           <BookSection
             selectedDate={selectedDate}
