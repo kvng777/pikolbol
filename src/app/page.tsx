@@ -11,7 +11,7 @@ import Footer from '@/components/home/Footer'
 import { useBookingsByDate, useDisabledSlotsByDate, useClosedDates } from '@/hooks/useBookings'
 import { useCreateBooking, useCreateBookings } from '@/hooks/useCreateBooking'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
-import { Booking, BookingFormData } from '@/types/booking'
+import { Booking, BulkBookingPayload } from '@/types/booking'
 import { toast } from 'sonner'
 import BookingConfirmedModal from '@/components/ui/BookingConfirmedModal'
 
@@ -42,20 +42,16 @@ export default function Home() {
     setSelectedSlots([])
   }, [dateString])
 
-  const handleSubmit = async (data: any) => {
-    // typed form data
-    const formData = data as BookingFormData
-    // Use bulk create when multiple slots are selected
+  const handleSubmit = async (data: BulkBookingPayload) => {
     try {
-      const result = await createBookings.mutateAsync({
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email,
-        date: dateString,
-        timeSlots: selectedSlots,
-        courtNumber: 1,
-        players: formData.players,
-      })
+      const payload: BulkBookingPayload = data
+
+      // ensure date and court are consistent with page state if booking form didn't provide them
+      if (!payload.date) payload.date = dateString
+      if (!payload.courtNumber) payload.courtNumber = 1
+      if (!payload.timeSlots || payload.timeSlots.length === 0) payload.timeSlots = selectedSlots
+
+      const result = await createBookings.mutateAsync(payload)
 
       if (result.success && result.bookings) {
         setConfirmedBookings(result.bookings)

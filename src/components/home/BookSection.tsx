@@ -4,7 +4,7 @@ import React from 'react'
 import { CalendarPicker } from '@/components/booking/CalendarPicker'
 import { TimeSlotPicker } from '@/components/booking/TimeSlotPicker'
 import { BookingForm } from '@/components/booking/BookingForm'
-import { BookingFormData, TimeSlot, ClosedDate } from '@/types/booking'
+import { BulkBookingPayload, TimeSlot, ClosedDate } from '@/types/booking'
 
 type BookSectionProps = {
   selectedDate: Date
@@ -16,7 +16,7 @@ type BookSectionProps = {
   isLoading: boolean
   dateString: string
   createBookingPending: boolean
-  onSubmit: (data: BookingFormData) => Promise<void>
+  onSubmit: (data: BulkBookingPayload) => Promise<void>
   closedDates: ClosedDate[]
 }
 

@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { BookingFormData } from '@/types/booking'
+import { BookingFormData, BulkBookingPayload } from '@/types/booking'
 import { User, Phone, Mail } from 'lucide-react'
 
 const formSchema = z.object({
@@ -17,16 +17,6 @@ const formSchema = z.object({
 })
 
 type FormData = z.infer<typeof formSchema>
-
-type BulkBookingPayload = {
-  name: string
-  phone: string
-  email: string
-  date: string
-  timeSlots: string[]
-  courtNumber: number
-  players?: number
-}
 
 interface BookingFormProps {
   selectedDate: string
