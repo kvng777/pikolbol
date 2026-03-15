@@ -2,17 +2,18 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
-import { CalendarPicker } from '@/components/booking/CalendarPicker'
-import { TimeSlotPicker } from '@/components/booking/TimeSlotPicker'
-import { BookingForm } from '@/components/booking/BookingForm'
 import { BookingCard } from '@/components/booking/BookingCard'
 import NavBar from '@/components/NavBar'
+import HeroSection from '@/components/home/HeroSection'
+import AboutSection from '@/components/home/AboutSection'
+import BookSection from '@/components/home/BookSection'
+import ContactSection from '@/components/home/ContactSection'
+import Footer from '@/components/home/Footer'
 import { useBookingsByDate, useDisabledSlotsByDate, useClosedDates } from '@/hooks/useBookings'
 import { useCreateBooking } from '@/hooks/useCreateBooking'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { BookingFormData, Booking } from '@/types/booking'
 import { toast } from 'sonner'
-import { Calendar, Clock, MapPin, Ban } from 'lucide-react'
 
 export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
@@ -156,100 +157,29 @@ export default function Home() {
       <NavBar />
       <main className="relative z-10 min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
-          <header className="text-center mb-12">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-linear-to-br from-emerald-500 to-teal-600 mb-6 shadow-lg shadow-emerald-500/25">
-              <MapPin className="w-8 h-8 text-white" />
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-3">
-              Pikolbol
-            </h1>
-            <p className="text-lg text-gray-500 max-w-md mx-auto">
-              Book your pickleball court in seconds
-            </p>
-          </header>
+          <HeroSection />
 
-          <section id="about" className="mb-12">
-            <h3 className="text-lg font-semibold text-gray-900">About</h3>
-            <p className="text-sm text-gray-500">Pikolbol is a community-first pickleball court booking app.</p>
-          </section>
+          <AboutSection />
 
-          <section id="book" className="mb-12">
-            <h3 className="text-lg font-semibold text-gray-900">Book</h3>
-            <p className="text-sm text-gray-500 mb-6">Select a date and time to reserve a court.</p>
-          </section>
+          <BookSection
+            selectedDate={selectedDate}
+            selectedSlots={selectedSlots}
+            setSelectedDate={setSelectedDate}
+            setSelectedSlots={setSelectedSlots}
+            isDateClosed={isDateClosed}
+            availableSlots={availableSlots}
+            isLoading={isLoading}
+            dateString={dateString}
+            createBookingPending={createBooking.isPending}
+            onSubmit={handleSubmit}
+            closedDates={closedDates}
+          />
 
-          <div className="grid lg:grid-cols-5 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 rounded-lg bg-emerald-100">
-                    <Calendar className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <h2 className="text-lg font-semibold text-gray-900">Select Date</h2>
-                </div>
-                <CalendarPicker
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  closedDates={closedDates}
-                />
-              </div>
-            </div>
-
-            <div className="lg:col-span-3 space-y-6">
-              <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl min-h-125">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-emerald-100">
-                      <Clock className="w-5 h-5 text-emerald-600" />
-                    </div>
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      Available Times
-                    </h2>
-                  </div>
-                </div>
-                
-                <p className="text-sm text-gray-500 mb-5">
-                  {format(selectedDate, 'EEEE, MMMM d, yyyy')}
-                </p>
-
-                {isDateClosed ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="p-4 rounded-full bg-red-100 mb-4">
-                      <Ban className="w-8 h-8 text-red-500" />
-                    </div>
-                    <p className="text-gray-900 font-medium">Court is closed</p>
-                    <p className="text-sm text-gray-500 mt-1">Please select a different date</p>
-                  </div>
-                ) : (
-                  <TimeSlotPicker
-                    slots={availableSlots}
-                    selectedSlots={selectedSlots}
-                    onSelectSlots={setSelectedSlots}
-                    isLoading={isLoading}
-                  />
-                )}
-
-                {selectedSlots.length > 0 && !isDateClosed && (
-                  <div className="mt-8 pt-6 border-t border-gray-100">
-                    <h3 className="text-gray-900 font-semibold mb-4">Complete your booking</h3>
-                    <BookingForm
-                      selectedDate={dateString}
-                      selectedSlots={selectedSlots}
-                      onSubmit={handleSubmit}
-                      isSubmitting={createBooking.isPending}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <section id="contact" className="mt-12">
-            <h3 className="text-lg font-semibold text-gray-900">Contact</h3>
-            <p className="text-sm text-gray-500">Questions? Email us at hello@pikolbol.example</p>
-          </section>
+          <ContactSection />
+          
         </div>
       </main>
+      <Footer />
     </div>
   )
 }

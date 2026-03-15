@@ -8,6 +8,7 @@ import { Calendar, Clock, Plus, Ban, Lock } from 'lucide-react'
 import AdminHeader from './ui/AdminHeader'
 import AdminControls from './ui/AdminControls'
 import BookingsTable from './ui/BookingsTable'
+import NavBar from '@/components/NavBar'
 
 export default function AdminPage() {
   const table = useAdminTable()
@@ -35,6 +36,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-teal-50">
+      <NavBar />
       <div className="relative z-10 min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           <div className='pb-2 text-2xl'>

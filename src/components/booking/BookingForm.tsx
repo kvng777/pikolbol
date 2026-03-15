@@ -95,14 +95,12 @@ export function BookingForm({
           >-
           </button>
 
-          <Input
-            id="players"
-            type="number"
-            disabled
-            min={2}
-            className="w-10 text-center bg-gray-50 border-gray-200 text-gray-900"
-            {...register('players', { valueAsNumber: true })}
-          />
+          {/* visual centered display */}
+          <div className="w-10 h-8 flex items-center justify-center bg-gray-50 border border-gray-200 rounded text-gray-900">
+            {playersCount}
+          </div>
+          {/* hidden input preserves form value for react-hook-form submission */}
+          <input type="hidden" id="players" {...register('players', { valueAsNumber: true })} />
 
           <button
             type="button"
