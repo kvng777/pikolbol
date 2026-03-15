@@ -45,3 +45,13 @@ export interface ClosedDate {
   reason: string
   created_at: string
 }
+
+export interface BulkBookingPayload {
+  name: string
+  phone: string
+  email: string
+  date: string
+  timeSlots: string[]
+  courtNumber: number
+  players?: number
+}

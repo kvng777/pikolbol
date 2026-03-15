@@ -108,9 +108,9 @@ export default function AdminControls({ table }: { table: TableUI }) {
             Clear
           </Button>
         )}
-        <Button size="sm" onClick={handleExportCSV} className="ml-2">
+        {/* <Button size="sm" onClick={handleExportCSV} className="ml-2">
           Export CSV
-        </Button>
+        </Button> */}
         <Button size="sm" onClick={handleExportXLSX} className="ml-2">
           Export XLSX
         </Button>

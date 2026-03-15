@@ -5,13 +5,13 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 
 const SECTIONS = [
-  { id: 'about', label: 'About' },
+  // { id: 'about', label: 'About' },
   { id: 'book', label: 'Book' },
   { id: 'contact', label: 'Contact' },
 ]
 
 export default function NavBar() {
-  const [active, setActive] = useState<string>('about')
+  const [active, setActive] = useState<string>('')
   const pathname = usePathname()
   const router = useRouter()
   const isAdmin = pathname?.startsWith('/admin') ?? false

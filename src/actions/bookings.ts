@@ -2,6 +2,7 @@
 
 import { 
   createBooking, 
+  createBookings,
   getBookingsByDate, 
   getAllBookings, 
   deleteBooking,
@@ -27,6 +28,30 @@ export async function createBookingAction(data: BookingFormData): Promise<Create
   }
 
   const result = await createBooking(data)
+
+  if (result.success) {
+    revalidatePath('/')
+    revalidatePath('/admin')
+  }
+
+  return result
+}
+
+export async function createBookingsAction(data: { name: string; phone: string; email: string; date: string; timeSlots: string[]; courtNumber: number; players?: number }): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+  const isClosed = await isDateClosed(data.date)
+  if (isClosed) {
+    return { success: false, error: 'The court is closed on this date. Please select another date.' }
+  }
+
+  const result = await createBookings({
+    name: data.name,
+    phone: data.phone,
+    email: data.email,
+    date: data.date,
+    timeSlots: data.timeSlots,
+    court_number: data.courtNumber,
+    players: data.players,
+  })
 
   if (result.success) {
     revalidatePath('/')

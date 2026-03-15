@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { BookingFormData } from '@/types/booking'
+import { BookingFormData, BulkBookingPayload } from '@/types/booking'
 import { User, Phone, Mail } from 'lucide-react'
 
 const formSchema = z.object({
@@ -21,7 +21,7 @@ type FormData = z.infer<typeof formSchema>
 interface BookingFormProps {
   selectedDate: string
   selectedSlots: string[]
-  onSubmit: (data: BookingFormData) => Promise<void>
+  onSubmit: (data: BulkBookingPayload) => Promise<void>
   isSubmitting?: boolean
 }
 
@@ -44,22 +44,27 @@ export function BookingForm({
   })
 
   const handleFormSubmit = async (data: FormData) => {
-    // Create a booking for each selected slot
-    for (const slot of selectedSlots) {
-      await onSubmit({
-        ...data,
-        date: selectedDate,
-        timeSlot: slot,
-        courtNumber: 1,
-      })
-    }
+    // Send a single bulk booking request for all selected slots
+    await onSubmit({
+      name: data.name,
+      phone: data.phone,
+      email: data.email,
+      date: selectedDate,
+      timeSlots: selectedSlots,
+      courtNumber: 1,
+      players: data.players,
+    })
   }
 
-  // Dynamic pricing: base Php200 covers up to 4 players; +50 per extra player
+  // Dynamic pricing: Php200 per 1-hour timeslot. Base covers up to 4 players.
+  // Additional Php50 per extra player (beyond 4) applied once per booking.
   const playersCount = Number(watch('players') ?? 2)
-  const basePrice = 200
-  const extra = Math.max(0, playersCount - 4)
-  const totalCost = basePrice + extra * 50
+  const slotsCount = Math.max(1, selectedSlots.length)
+  const pricePerSlot = 200
+  const baseTotal = pricePerSlot * slotsCount
+  const extraPlayers = Math.max(0, playersCount - 4)
+  const extraCharge = extraPlayers * 50
+  const totalCost = baseTotal + extraCharge
   const formattedTotal = `Php${totalCost.toLocaleString()}`
 
   return (

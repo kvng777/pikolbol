@@ -2,18 +2,18 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
-import { BookingCard } from '@/components/booking/BookingCard'
 import NavBar from '@/components/NavBar'
 import HeroSection from '@/components/home/HeroSection'
-import AboutSection from '@/components/home/AboutSection'
+// import AboutSection from '@/components/home/AboutSection'
 import BookSection from '@/components/home/BookSection'
 import ContactSection from '@/components/home/ContactSection'
 import Footer from '@/components/home/Footer'
 import { useBookingsByDate, useDisabledSlotsByDate, useClosedDates } from '@/hooks/useBookings'
-import { useCreateBooking } from '@/hooks/useCreateBooking'
+import { useCreateBooking, useCreateBookings } from '@/hooks/useCreateBooking'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
-import { BookingFormData, Booking } from '@/types/booking'
+import { Booking, BulkBookingPayload } from '@/types/booking'
 import { toast } from 'sonner'
+import BookingConfirmedModal from '@/components/ui/BookingConfirmedModal'
 
 export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
@@ -26,6 +26,7 @@ export default function Home() {
   const { data: disabledSlots = [] } = useDisabledSlotsByDate(dateString)
   const { data: closedDates = [] } = useClosedDates()
   const createBooking = useCreateBooking()
+  const createBookings = useCreateBookings()
 
   const isDateClosed = useMemo(() => {
     return closedDates.some(cd => 
@@ -41,14 +42,26 @@ export default function Home() {
     setSelectedSlots([])
   }, [dateString])
 
-  const handleSubmit = async (data: BookingFormData) => {
-    const result = await createBooking.mutateAsync(data)
+  const handleSubmit = async (data: BulkBookingPayload) => {
+    try {
+      const payload: BulkBookingPayload = data
 
-    if (result.success && result.booking) {
-      setConfirmedBookings(prev => [...prev, result.booking!])
-      toast.success('Booking confirmed!')
-    } else {
-      toast.error(result.error || 'Failed to create booking')
+      // ensure date and court are consistent with page state if booking form didn't provide them
+      if (!payload.date) payload.date = dateString
+      if (!payload.courtNumber) payload.courtNumber = 1
+      if (!payload.timeSlots || payload.timeSlots.length === 0) payload.timeSlots = selectedSlots
+
+      const result = await createBookings.mutateAsync(payload)
+
+      if (result.success && result.bookings) {
+        setConfirmedBookings(result.bookings)
+        toast.success('Booking confirmed!')
+      } else {
+        toast.error(result.error || 'Failed to create bookings')
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to create bookings')
     }
   }
 
@@ -124,37 +137,17 @@ export default function Home() {
     }
   }
 
-  if (confirmedBookings.length > 0) {
-    return (
-      <div className="min-h-screen relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-teal-50">
-        <main className="relative z-10 min-h-screen flex items-center justify-center py-12 px-4">
-          <div className="max-w-lg w-full space-y-4">
-            <div ref={bookingCardRef}>
-              <BookingCard bookings={confirmedBookings} />
-            </div>
-            <div className="text-center mt-8">
-              <button
-                onClick={handleNewBooking}
-                className="text-emerald-600 hover:text-emerald-700 transition-colors text-s font-medium"
-              >
-                Make another reservation
-              </button>
-              <button
-                onClick={handleDownloadScreenshot}
-                className="ml-4 text-emerald-600 hover:text-emerald-700 transition-colors text-s font-medium"
-              >
-                Download booking screenshot
-              </button>
-            </div>
-          </div>
-        </main>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-teal-50">
       <NavBar />
+      <BookingConfirmedModal
+        open={confirmedBookings.length > 0}
+        onClose={handleNewBooking}
+        bookings={confirmedBookings}
+        bookingCardRef={bookingCardRef}
+        onDownload={handleDownloadScreenshot}
+      />
+
       <main className="relative z-10 min-h-screen py-12 pt-0 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
           <HeroSection />
