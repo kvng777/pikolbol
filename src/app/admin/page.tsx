@@ -32,7 +32,8 @@ export default function AdminPage() {
     )
   }
 
-  if (!table.user) return null
+  // Don't render if not authenticated or not admin (will redirect via useAdminPage hook)
+  if (!table.user || !table.isAdmin) return null
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-teal-50">

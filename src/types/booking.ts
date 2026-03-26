@@ -8,6 +8,7 @@ export interface Booking {
   court_number: number
   created_at: string
   players: number
+  user_id?: string | null
 }
 
 export interface TimeSlot {
@@ -54,4 +55,10 @@ export interface BulkBookingPayload {
   timeSlots: string[]
   courtNumber: number
   players?: number
+  user_id?: string
+}
+
+export interface CancelBookingResult {
+  success: boolean
+  error?: string
 }

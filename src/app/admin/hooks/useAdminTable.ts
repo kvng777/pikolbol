@@ -6,6 +6,7 @@ export function useAdminTable() {
   const {
     user,
     authLoading,
+    isAdmin,
     handleSignOut,
     // filters / sorting
     handleSort,
@@ -96,6 +97,7 @@ export function useAdminTable() {
     // admin data & actions
     user,
     authLoading,
+    isAdmin,
     handleSignOut,
     handleSort,
     filterDate,

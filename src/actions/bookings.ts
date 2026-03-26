@@ -13,9 +13,11 @@ import {
   getClosedDates,
   addClosedDate,
   removeClosedDate,
-  isDateClosed
+  isDateClosed,
+  getBookingsByUserId,
+  cancelBooking,
 } from '@/lib/bookingService'
-import { BookingFormData, Booking, CreateBookingResult, DisabledSlot, ClosedDate } from '@/types/booking'
+import { BookingFormData, Booking, CreateBookingResult, DisabledSlot, ClosedDate, CancelBookingResult } from '@/types/booking'
 import { revalidatePath } from 'next/cache'
 
 export async function createBookingAction(data: BookingFormData): Promise<CreateBookingResult> {
@@ -37,7 +39,7 @@ export async function createBookingAction(data: BookingFormData): Promise<Create
   return result
 }
 
-export async function createBookingsAction(data: { name: string; phone: string; email: string; date: string; timeSlots: string[]; courtNumber: number; players?: number }): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+export async function createBookingsAction(data: { name: string; phone: string; email: string; date: string; timeSlots: string[]; courtNumber: number; players?: number; user_id?: string }): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
   const isClosed = await isDateClosed(data.date)
   if (isClosed) {
     return { success: false, error: 'The court is closed on this date. Please select another date.' }
@@ -51,6 +53,7 @@ export async function createBookingsAction(data: { name: string; phone: string; 
     timeSlots: data.timeSlots,
     court_number: data.courtNumber,
     players: data.players,
+    user_id: data.user_id,
   })
 
   if (result.success) {
@@ -125,5 +128,27 @@ export async function removeClosedDateAction(id: string): Promise<{ success: boo
     revalidatePath('/')
     revalidatePath('/admin')
   }
+  return result
+}
+
+/**
+ * Get all bookings for a specific user
+ */
+export async function getBookingsByUserIdAction(userId: string): Promise<Booking[]> {
+  return getBookingsByUserId(userId)
+}
+
+/**
+ * Cancel a booking (user can only cancel their own bookings, 24h policy applies)
+ */
+export async function cancelBookingAction(bookingId: string, userId: string): Promise<CancelBookingResult> {
+  const result = await cancelBooking(bookingId, userId)
+
+  if (result.success) {
+    revalidatePath('/')
+    revalidatePath('/admin')
+    revalidatePath('/profile')
+  }
+
   return result
 }

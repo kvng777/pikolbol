@@ -1,7 +1,6 @@
 'use client'
 
 import Image from "next/image"
-import { ChevronDown, User } from 'lucide-react'
 
 export default function HeroSection({
   // title = 'Pikolbol',

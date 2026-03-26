@@ -11,6 +11,8 @@ import {
   addClosedDateAction,
   removeClosedDateAction,
   deleteBookingAction,
+  getBookingsByUserIdAction,
+  cancelBookingAction,
 } from '@/actions/bookings'
 
 const CACHE_TIME = 5 * 60 * 1000 // 5 minutes
@@ -120,6 +122,36 @@ export function useDeleteBooking() {
   return useMutation({
     mutationFn: (id: string) => deleteBookingAction(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['allBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
+    },
+  })
+}
+
+/**
+ * Hook to fetch bookings for a specific user
+ */
+export function useUserBookings(userId: string | undefined) {
+  return useQuery<Booking[]>({
+    queryKey: ['userBookings', userId],
+    queryFn: () => getBookingsByUserIdAction(userId!),
+    enabled: !!userId,
+    staleTime: CACHE_TIME,
+    gcTime: CACHE_TIME,
+  })
+}
+
+/**
+ * Hook to cancel a user's booking (24-hour policy applies)
+ */
+export function useCancelBooking() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ bookingId, userId }: { bookingId: string; userId: string }) => 
+      cancelBookingAction(bookingId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userBookings'] })
       queryClient.invalidateQueries({ queryKey: ['allBookings'] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
     },

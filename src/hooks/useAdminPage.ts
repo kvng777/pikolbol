@@ -32,7 +32,7 @@ interface GroupedBooking {
 }
 
 export function useAdminPage() {
-  const { user, loading: authLoading, signOut } = useAuth()
+  const { user, loading: authLoading, isAdmin, signOut } = useAuth()
   const router = useRouter()
   const { data: bookings = [], isLoading: bookingsLoading, refetch } = useAllBookings()
   const { data: allDisabledSlots = [], refetch: refetchDisabledSlots } = useAllDisabledSlots()
@@ -54,10 +54,17 @@ export function useAdminPage() {
   const [closeReason, setCloseReason] = useState<string>('')
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/admin/login')
+    if (!authLoading) {
+      if (!user) {
+        // Not logged in - redirect to login
+        router.push('/admin/login')
+      } else if (!isAdmin) {
+        // Logged in but not admin - redirect to home
+        toast.error('Access denied. Admin privileges required.')
+        router.push('/')
+      }
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, isAdmin, router])
 
   const handleSignOut = async () => {
     await signOut()
@@ -239,6 +246,7 @@ export function useAdminPage() {
     // auth
     user,
     authLoading,
+    isAdmin,
     handleSignOut,
     // data
     bookings,

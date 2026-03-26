@@ -14,6 +14,7 @@ import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { Booking, BulkBookingPayload } from '@/types/booking'
 import { toast } from 'sonner'
 import BookingConfirmedModal from '@/components/ui/BookingConfirmedModal'
+import { useAuth } from '@/components/AuthProvider'
 
 export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
@@ -21,6 +22,7 @@ export default function Home() {
   const [confirmedBookings, setConfirmedBookings] = useState<Booking[]>([])
   const bookingCardRef = useRef<HTMLDivElement | null>(null)
 
+  const { user } = useAuth()
   const dateString = format(selectedDate, 'yyyy-MM-dd')
   const { data: bookings = [], isLoading } = useBookingsByDate(dateString)
   const { data: disabledSlots = [] } = useDisabledSlotsByDate(dateString)
@@ -44,12 +46,17 @@ export default function Home() {
 
   const handleSubmit = async (data: BulkBookingPayload) => {
     try {
-      const payload: BulkBookingPayload = data
+      const payload: BulkBookingPayload = { ...data }
 
       // ensure date and court are consistent with page state if booking form didn't provide them
       if (!payload.date) payload.date = dateString
       if (!payload.courtNumber) payload.courtNumber = 1
       if (!payload.timeSlots || payload.timeSlots.length === 0) payload.timeSlots = selectedSlots
+      
+      // Attach the authenticated user's ID to the booking
+      if (user?.id) {
+        payload.user_id = user.id
+      }
 
       const result = await createBookings.mutateAsync(payload)
 

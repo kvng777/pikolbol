@@ -1,5 +1,9 @@
 import { supabase } from './supabase-server'
-import { Booking, BookingFormData, CreateBookingResult, DisabledSlot, ClosedDate } from '@/types/booking'
+import { Booking, BookingFormData, CreateBookingResult, DisabledSlot, ClosedDate, CancelBookingResult } from '@/types/booking'
+import { CANCELLATION_HOURS_BEFORE } from './constants'
+
+// Re-export the constant for backwards compatibility with server-side code
+export { CANCELLATION_HOURS_BEFORE }
 
 export async function getBookingsByDate(date: string): Promise<Booking[]> {
   const { data, error } = await supabase
@@ -65,7 +69,7 @@ export async function createBooking(booking: BookingFormData): Promise<CreateBoo
   }
 }
 
-export async function createBookings(payload: { name: string; phone: string; email: string; date: string; timeSlots: string[]; court_number: number; players?: number }): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+export async function createBookings(payload: { name: string; phone: string; email: string; date: string; timeSlots: string[]; court_number: number; players?: number; user_id?: string }): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
   const rows = payload.timeSlots.map((ts) => ({
     name: payload.name,
     phone: payload.phone,
@@ -74,6 +78,7 @@ export async function createBookings(payload: { name: string; phone: string; ema
     time_slot: ts,
     court_number: payload.court_number,
     players: payload.players,
+    user_id: payload.user_id || null,
   }))
 
   const { data, error } = await supabase
@@ -245,4 +250,105 @@ export async function getBookingById(id: string): Promise<Booking | null> {
   }
 
   return data || null
+}
+
+/**
+ * Get all bookings for a specific user
+ */
+export async function getBookingsByUserId(userId: string): Promise<Booking[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('user_id', userId)
+    .order('date', { ascending: false })
+    .order('time_slot', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching user bookings:', error)
+    return []
+  }
+
+  return data || []
+}
+
+/**
+ * Check if a booking can be cancelled based on the 24-hour policy
+ * Returns true if the booking is more than CANCELLATION_HOURS_BEFORE hours away
+ */
+export function canCancelBooking(booking: Booking): boolean {
+  const bookingDateTime = parseBookingDateTime(booking.date, booking.time_slot)
+  const now = new Date()
+  const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
+  
+  return hoursUntilBooking >= CANCELLATION_HOURS_BEFORE
+}
+
+/**
+ * Parse booking date and time_slot into a Date object
+ * time_slot format is expected to be "HH:MM AM/PM - HH:MM AM/PM" (e.g., "6:00 AM - 7:00 AM")
+ */
+function parseBookingDateTime(date: string, timeSlot: string): Date {
+  // Extract the start time from the time_slot (e.g., "6:00 AM" from "6:00 AM - 7:00 AM")
+  const startTime = timeSlot.split(' - ')[0].trim()
+  
+  // Parse the time
+  const timeMatch = startTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i)
+  if (!timeMatch) {
+    // Fallback: return start of the booking date
+    return new Date(date)
+  }
+
+  let hours = parseInt(timeMatch[1], 10)
+  const minutes = parseInt(timeMatch[2], 10)
+  const period = timeMatch[3].toUpperCase()
+
+  // Convert to 24-hour format
+  if (period === 'PM' && hours !== 12) {
+    hours += 12
+  } else if (period === 'AM' && hours === 12) {
+    hours = 0
+  }
+
+  const bookingDate = new Date(date)
+  bookingDate.setHours(hours, minutes, 0, 0)
+  
+  return bookingDate
+}
+
+/**
+ * Cancel a booking by ID
+ * Only allows cancellation if the user owns the booking and it's more than 24 hours away
+ */
+export async function cancelBooking(bookingId: string, userId: string): Promise<CancelBookingResult> {
+  // First, fetch the booking to verify ownership and check cancellation policy
+  const booking = await getBookingById(bookingId)
+  
+  if (!booking) {
+    return { success: false, error: 'Booking not found' }
+  }
+
+  if (booking.user_id !== userId) {
+    return { success: false, error: 'You can only cancel your own bookings' }
+  }
+
+  if (!canCancelBooking(booking)) {
+    return { 
+      success: false, 
+      error: `Bookings can only be cancelled at least ${CANCELLATION_HOURS_BEFORE} hours before the scheduled time` 
+    }
+  }
+
+  // Delete the booking
+  const { error } = await supabase
+    .from('bookings')
+    .delete()
+    .eq('id', bookingId)
+    .eq('user_id', userId) // Extra safety check
+
+  if (error) {
+    console.error('Error cancelling booking:', error)
+    return { success: false, error: 'Failed to cancel booking' }
+  }
+
+  return { success: true }
 }
