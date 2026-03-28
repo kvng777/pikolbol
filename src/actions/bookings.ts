@@ -3,8 +3,10 @@
 import { 
   createBooking, 
   createBookings,
-  getBookingsByDate, 
-  getAllBookings, 
+  getBookingsByDate,
+  getActiveBookingsByDate,
+  getAllBookings,
+  getConfirmedBookings,
   deleteBooking,
   getDisabledSlotsByDate,
   addDisabledSlot,
@@ -64,12 +66,35 @@ export async function createBookingsAction(data: { name: string; phone: string; 
   return result
 }
 
+/**
+ * Get bookings by date - ALL bookings regardless of payment status
+ * Use getActiveBookingsByDateAction for slot availability checking
+ */
 export async function getBookingsByDateAction(date: string): Promise<Booking[]> {
   return getBookingsByDate(date)
 }
 
+/**
+ * Get ACTIVE bookings by date - only bookings that occupy slots
+ * (pending payment, awaiting confirmation, or confirmed)
+ * Use this for slot availability checking
+ */
+export async function getActiveBookingsByDateAction(date: string): Promise<Booking[]> {
+  return getActiveBookingsByDate(date)
+}
+
+/**
+ * Get ALL bookings - for admin view
+ */
 export async function getAllBookingsAction(): Promise<Booking[]> {
   return getAllBookings()
+}
+
+/**
+ * Get only CONFIRMED bookings - for admin booking list
+ */
+export async function getConfirmedBookingsAction(): Promise<Booking[]> {
+  return getConfirmedBookings()
 }
 
 export async function deleteBookingAction(id: string): Promise<{ success: boolean; error?: string }> {

@@ -1,3 +1,5 @@
+import { PaymentStatus } from './payment'
+
 export interface Booking {
   id: string
   name: string
@@ -9,6 +11,11 @@ export interface Booking {
   created_at: string
   players: number
   user_id?: string | null
+  // Payment fields
+  payment_status?: PaymentStatus
+  payment_deadline?: string | null
+  payment_confirmed_at?: string | null
+  payment_amount?: number | null
 }
 
 export interface TimeSlot {
@@ -30,6 +37,8 @@ export interface CreateBookingResult {
   success: boolean
   error?: string
   booking?: Booking
+  bookings?: Booking[] // For bulk bookings
+  paymentDeadline?: string // ISO timestamp for payment deadline
 }
 
 export interface DisabledSlot {

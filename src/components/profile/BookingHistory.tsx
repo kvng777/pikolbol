@@ -3,9 +3,34 @@
 import { useState } from 'react'
 import { format, parseISO, isAfter, addHours } from 'date-fns'
 import { Booking } from '@/types/booking'
-import { Calendar, Clock, Users, X, AlertTriangle, Loader2 } from 'lucide-react'
+import { PaymentStatus } from '@/types/payment'
+import { Calendar, Clock, Users, X, AlertTriangle, Loader2, CreditCard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CANCELLATION_HOURS_BEFORE } from '@/lib/constants'
+
+// Payment status badge configuration
+const paymentStatusConfig: Record<PaymentStatus, { label: string; className: string }> = {
+  pending: {
+    label: 'Payment Pending',
+    className: 'bg-yellow-100 text-yellow-700',
+  },
+  awaiting_confirmation: {
+    label: 'Awaiting Verification',
+    className: 'bg-orange-100 text-orange-700',
+  },
+  confirmed: {
+    label: 'Paid',
+    className: 'bg-green-100 text-green-700',
+  },
+  expired: {
+    label: 'Payment Expired',
+    className: 'bg-red-100 text-red-700',
+  },
+  rejected: {
+    label: 'Payment Rejected',
+    className: 'bg-red-100 text-red-700',
+  },
+}
 
 interface BookingHistoryProps {
   bookings: Booking[]
@@ -30,7 +55,17 @@ function getBookingStatus(booking: Booking): BookingStatus {
   return 'past'
 }
 
-function canCancelBooking(booking: Booking): boolean {
+function canCancelBooking(booking: Booking): { canCancel: boolean; reason?: string } {
+  // Cannot cancel if payment is not confirmed (for bookings with payment)
+  if (booking.payment_status && booking.payment_status !== 'confirmed') {
+    if (booking.payment_status === 'pending' || booking.payment_status === 'awaiting_confirmation') {
+      return { canCancel: false, reason: 'Complete or wait for payment to expire' }
+    }
+    if (booking.payment_status === 'expired' || booking.payment_status === 'rejected') {
+      return { canCancel: false, reason: 'Booking already cancelled' }
+    }
+  }
+
   const now = new Date()
   
   // Parse the booking date and time
@@ -41,7 +76,7 @@ function canCancelBooking(booking: Booking): boolean {
   const timeMatch = startTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i)
   
   if (!timeMatch) {
-    return false
+    return { canCancel: false }
   }
 
   let hours = parseInt(timeMatch[1], 10)
@@ -59,7 +94,13 @@ function canCancelBooking(booking: Booking): boolean {
 
   // Check if booking is more than CANCELLATION_HOURS_BEFORE hours away
   const cancellationDeadline = addHours(now, CANCELLATION_HOURS_BEFORE)
-  return isAfter(bookingDateTime, cancellationDeadline)
+  const withinDeadline = isAfter(bookingDateTime, cancellationDeadline)
+  
+  if (!withinDeadline) {
+    return { canCancel: false, reason: `Cannot cancel within ${CANCELLATION_HOURS_BEFORE}h` }
+  }
+  
+  return { canCancel: true }
 }
 
 interface CancelConfirmModalProps {
@@ -187,7 +228,7 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
 
       {sortedBookings.map((booking) => {
         const status = getBookingStatus(booking)
-        const canCancel = canCancelBooking(booking)
+        const cancelCheck = canCancelBooking(booking)
 
         return (
           <div
@@ -202,8 +243,9 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
           >
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                {/* Status badge */}
-                <div className="mb-2">
+                {/* Status badges */}
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {/* Time status badge */}
                   {status === 'today' && (
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
                       Today
@@ -217,6 +259,14 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
                   {status === 'past' && (
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
                       Completed
+                    </span>
+                  )}
+
+                  {/* Payment status badge */}
+                  {booking.payment_status && (
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${paymentStatusConfig[booking.payment_status].className}`}>
+                      <CreditCard className="w-3 h-3" />
+                      {paymentStatusConfig[booking.payment_status].label}
                     </span>
                   )}
                 </div>
@@ -243,12 +293,19 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
                 <p className="text-sm text-gray-500 mt-2">
                   Court {booking.court_number}
                 </p>
+
+                {/* Payment amount */}
+                {booking.payment_amount && booking.payment_status === 'confirmed' && (
+                  <p className="text-sm text-green-600 font-medium mt-1">
+                    ₱{booking.payment_amount.toFixed(2)} paid
+                  </p>
+                )}
               </div>
 
               {/* Cancel button (only for upcoming bookings that can be cancelled) */}
               {status !== 'past' && (
                 <div className="ml-4">
-                  {canCancel ? (
+                  {cancelCheck.canCancel ? (
                     <button
                       onClick={() => handleCancelClick(booking.id)}
                       className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -256,11 +313,11 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
                     >
                       <X className="w-5 h-5" />
                     </button>
-                  ) : (
-                    <div className="text-xs text-gray-400 text-right max-w-[100px]">
-                      Cannot cancel within {CANCELLATION_HOURS_BEFORE}h
+                  ) : cancelCheck.reason ? (
+                    <div className="text-xs text-gray-400 text-right max-w-[120px]">
+                      {cancelCheck.reason}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>

@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Booking, DisabledSlot, ClosedDate } from '@/types/booking'
 import { 
-  getBookingsByDateAction, 
+  getBookingsByDateAction,
+  getActiveBookingsByDateAction,
   getAllBookingsAction,
+  getConfirmedBookingsAction,
   getDisabledSlotsByDateAction,
   addDisabledSlotAction,
   removeDisabledSlotAction,
@@ -17,6 +19,9 @@ import {
 
 const CACHE_TIME = 5 * 60 * 1000 // 5 minutes
 
+/**
+ * Get ALL bookings by date (regardless of payment status)
+ */
 export function useBookingsByDate(date: string) {
   return useQuery<Booking[]>({
     queryKey: ['bookings', date],
@@ -27,10 +32,39 @@ export function useBookingsByDate(date: string) {
   })
 }
 
+/**
+ * Get ACTIVE bookings by date - only bookings that occupy slots
+ * Use this for slot availability checking
+ */
+export function useActiveBookingsByDate(date: string) {
+  return useQuery<Booking[]>({
+    queryKey: ['activeBookings', date],
+    queryFn: () => getActiveBookingsByDateAction(date),
+    enabled: !!date,
+    staleTime: 30 * 1000, // 30 seconds - shorter cache for availability
+    gcTime: 30 * 1000,
+  })
+}
+
+/**
+ * Get ALL bookings (for admin view)
+ */
 export function useAllBookings() {
   return useQuery<Booking[]>({
     queryKey: ['allBookings'],
     queryFn: getAllBookingsAction,
+    staleTime: CACHE_TIME,
+    gcTime: CACHE_TIME,
+  })
+}
+
+/**
+ * Get only CONFIRMED bookings (for admin booking list)
+ */
+export function useConfirmedBookings() {
+  return useQuery<Booking[]>({
+    queryKey: ['confirmedBookings'],
+    queryFn: getConfirmedBookingsAction,
     staleTime: CACHE_TIME,
     gcTime: CACHE_TIME,
   })

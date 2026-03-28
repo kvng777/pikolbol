@@ -4,11 +4,14 @@ import { format } from 'date-fns'
 import { useAdminTable } from './hooks/useAdminTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Calendar, Clock, Plus, Ban, Lock } from 'lucide-react'
+import { Calendar, Clock, Plus, Ban, Lock, CreditCard, Settings } from 'lucide-react'
 import AdminHeader from './ui/AdminHeader'
 import AdminControls from './ui/AdminControls'
 import BookingsTable from './ui/BookingsTable'
 import NavBar from '@/components/NavBar'
+import { PendingPayments } from '@/components/admin/PendingPayments'
+import { PaymentSettings } from '@/components/admin/PaymentSettings'
+import { usePendingPayments } from '@/hooks/usePayment'
 
 export default function AdminPage() {
   const table = useAdminTable()
@@ -46,7 +49,7 @@ export default function AdminPage() {
 
           <AdminHeader table={table} />
 
-          <div className="flex gap-2 mb-6">
+          <div className="flex flex-wrap gap-2 mb-6">
             <Button
               variant={table.activeTab === 'bookings' ? 'default' : 'outline'}
               onClick={() => table.setActiveTab('bookings')}
@@ -54,6 +57,14 @@ export default function AdminPage() {
             >
               <Calendar className="w-4 h-4 mr-2" />
               Bookings
+            </Button>
+            <Button
+              variant={table.activeTab === 'payments' ? 'default' : 'outline'}
+              onClick={() => table.setActiveTab('payments')}
+              className={table.activeTab === 'payments' ? 'bg-amber-500 hover:bg-amber-600' : ''}
+            >
+              <CreditCard className="w-4 h-4 mr-2" />
+              Pending Payments
             </Button>
             <Button
               variant={table.activeTab === 'slots' ? 'default' : 'outline'}
@@ -71,12 +82,32 @@ export default function AdminPage() {
               <Lock className="w-4 h-4 mr-2" />
               Closed Dates
             </Button>
+            <Button
+              variant={table.activeTab === 'settings' ? 'default' : 'outline'}
+              onClick={() => table.setActiveTab('settings')}
+              className={table.activeTab === 'settings' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Payment Settings
+            </Button>
           </div>
 
           {table.activeTab === 'bookings' && (
             <div className="rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
               <AdminControls table={table} />
               <BookingsTable table={table} />
+            </div>
+          )}
+
+          {table.activeTab === 'payments' && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+              <PendingPayments />
+            </div>
+          )}
+
+          {table.activeTab === 'settings' && (
+            <div className="space-y-6">
+              <PaymentSettings />
             </div>
           )}
 
