@@ -5,7 +5,7 @@ import { format, parseISO } from 'date-fns'
 import { CheckCircle, XCircle, AlertTriangle, Loader2, User, Calendar, Clock, Users, CreditCard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePendingPayments, useConfirmPayment, useRejectPayment } from '@/hooks/usePayment'
-import { PendingPaymentBooking, PaymentStatus } from '@/types/payment'
+import { PendingPaymentBooking } from '@/types/payment'
 import { toast } from 'sonner'
 
 // Group bookings by user (same name, email, date, and close deadline = same booking session)
@@ -15,7 +15,7 @@ function groupBookings(bookings: PendingPaymentBooking[]): Map<string, PendingPa
   bookings.forEach(booking => {
     // Group key: name + email + date + deadline (rounded to minute)
     // Protect against null/undefined payment_deadline before calling substring
-    const deadlineRaw = booking.payment_deadline ?? ''
+    const deadlineRaw = (booking as any).payment_deadline ?? ''
     const deadlineMinute = (typeof deadlineRaw === 'string' && deadlineRaw.length >= 16)
       ? deadlineRaw.substring(0, 16)
       : deadlineRaw
@@ -201,20 +201,17 @@ export function PendingPayments() {
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
-      <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-        <p className="text-sm text-amber-600 font-medium">Awaiting Verification</p>
-        <p className="text-2xl font-bold text-amber-700">{groupedBookings.length}</p>
-        <p className="text-xs text-amber-600 mt-1">
-          Customers have submitted payment, please verify via GCash
-        </p>
-      </div>
 
       {/* Pending Verification List */}
       <div>
-        <h3 className="text-sm font-semibold text-amber-700 uppercase tracking-wide mb-3">
-          Needs Verification ({groupedBookings.length})
-        </h3>
+        <div className="flex flex-row gap-2 mb-3">
+          <p className="text-md font-semibold text-amber-700 uppercase">
+            Needs Verification ({groupedBookings.length})
+          </p>
+          <p className="text-sm text-amber-600 align-self-center">
+            Customers have submitted payment, please verify via GCash
+          </p>
+        </div>
         <div className="space-y-3">
           {groupedBookings.map((group) => (
             <BookingGroupCard

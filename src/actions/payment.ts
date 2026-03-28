@@ -156,7 +156,6 @@ export async function getPaymentInfoAction(bookingId: string): Promise<PaymentIn
 
   return {
     amount: booking.payment_amount || 0,
-    deadline: new Date(),
     qrCodeUrl: settings?.gcash_qr_url || null,
     gcashName: settings?.gcash_name || null,
     gcashNumber: settings?.gcash_number || null,

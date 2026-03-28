@@ -7,9 +7,9 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { AuthModal } from '@/components/auth/AuthModal'
 import { User, LogOut, CalendarDays, ChevronDown } from 'lucide-react'
+import { useProfile } from '@/hooks/useProfile'
 
 const SECTIONS = [
-  // { id: 'about', label: 'About' },
   { id: 'rates', label: 'Rates & Policies' },
   { id: 'book', label: 'Book' },
   { id: 'contact', label: 'Contact' },
@@ -24,6 +24,9 @@ export default function NavBar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading: authLoading, signOut, isAdmin: userIsAdmin } = useAuth()
+  const { data: profile } = useProfile()
+  // Prefer a friendly display name from auth metadata; fall back to email or 'User'
+  const displayName = profile?.name ?? user?.user_metadata?.full_name ?? user?.email ?? 'User'
   
   const isAdminPath = pathname?.startsWith('/admin') ?? false
   const isProfilePage = pathname === '/profile'
@@ -161,7 +164,7 @@ export default function NavBar() {
                         className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
                       >
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-sm font-medium">
-                          {user.email?.[0]?.toUpperCase() || 'U'}
+                          {displayName?.[0]?.toUpperCase() || 'U'}
                         </div>
                         <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
                       </button>
@@ -171,7 +174,7 @@ export default function NavBar() {
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
                           <div className="px-4 py-2 border-b border-gray-100">
                             <p className="text-sm font-medium text-gray-900 truncate">
-                              {user.email}
+                              {displayName}
                             </p>
                           </div>
 
