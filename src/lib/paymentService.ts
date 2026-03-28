@@ -9,14 +9,14 @@ import { PaymentStatus, PaymentResult, PendingPaymentBooking } from '@/types/pay
 import { 
   calculatePaymentAmount, 
   calculatePaymentDeadline, 
-  isPaymentExpired,
   HELD_PAYMENT_STATUSES,
+  PENDING_VERIFICATION_STATUSES,
   DEFAULT_PAYMENT_TIMEOUT_MINUTES 
 } from './paymentConfig'
 
 /**
- * Create bookings with pending payment status
- * Returns the created bookings with payment info
+ * Create bookings with awaiting_payment status
+ * User has confirmed booking, now needs to pay
  */
 export async function createBookingsWithPayment(
   payload: {
@@ -44,7 +44,7 @@ export async function createBookingsWithPayment(
     court_number: payload.court_number,
     players: payload.players,
     user_id: payload.user_id || null,
-    payment_status: 'pending' as PaymentStatus,
+    payment_status: 'awaiting_payment' as PaymentStatus, // User needs to pay
     payment_deadline: deadline.toISOString(),
     payment_amount: amount,
   }))
@@ -73,13 +73,14 @@ export async function createBookingsWithPayment(
 
 /**
  * Mark payment as submitted (user says they paid)
+ * Changes from awaiting_payment -> pending (now visible in admin Pending Payments)
  */
 export async function markPaymentSubmitted(bookingIds: string[]): Promise<PaymentResult> {
   const { error } = await supabase
     .from('bookings')
-    .update({ payment_status: 'awaiting_confirmation' as PaymentStatus })
+    .update({ payment_status: 'pending' as PaymentStatus })
     .in('id', bookingIds)
-    .eq('payment_status', 'pending')
+    .eq('payment_status', 'awaiting_payment')
 
   if (error) {
     console.error('Error marking payment as submitted:', error)
@@ -91,6 +92,7 @@ export async function markPaymentSubmitted(bookingIds: string[]): Promise<Paymen
 
 /**
  * Confirm payment (admin action)
+ * Only from 'pending' status (user has submitted payment)
  */
 export async function confirmPayment(bookingIds: string[]): Promise<PaymentResult> {
   const { error } = await supabase
@@ -100,7 +102,7 @@ export async function confirmPayment(bookingIds: string[]): Promise<PaymentResul
       payment_confirmed_at: new Date().toISOString()
     })
     .in('id', bookingIds)
-    .in('payment_status', ['pending', 'awaiting_confirmation'])
+    .eq('payment_status', 'pending')
 
   if (error) {
     console.error('Error confirming payment:', error)
@@ -112,13 +114,14 @@ export async function confirmPayment(bookingIds: string[]): Promise<PaymentResul
 
 /**
  * Reject payment (admin action)
+ * Only from 'pending' status
  */
 export async function rejectPayment(bookingIds: string[]): Promise<PaymentResult> {
   const { error } = await supabase
     .from('bookings')
     .update({ payment_status: 'rejected' as PaymentStatus })
     .in('id', bookingIds)
-    .in('payment_status', ['pending', 'awaiting_confirmation'])
+    .eq('payment_status', 'pending')
 
   if (error) {
     console.error('Error rejecting payment:', error)
@@ -151,7 +154,8 @@ export async function expireOverduePayments(): Promise<{ expiredCount: number; e
 }
 
 /**
- * Get bookings awaiting payment confirmation (admin view)
+ * Get bookings awaiting admin verification (user has submitted payment)
+ * Only shows 'pending' status - where user clicked "I've Completed Payment"
  */
 export async function getPendingPayments(): Promise<PendingPaymentBooking[]> {
   // First, expire any overdue payments
@@ -160,8 +164,8 @@ export async function getPendingPayments(): Promise<PendingPaymentBooking[]> {
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
-    .in('payment_status', ['pending', 'awaiting_confirmation'])
-    .order('payment_deadline', { ascending: true })
+    .in('payment_status', [...PENDING_VERIFICATION_STATUSES])
+    .order('created_at', { ascending: true })
 
   if (error) {
     console.error('Error fetching pending payments:', error)

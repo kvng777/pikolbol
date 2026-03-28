@@ -1,10 +1,11 @@
 // Payment status values
 export type PaymentStatus = 
-  | 'pending'              // Waiting for user to pay
-  | 'awaiting_confirmation' // User says they paid, waiting for admin
-  | 'confirmed'            // Admin verified payment
-  | 'expired'              // Payment timeout reached
-  | 'rejected'             // Admin rejected payment
+  | 'awaiting_payment'      // User confirmed booking, waiting for them to pay
+  | 'pending'               // User says they paid, waiting for admin verification
+  | 'confirmed'             // Admin verified payment - booking is final
+  | 'expired'               // Payment timeout reached
+  | 'rejected'              // Admin rejected payment
+  | 'cancelled'             // User cancelled the booking
 
 // Payment settings stored in database
 export interface PaymentSettings {

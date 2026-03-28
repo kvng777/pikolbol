@@ -10,12 +10,12 @@ import { CANCELLATION_HOURS_BEFORE } from '@/lib/constants'
 
 // Payment status badge configuration
 const paymentStatusConfig: Record<PaymentStatus, { label: string; className: string }> = {
-  pending: {
-    label: 'Payment Pending',
+  awaiting_payment: {
+    label: 'Awaiting Payment',
     className: 'bg-yellow-100 text-yellow-700',
   },
-  awaiting_confirmation: {
-    label: 'Awaiting Verification',
+  pending: {
+    label: 'Pending Verification',
     className: 'bg-orange-100 text-orange-700',
   },
   confirmed: {
@@ -24,11 +24,15 @@ const paymentStatusConfig: Record<PaymentStatus, { label: string; className: str
   },
   expired: {
     label: 'Payment Expired',
-    className: 'bg-red-100 text-red-700',
+    className: 'bg-gray-100 text-gray-500',
   },
   rejected: {
     label: 'Payment Rejected',
     className: 'bg-red-100 text-red-700',
+  },
+  cancelled: {
+    label: 'Cancelled',
+    className: 'bg-gray-100 text-gray-500',
   },
 }
 
@@ -58,10 +62,10 @@ function getBookingStatus(booking: Booking): BookingStatus {
 function canCancelBooking(booking: Booking): { canCancel: boolean; reason?: string } {
   // Cannot cancel if payment is not confirmed (for bookings with payment)
   if (booking.payment_status && booking.payment_status !== 'confirmed') {
-    if (booking.payment_status === 'pending' || booking.payment_status === 'awaiting_confirmation') {
+    if (booking.payment_status === 'awaiting_payment' || booking.payment_status === 'pending') {
       return { canCancel: false, reason: 'Complete or wait for payment to expire' }
     }
-    if (booking.payment_status === 'expired' || booking.payment_status === 'rejected') {
+    if (booking.payment_status === 'expired' || booking.payment_status === 'rejected' || booking.payment_status === 'cancelled') {
       return { canCancel: false, reason: 'Booking already cancelled' }
     }
   }

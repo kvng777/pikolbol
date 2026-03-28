@@ -46,9 +46,9 @@ export function PaymentScreen({
     }
   }, [paymentStatus, onPaymentConfirmed, onPaymentExpired])
 
-  // Handle expiry
+  // Handle expiry (only when user hasn't submitted payment yet)
   useEffect(() => {
-    if (isExpired && paymentStatus === 'pending') {
+    if (isExpired && paymentStatus === 'awaiting_payment') {
       onPaymentExpired()
     }
   }, [isExpired, paymentStatus, onPaymentExpired])
@@ -72,7 +72,8 @@ export function PaymentScreen({
   const timeSlots = bookings.map(b => b.time_slot).join(', ')
 
   // Different UI based on payment status
-  if (paymentStatus === 'awaiting_confirmation') {
+  // Show "Awaiting Verification" when user has submitted payment (pending status)
+  if (paymentStatus === 'pending') {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6">
@@ -82,7 +83,7 @@ export function PaymentScreen({
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Awaiting Confirmation</h2>
             <p className="text-gray-600 mb-6">
-              Thank you! We've received your payment notification. Please wait while we verify your payment.
+              Thank you! We&apos;ve received your payment notification. Please wait while we verify your payment.
             </p>
 
             {/* Booking Summary */}
@@ -94,7 +95,7 @@ export function PaymentScreen({
             </div>
 
             <p className="text-sm text-gray-500">
-              You'll receive an email once your payment is confirmed. This usually takes a few minutes.
+              You&apos;ll receive an email once your payment is confirmed. This usually takes a few minutes.
             </p>
           </div>
         </div>
@@ -210,11 +211,11 @@ export function PaymentScreen({
             <h3 className="font-medium text-blue-900 mb-2">How to Pay:</h3>
             <ol className="text-sm text-blue-800 space-y-1">
               <li>1. Open your GCash app</li>
-              <li>2. Tap "Scan QR" or "Send Money"</li>
+              <li>2. Tap &quot;Scan QR&quot; or &quot;Send Money&quot;</li>
               <li>3. Scan the QR code above or enter the number</li>
               <li>4. Enter exact amount: <strong>Php {amount.toLocaleString()}</strong></li>
               <li>5. Complete the payment</li>
-              <li>6. Click "I've Completed Payment" below</li>
+              <li>6. Click &quot;I&apos;ve Completed Payment&quot; below</li>
             </ol>
           </div>
 
@@ -241,7 +242,7 @@ export function PaymentScreen({
               ) : (
                 <span className="flex items-center gap-2">
                   <CheckCircle className="w-5 h-5" />
-                  I've Completed Payment
+                  I&apos;ve Completed Payment
                 </span>
               )}
             </Button>

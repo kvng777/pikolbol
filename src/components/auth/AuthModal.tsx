@@ -21,8 +21,6 @@ export function AuthModal({ open, onClose, onSuccess, defaultTab = 'login' }: Au
   const { isLoading, error, login, signup, clearError } = useUserAuth()
   const isClient = typeof document !== 'undefined'
 
-  console.log('activeTab', activeTab);
-
   // Reset tab when modal opens
   // useEffect(() => {
   //   if (open) {

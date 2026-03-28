@@ -95,6 +95,8 @@ export function PaymentSettings() {
 
   const currentQrUrl = previewUrl || settings?.gcash_qr_url
 
+  console.log('currentQrUrl', currentQrUrl);
+
   return (
     <div className="space-y-8">
       {/* QR Code Upload */}

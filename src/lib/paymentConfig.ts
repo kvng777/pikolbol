@@ -12,13 +12,18 @@ export const BASE_PLAYERS_INCLUDED = 4 // Players included in base price
 export const DEFAULT_PAYMENT_TIMEOUT_MINUTES = 15
 
 // Payment statuses that indicate a slot is "held" (unavailable)
-export const HELD_PAYMENT_STATUSES = ['pending', 'awaiting_confirmation'] as const
+// User is in process of paying or admin is verifying
+export const HELD_PAYMENT_STATUSES = ['awaiting_payment', 'pending'] as const
 
 // Payment statuses that indicate booking is finalized
 export const CONFIRMED_PAYMENT_STATUSES = ['confirmed'] as const
 
 // Payment statuses that indicate booking should be released
-export const RELEASED_PAYMENT_STATUSES = ['expired', 'rejected'] as const
+export const RELEASED_PAYMENT_STATUSES = ['expired', 'rejected', 'cancelled'] as const
+
+// Payment statuses shown in admin "Pending Payments" tab
+// Only show after user says they've paid
+export const PENDING_VERIFICATION_STATUSES = ['pending'] as const
 
 /**
  * Calculate the total payment amount for a booking

@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { useAdminPage } from '@/hooks/useAdminPage'
+import { useState, useMemo } from 'react'
+import { useAdminPage, GroupedBooking } from '@/hooks/useAdminPage'
+import { BookingFilterValue, TimeFilterValue, isBookingPast, isBookingToday } from '@/lib/bookingStatus'
 
 export function useAdminTable() {
   const admin = useAdminPage()
@@ -43,43 +44,64 @@ export function useAdminTable() {
     addClosedDate,
   } = admin
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  // UI state
-  const [filterMode, setFilterMode] = useState<'all' | 'incoming' | 'passed'>('all')
+  // UI state for filters
+  const [statusFilter, setStatusFilter] = useState<BookingFilterValue>('all')
+  const [timeFilter, setTimeFilter] = useState<TimeFilterValue>('all')
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [page, setPage] = useState<number>(1)
   const pageSize = 10
 
-  // Apply filter mode (incoming/past) on sortedBookings
-  const filteredBookings = sortedBookings.filter((group) => {
-    const groupDate = new Date(group.date + 'T00:00:00')
-    const isPast = groupDate < today
-    if (filterMode === 'all') return true
-    if (filterMode === 'incoming') return !isPast
-    if (filterMode === 'passed') return isPast
-    return true
-  })
+  // Apply filters
+  const filteredBookings = useMemo(() => {
+    return sortedBookings.filter((group: GroupedBooking) => {
+      // Status filter
+      if (statusFilter !== 'all') {
+        if (group.payment_status !== statusFilter) return false
+      }
 
-  // apply search filter (name or phone) if provided
+      // Time filter
+      if (timeFilter !== 'all') {
+        const isPast = isBookingPast(group.date)
+        const isToday = isBookingToday(group.date)
+        
+        if (timeFilter === 'upcoming' && (isPast || isToday)) return false
+        if (timeFilter === 'today' && !isToday) return false
+        if (timeFilter === 'past' && !isPast) return false
+      }
+
+      return true
+    })
+  }, [sortedBookings, statusFilter, timeFilter])
+
+  // Apply search filter
   const normalizedQuery = searchQuery.trim().toLowerCase()
-  const searchedBookings = normalizedQuery
-    ? filteredBookings.filter((g) => {
-        const name = (g.name || '').toLowerCase()
-        const phone = (g.phone || '').toString().toLowerCase()
-        return name.includes(normalizedQuery) || phone.includes(normalizedQuery)
-      })
-    : filteredBookings
+  const searchedBookings = useMemo(() => {
+    if (!normalizedQuery) return filteredBookings
+    
+    return filteredBookings.filter((g: GroupedBooking) => {
+      const name = (g.name || '').toLowerCase()
+      const phone = (g.phone || '').toString().toLowerCase()
+      const email = (g.email || '').toLowerCase()
+      return name.includes(normalizedQuery) || 
+             phone.includes(normalizedQuery) || 
+             email.includes(normalizedQuery)
+    })
+  }, [filteredBookings, normalizedQuery])
 
+  // Pagination
   const totalPages = Math.max(1, Math.ceil(searchedBookings.length / pageSize))
   const currentPage = Math.min(page, totalPages)
   const startIdx = (currentPage - 1) * pageSize
   const pagedBookings = searchedBookings.slice(startIdx, startIdx + pageSize)
 
   // Helpers (update state and reset page when needed)
-  const setFilterModeAndReset = (mode: 'all' | 'incoming' | 'passed') => {
-    setFilterMode(mode)
+  const setStatusFilterAndReset = (filter: BookingFilterValue) => {
+    setStatusFilter(filter)
+    setPage(1)
+  }
+
+  const setTimeFilterAndReset = (filter: TimeFilterValue) => {
+    setTimeFilter(filter)
     setPage(1)
   }
 
@@ -129,9 +151,11 @@ export function useAdminTable() {
     addDisabledSlot,
     addClosedDate,
 
-    // UI state
-    filterMode,
-    setFilterMode: setFilterModeAndReset,
+    // UI state - filters
+    statusFilter,
+    setStatusFilter: setStatusFilterAndReset,
+    timeFilter,
+    setTimeFilter: setTimeFilterAndReset,
     searchQuery,
     setSearchQuery: setSearchQueryAndReset,
     page,

@@ -15,11 +15,13 @@ import {
   useRemoveClosedDate,
 } from '@/hooks/useBookings'
 import { Booking } from '@/types/booking'
+import { PaymentStatus } from '@/types/payment'
+import { BookingFilterValue, TimeFilterValue } from '@/lib/bookingStatus'
 
-type SortField = 'date' | 'time_slot' | 'name' | 'created_at'
+type SortField = 'date' | 'time_slot' | 'name' | 'created_at' | 'payment_status'
 type SortOrder = 'asc' | 'desc'
 
-interface GroupedBooking {
+export interface GroupedBooking {
   key: string
   name: string
   email: string
@@ -29,6 +31,8 @@ interface GroupedBooking {
   bookingIds: string[]
   created_at: string
   players?: number
+  payment_status: PaymentStatus | null
+  payment_amount?: number
 }
 
 export function useAdminPage() {
@@ -82,7 +86,8 @@ export function useAdminPage() {
     const groups = new Map<string, GroupedBooking>()
 
     filtered.forEach((booking: Booking) => {
-      const key = `${booking.name}-${booking.email}-${booking.phone}-${booking.date}`
+      // Group by user + date + payment_status (same user may have multiple bookings with different statuses)
+      const key = `${booking.name}-${booking.email}-${booking.phone}-${booking.date}-${booking.payment_status}`
       
       if (groups.has(key)) {
         const group = groups.get(key)!
@@ -99,6 +104,8 @@ export function useAdminPage() {
           bookingIds: [booking.id],
           created_at: booking.created_at,
           players: booking.players,
+          payment_status: booking.payment_status || null,
+          payment_amount: booking.payment_amount ?? undefined,
         })
       }
     })
