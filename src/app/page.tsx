@@ -15,6 +15,7 @@ import BookingConfirmedModal from '@/components/ui/BookingConfirmedModal'
 import { PaymentScreen, BookingData } from '@/components/booking/PaymentScreen'
 import { useAuth } from '@/components/AuthProvider'
 import { calculatePaymentAmount } from '@/lib/paymentConfig'
+import RatesPolicies from '@/components/home/RatesPolicies'
 
 type BookingState = 'idle' | 'payment' | 'pending' | 'confirmed'
 
@@ -191,7 +192,7 @@ export default function Home() {
       <main className="relative z-10 min-h-screen py-12 pt-0 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
           <HeroSection />
-
+          <RatesPolicies />
           <BookSection
             selectedDate={selectedDate}
             selectedSlots={selectedSlots}

@@ -10,6 +10,7 @@ import { User, LogOut, CalendarDays, ChevronDown } from 'lucide-react'
 
 const SECTIONS = [
   // { id: 'about', label: 'About' },
+  { id: 'rates', label: 'Rates & Policies' },
   { id: 'book', label: 'Book' },
   { id: 'contact', label: 'Contact' },
 ]
