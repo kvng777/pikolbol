@@ -32,7 +32,7 @@ interface GroupedBooking {
 }
 
 export function useAdminPage() {
-  const { user, loading: authLoading, signOut } = useAuth()
+  const { user, loading: authLoading, isAdmin, signOut } = useAuth()
   const router = useRouter()
   const { data: bookings = [], isLoading: bookingsLoading, refetch } = useAllBookings()
   const { data: allDisabledSlots = [], refetch: refetchDisabledSlots } = useAllDisabledSlots()
@@ -46,7 +46,7 @@ export function useAdminPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [filterDate, setFilterDate] = useState<string>('')
 
-  const [activeTab, setActiveTab] = useState<'bookings' | 'slots' | 'closed'>('bookings')
+  const [activeTab, setActiveTab] = useState<'bookings' | 'slots' | 'closed' | 'payments' | 'settings'>('bookings')
   const [selectedDateForSlots, setSelectedDateForSlots] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
   const [closeStartDate, setCloseStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
@@ -54,10 +54,17 @@ export function useAdminPage() {
   const [closeReason, setCloseReason] = useState<string>('')
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/admin/login')
+    if (!authLoading) {
+      if (!user) {
+        // Not logged in - redirect to login
+        router.push('/admin/login')
+      } else if (!isAdmin) {
+        // Logged in but not admin - redirect to home
+        toast.error('Access denied. Admin privileges required.')
+        router.push('/')
+      }
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, isAdmin, router])
 
   const handleSignOut = async () => {
     await signOut()
@@ -239,6 +246,7 @@ export function useAdminPage() {
     // auth
     user,
     authLoading,
+    isAdmin,
     handleSignOut,
     // data
     bookings,

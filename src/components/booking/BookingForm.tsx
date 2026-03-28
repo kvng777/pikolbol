@@ -1,12 +1,13 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { BookingFormData, BulkBookingPayload } from '@/types/booking'
+import { BulkBookingPayload } from '@/types/booking'
 import { User, Phone, Mail } from 'lucide-react'
 
 const formSchema = z.object({
@@ -18,11 +19,18 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>
 
+export interface BookingFormDefaultValues {
+  name?: string
+  phone?: string
+  email?: string
+}
+
 interface BookingFormProps {
   selectedDate: string
   selectedSlots: string[]
   onSubmit: (data: BulkBookingPayload) => Promise<void>
   isSubmitting?: boolean
+  defaultValues?: BookingFormDefaultValues
 }
 
 export function BookingForm({
@@ -30,6 +38,7 @@ export function BookingForm({
   selectedSlots,
   onSubmit,
   isSubmitting,
+  defaultValues,
 }: BookingFormProps) {
   const {
     register,
@@ -38,10 +47,25 @@ export function BookingForm({
     setValue,
     watch,
     getValues,
+    reset,
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: { players: 2 },
+    defaultValues: { 
+      players: 2,
+      name: defaultValues?.name || '',
+      phone: defaultValues?.phone || '',
+      email: defaultValues?.email || '',
+    },
   })
+
+  // Update form when defaultValues change (e.g., when user logs in and profile loads)
+  useEffect(() => {
+    if (defaultValues) {
+      if (defaultValues.name) setValue('name', defaultValues.name)
+      if (defaultValues.phone) setValue('phone', defaultValues.phone)
+      if (defaultValues.email) setValue('email', defaultValues.email)
+    }
+  }, [defaultValues, setValue])
 
   const handleFormSubmit = async (data: FormData) => {
     // Send a single bulk booking request for all selected slots

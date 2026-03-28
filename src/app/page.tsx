@@ -1,32 +1,41 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { format } from 'date-fns'
 import NavBar from '@/components/NavBar'
 import HeroSection from '@/components/home/HeroSection'
-// import AboutSection from '@/components/home/AboutSection'
 import BookSection from '@/components/home/BookSection'
 import ContactSection from '@/components/home/ContactSection'
 import Footer from '@/components/home/Footer'
-import { useBookingsByDate, useDisabledSlotsByDate, useClosedDates } from '@/hooks/useBookings'
-import { useCreateBooking, useCreateBookings } from '@/hooks/useCreateBooking'
+import { useActiveBookingsByDate, useDisabledSlotsByDate, useClosedDates } from '@/hooks/useBookings'
+import { useCreateBookingWithPayment } from '@/hooks/usePayment'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { Booking, BulkBookingPayload } from '@/types/booking'
 import { toast } from 'sonner'
 import BookingConfirmedModal from '@/components/ui/BookingConfirmedModal'
+import { PaymentScreen } from '@/components/booking/PaymentScreen'
+import { useAuth } from '@/components/AuthProvider'
+import { calculatePaymentAmount } from '@/lib/paymentConfig'
+
+type BookingState = 'idle' | 'payment' | 'confirmed'
 
 export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
+  const [bookingState, setBookingState] = useState<BookingState>('idle')
+  const [pendingBookings, setPendingBookings] = useState<Booking[]>([])
+  const [paymentDeadline, setPaymentDeadline] = useState<string>('')
   const [confirmedBookings, setConfirmedBookings] = useState<Booking[]>([])
   const bookingCardRef = useRef<HTMLDivElement | null>(null)
 
+  const { user } = useAuth()
   const dateString = format(selectedDate, 'yyyy-MM-dd')
-  const { data: bookings = [], isLoading } = useBookingsByDate(dateString)
+  
+  // Use ACTIVE bookings for slot availability (payment-aware)
+  const { data: bookings = [], isLoading } = useActiveBookingsByDate(dateString)
   const { data: disabledSlots = [] } = useDisabledSlotsByDate(dateString)
   const { data: closedDates = [] } = useClosedDates()
-  const createBooking = useCreateBooking()
-  const createBookings = useCreateBookings()
+  const createBookingWithPayment = useCreateBookingWithPayment()
 
   const isDateClosed = useMemo(() => {
     return closedDates.some(cd => 
@@ -44,30 +53,63 @@ export default function Home() {
 
   const handleSubmit = async (data: BulkBookingPayload) => {
     try {
-      const payload: BulkBookingPayload = data
+      const payload = {
+        name: data.name,
+        phone: data.phone,
+        email: data.email,
+        date: data.date || dateString,
+        timeSlots: data.timeSlots || selectedSlots,
+        courtNumber: data.courtNumber || 1,
+        players: data.players || 2,
+        user_id: user?.id,
+      }
 
-      // ensure date and court are consistent with page state if booking form didn't provide them
-      if (!payload.date) payload.date = dateString
-      if (!payload.courtNumber) payload.courtNumber = 1
-      if (!payload.timeSlots || payload.timeSlots.length === 0) payload.timeSlots = selectedSlots
+      const result = await createBookingWithPayment.mutateAsync(payload)
 
-      const result = await createBookings.mutateAsync(payload)
-
-      if (result.success && result.bookings) {
-        setConfirmedBookings(result.bookings)
-        toast.success('Booking confirmed!')
+      if (result.success && result.bookings && result.paymentDeadline) {
+        setPendingBookings(result.bookings)
+        setPaymentDeadline(result.paymentDeadline)
+        setBookingState('payment')
+        toast.info('Please complete your payment')
       } else {
-        toast.error(result.error || 'Failed to create bookings')
+        toast.error(result.error || 'Failed to create booking')
       }
     } catch (err) {
       console.error(err)
-      toast.error('Failed to create bookings')
+      toast.error('Failed to create booking')
     }
   }
+
+  const handlePaymentConfirmed = useCallback(() => {
+    setConfirmedBookings(pendingBookings)
+    setPendingBookings([])
+    setPaymentDeadline('')
+    setBookingState('confirmed')
+    setSelectedSlots([])
+    toast.success('Payment confirmed! Your booking is secured.')
+  }, [pendingBookings])
+
+  const handlePaymentExpired = useCallback(() => {
+    setPendingBookings([])
+    setPaymentDeadline('')
+    setBookingState('idle')
+    setSelectedSlots([])
+    toast.error('Payment time expired. Please try booking again.')
+  }, [])
+
+  const handleCancelPayment = useCallback(() => {
+    // User cancels - the booking will expire automatically
+    setPendingBookings([])
+    setPaymentDeadline('')
+    setBookingState('idle')
+    setSelectedSlots([])
+    toast.info('Booking cancelled')
+  }, [])
 
   const handleNewBooking = () => {
     setSelectedSlots([])
     setConfirmedBookings([])
+    setBookingState('idle')
   }
 
   const handleDownloadScreenshot = async () => {
@@ -79,7 +121,6 @@ export default function Home() {
     try {
       const domToImage = (await import('dom-to-image-more')).default
 
-      // Clone the node and inline computed styles to avoid unsupported CSS (gradients/lab() colors)
       const original = bookingCardRef.current
       const clone = original.cloneNode(true) as HTMLElement
 
@@ -94,7 +135,6 @@ export default function Home() {
           }
         }
 
-        // Neutralize problematic display styles that often break rasterization
         ;(dest as HTMLElement).style.boxShadow = 'none'
         ;(dest as HTMLElement).style.backgroundImage = 'none'
         ;(dest as HTMLElement).style.filter = 'none'
@@ -111,14 +151,12 @@ export default function Home() {
 
       inlineStyles(original, clone)
 
-      // Place offscreen and ensure size is preserved
       clone.style.position = 'fixed'
       clone.style.left = '-9999px'
       clone.style.top = '0'
       clone.style.zIndex = '9999'
       document.body.appendChild(clone)
 
-      // Capture the cleaned clone
       const blob: Blob = await domToImage.toBlob(clone, { bgcolor: '#ffffff' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -128,7 +166,6 @@ export default function Home() {
       link.click()
       link.remove()
       URL.revokeObjectURL(url)
-      // remove the clone after capture
       clone.remove()
       toast.success('Screenshot downloaded')
     } catch (err) {
@@ -137,11 +174,30 @@ export default function Home() {
     }
   }
 
+  // Calculate payment amount for pending bookings
+  const paymentAmount = pendingBookings.length > 0 
+    ? pendingBookings[0].payment_amount || calculatePaymentAmount(pendingBookings.length, pendingBookings[0].players)
+    : 0
+
   return (
     <div className="min-h-screen relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-teal-50">
       <NavBar />
+      
+      {/* Payment Screen */}
+      {bookingState === 'payment' && pendingBookings.length > 0 && (
+        <PaymentScreen
+          bookings={pendingBookings}
+          amount={paymentAmount}
+          deadline={paymentDeadline}
+          onPaymentConfirmed={handlePaymentConfirmed}
+          onPaymentExpired={handlePaymentExpired}
+          onCancel={handleCancelPayment}
+        />
+      )}
+
+      {/* Booking Confirmed Modal */}
       <BookingConfirmedModal
-        open={confirmedBookings.length > 0}
+        open={bookingState === 'confirmed' && confirmedBookings.length > 0}
         onClose={handleNewBooking}
         bookings={confirmedBookings}
         bookingCardRef={bookingCardRef}
@@ -152,8 +208,6 @@ export default function Home() {
         <div className="max-w-5xl mx-auto">
           <HeroSection />
 
-          {/* <AboutSection /> */}
-
           <BookSection
             selectedDate={selectedDate}
             selectedSlots={selectedSlots}
@@ -163,7 +217,7 @@ export default function Home() {
             availableSlots={availableSlots}
             isLoading={isLoading}
             dateString={dateString}
-            createBookingPending={createBooking.isPending}
+            createBookingPending={createBookingWithPayment.isPending}
             onSubmit={handleSubmit}
             closedDates={closedDates}
           />

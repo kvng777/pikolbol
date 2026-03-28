@@ -21,9 +21,6 @@ export function CalendarPicker({ selected, onSelect, closedDates = [] }: Calenda
     return () => cancelAnimationFrame(id)
   }, [])
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
   if (!mounted) {
     return (
       <div className="flex flex-col items-center">
@@ -33,16 +30,23 @@ export function CalendarPicker({ selected, onSelect, closedDates = [] }: Calenda
     )
   }
 
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
   return (
     <div className="flex flex-col items-center">
       <DayPicker
         mode="single"
         selected={selected}
-        disabled={closedDates.map(cd => ({ from: new Date(cd.start_date + 'T00:00:00'), to: new Date(cd.end_date + 'T00:00:00') }))}
+        disabled={[
+          { before: today },
+          ...closedDates.map(cd => ({ from: new Date(cd.start_date + 'T00:00:00'), to: new Date(cd.end_date + 'T00:00:00') }))
+        ]}
         onSelect={(date) => {
           if (!date) return
           const d = new Date(date)
           d.setHours(0,0,0,0)
+          if (d.getTime() < today.getTime()) return
           const isClosed = closedDates.some(cd => {
             const from = new Date(cd.start_date + 'T00:00:00')
             const to = new Date(cd.end_date + 'T00:00:00')
@@ -51,7 +55,7 @@ export function CalendarPicker({ selected, onSelect, closedDates = [] }: Calenda
           if (!isClosed) onSelect(date)
         }}
         fromDate={today}
-        className="!font-sans"
+        className="font-sans!"
         components={{
           Chevron: ({ orientation }) => 
             orientation === 'left' 

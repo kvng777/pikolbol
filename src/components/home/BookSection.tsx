@@ -1,10 +1,14 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { CalendarPicker } from '@/components/booking/CalendarPicker'
 import { TimeSlotPicker } from '@/components/booking/TimeSlotPicker'
-import { BookingForm } from '@/components/booking/BookingForm'
+import { BookingForm, BookingFormDefaultValues } from '@/components/booking/BookingForm'
+import { AuthModal } from '@/components/auth/AuthModal'
 import { BulkBookingPayload, TimeSlot, ClosedDate } from '@/types/booking'
+import { useAuth } from '@/components/AuthProvider'
+import { useProfile } from '@/hooks/useProfile'
+import { LogIn } from 'lucide-react'
 
 type BookSectionProps = {
   selectedDate: Date
@@ -33,9 +37,36 @@ export default function BookSection({
   onSubmit,
   closedDates,
 }: BookSectionProps) {
+  const { user, loading: authLoading } = useAuth()
+  const { data: profile } = useProfile()
+  const [showAuthModal, setShowAuthModal] = useState(false)
+
+  // Prepare default values for the booking form from user profile
+  const formDefaultValues: BookingFormDefaultValues | undefined = user ? {
+    name: profile?.name || '',
+    phone: profile?.phone || '',
+    email: user.email || '',
+  } : undefined
+
+  const handleAuthSuccess = () => {
+    // Auth modal will close automatically
+    // The form will re-render with the new user data
+  }
+
+  const isAuthenticated = !!user
+
   return (
     <section id="book" style={{ scrollMarginTop: '5rem' }}>
       <h2 className="text-2xl font-semibold text-gray-900 mb-8 mt-8">Booking Form</h2>
+      
+      {/* Auth Modal */}
+      <AuthModal
+        open={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={handleAuthSuccess}
+        defaultTab="login"
+      />
+
       <div className="grid lg:grid-cols-5 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
@@ -90,12 +121,43 @@ export default function BookSection({
             {selectedSlots.length > 0 && !isDateClosed && (
               <div className="mt-8 pt-6 border-t border-gray-100">
                 <h3 className="text-gray-900 font-semibold mb-4">Complete your booking</h3>
-                <BookingForm
-                  selectedDate={dateString}
-                  selectedSlots={selectedSlots}
-                  onSubmit={onSubmit}
-                  isSubmitting={createBookingPending}
-                />
+                
+                {/* Show login prompt if not authenticated */}
+                {!authLoading && !isAuthenticated ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-amber-100">
+                        <LogIn className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-amber-800">
+                          Login required to book
+                        </p>
+                        <p className="text-xs text-amber-600 mt-1">
+                          Please sign in or create an account to complete your booking.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowAuthModal(true)}
+                          className="mt-3 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-lg transition-all shadow-md shadow-emerald-500/25"
+                        >
+                          Sign In / Sign Up
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Show booking form if authenticated */}
+                {isAuthenticated && (
+                  <BookingForm
+                    selectedDate={dateString}
+                    selectedSlots={selectedSlots}
+                    onSubmit={onSubmit}
+                    isSubmitting={createBookingPending}
+                    defaultValues={formDefaultValues}
+                  />
+                )}
               </div>
             )}
           </div>
