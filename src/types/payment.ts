@@ -1,9 +1,7 @@
 // Payment status values
 export type PaymentStatus = 
-  | 'awaiting_payment'      // User confirmed booking, waiting for them to pay
-  | 'pending'               // User says they paid, waiting for admin verification
+  | 'pending'               // User submitted payment, waiting for admin verification
   | 'confirmed'             // Admin verified payment - booking is final
-  | 'expired'               // Payment timeout reached
   | 'rejected'              // Admin rejected payment
   | 'cancelled'             // User cancelled the booking
 
@@ -36,7 +34,6 @@ export interface PaymentSettingsResult {
 // Payment info displayed to user
 export interface PaymentInfo {
   amount: number
-  deadline: Date
   qrCodeUrl: string | null
   gcashName: string | null
   gcashNumber: string | null
@@ -61,14 +58,13 @@ export interface PendingPaymentBooking {
   court_number: number
   players: number
   payment_status: PaymentStatus
-  payment_deadline: string
   payment_amount: number
   created_at: string
   user_id: string | null
 }
 
 // Email notification types
-export type PaymentEmailType = 'confirmed' | 'rejected' | 'expired'
+export type PaymentEmailType = 'confirmed' | 'rejected'
 
 export interface PaymentEmailData {
   type: PaymentEmailType

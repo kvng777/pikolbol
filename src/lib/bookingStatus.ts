@@ -7,10 +7,8 @@ import { PaymentStatus } from '@/types/payment'
 
 // Booking status for display (combines payment status with time-based status)
 export type BookingDisplayStatus = 
-  | 'awaiting_payment'  // User needs to pay
   | 'pending'           // User paid, waiting for admin verification
   | 'confirmed'         // Payment verified, booking confirmed
-  | 'expired'           // Payment timeout
   | 'rejected'          // Admin rejected payment
   | 'cancelled'         // User cancelled
   | 'completed'         // Past booking (was confirmed)
@@ -28,14 +26,6 @@ export interface BookingStatusConfig {
  * Status configuration for UI display
  */
 export const BOOKING_STATUS_CONFIG: Record<PaymentStatus | 'completed', BookingStatusConfig> = {
-  awaiting_payment: {
-    label: 'Awaiting Payment',
-    shortLabel: 'Awaiting',
-    className: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-    bgColor: 'bg-yellow-100',
-    textColor: 'text-yellow-700',
-    description: 'User is completing payment',
-  },
   pending: {
     label: 'Pending Verification',
     shortLabel: 'Pending',
@@ -51,14 +41,6 @@ export const BOOKING_STATUS_CONFIG: Record<PaymentStatus | 'completed', BookingS
     bgColor: 'bg-green-100',
     textColor: 'text-green-700',
     description: 'Payment verified, booking confirmed',
-  },
-  expired: {
-    label: 'Expired',
-    shortLabel: 'Expired',
-    className: 'bg-gray-100 text-gray-500 border-gray-200',
-    bgColor: 'bg-gray-100',
-    textColor: 'text-gray-500',
-    description: 'Payment window expired',
   },
   rejected: {
     label: 'Rejected',
@@ -93,8 +75,6 @@ export const BOOKING_FILTER_OPTIONS = [
   { value: 'all', label: 'All Bookings' },
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'pending', label: 'Pending Verification' },
-  { value: 'awaiting_payment', label: 'Awaiting Payment' },
-  { value: 'expired', label: 'Expired' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'cancelled', label: 'Cancelled' },
 ] as const
@@ -145,7 +125,7 @@ export function getDisplayStatus(
     return 'completed'
   }
   
-  return paymentStatus || 'awaiting_payment'
+  return paymentStatus || 'pending'
 }
 
 /**

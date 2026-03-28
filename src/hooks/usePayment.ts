@@ -1,64 +1,33 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  createBookingsWithPaymentAction,
-  markPaymentSubmittedAction,
+  submitPaymentAction,
   getPaymentStatusAction,
-  getPaymentInfoAction,
   getPendingPaymentsAction,
   confirmPaymentAction,
   rejectPaymentAction,
 } from '@/actions/payment'
 import { getPaymentSettingsAction } from '@/actions/paymentSettings'
-import { getRemainingSeconds, formatRemainingTime } from '@/lib/paymentConfig'
 import { Booking } from '@/types/booking'
-import { PaymentInfo, PendingPaymentBooking, PaymentSettings } from '@/types/payment'
+import { PendingPaymentBooking, PaymentSettings } from '@/types/payment'
 
 const CACHE_TIME = 30 * 1000 // 30 seconds for payment-related data
 
 /**
- * Hook to create bookings with payment
+ * Hook to submit payment (creates booking with pending status)
+ * Called when user clicks "I've Completed Payment"
  */
-export function useCreateBookingWithPayment() {
+export function useSubmitPayment() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: createBookingsWithPaymentAction,
+    mutationFn: submitPaymentAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
       queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
-    },
-  })
-}
-
-/**
- * Hook to mark payment as submitted
- */
-export function useMarkPaymentSubmitted() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: markPaymentSubmittedAction,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['paymentStatus'] })
-      queryClient.invalidateQueries({ queryKey: ['paymentInfo'] })
       queryClient.invalidateQueries({ queryKey: ['pendingPayments'] })
     },
-  })
-}
-
-/**
- * Hook to get payment info for a specific booking
- */
-export function usePaymentInfo(bookingId: string | undefined) {
-  return useQuery<PaymentInfo | null>({
-    queryKey: ['paymentInfo', bookingId],
-    queryFn: () => (bookingId ? getPaymentInfoAction(bookingId) : null),
-    enabled: !!bookingId,
-    staleTime: CACHE_TIME,
-    refetchInterval: 10000, // Refetch every 10 seconds to check for status changes
   })
 }
 
@@ -73,43 +42,6 @@ export function usePaymentStatus(bookingIds: string[]) {
     staleTime: CACHE_TIME,
     refetchInterval: 5000, // Refetch every 5 seconds
   })
-}
-
-/**
- * Hook for countdown timer
- * Returns remaining time in seconds and formatted string
- */
-export function usePaymentCountdown(deadline: Date | string | undefined) {
-  const [remainingSeconds, setRemainingSeconds] = useState(0)
-
-  useEffect(() => {
-    if (!deadline) {
-      setRemainingSeconds(0)
-      return
-    }
-
-    // Calculate initial remaining time
-    const updateRemaining = () => {
-      const seconds = getRemainingSeconds(deadline)
-      setRemainingSeconds(seconds)
-    }
-
-    updateRemaining()
-
-    // Update every second
-    const interval = setInterval(updateRemaining, 1000)
-
-    return () => clearInterval(interval)
-  }, [deadline])
-
-  const isExpired = remainingSeconds <= 0
-  const formattedTime = formatRemainingTime(remainingSeconds)
-
-  return {
-    remainingSeconds,
-    formattedTime,
-    isExpired,
-  }
 }
 
 /**

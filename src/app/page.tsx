@@ -8,34 +8,31 @@ import BookSection from '@/components/home/BookSection'
 import ContactSection from '@/components/home/ContactSection'
 import Footer from '@/components/home/Footer'
 import { useActiveBookingsByDate, useDisabledSlotsByDate, useClosedDates } from '@/hooks/useBookings'
-import { useCreateBookingWithPayment } from '@/hooks/usePayment'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { Booking, BulkBookingPayload } from '@/types/booking'
 import { toast } from 'sonner'
 import BookingConfirmedModal from '@/components/ui/BookingConfirmedModal'
-import { PaymentScreen } from '@/components/booking/PaymentScreen'
+import { PaymentScreen, BookingData } from '@/components/booking/PaymentScreen'
 import { useAuth } from '@/components/AuthProvider'
 import { calculatePaymentAmount } from '@/lib/paymentConfig'
 
-type BookingState = 'idle' | 'payment' | 'confirmed'
+type BookingState = 'idle' | 'payment' | 'pending' | 'confirmed'
 
 export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
   const [bookingState, setBookingState] = useState<BookingState>('idle')
-  const [pendingBookings, setPendingBookings] = useState<Booking[]>([])
-  const [paymentDeadline, setPaymentDeadline] = useState<string>('')
+  const [pendingBookingData, setPendingBookingData] = useState<BookingData | null>(null)
   const [confirmedBookings, setConfirmedBookings] = useState<Booking[]>([])
   const bookingCardRef = useRef<HTMLDivElement | null>(null)
 
   const { user } = useAuth()
   const dateString = format(selectedDate, 'yyyy-MM-dd')
   
-  // Use ACTIVE bookings for slot availability (payment-aware)
-  const { data: bookings = [], isLoading } = useActiveBookingsByDate(dateString)
+  // Use ACTIVE bookings for slot availability (pending + confirmed)
+  const { data: bookings = [], isLoading, refetch } = useActiveBookingsByDate(dateString)
   const { data: disabledSlots = [] } = useDisabledSlotsByDate(dateString)
   const { data: closedDates = [] } = useClosedDates()
-  const createBookingWithPayment = useCreateBookingWithPayment()
 
   const isDateClosed = useMemo(() => {
     return closedDates.some(cd => 
@@ -51,64 +48,52 @@ export default function Home() {
     setSelectedSlots([])
   }, [dateString])
 
+  // When user clicks "Book" button - just open payment screen
   const handleSubmit = async (data: BulkBookingPayload) => {
-    try {
-      const payload = {
-        name: data.name,
-        phone: data.phone,
-        email: data.email,
-        date: data.date || dateString,
-        timeSlots: data.timeSlots || selectedSlots,
-        courtNumber: data.courtNumber || 1,
-        players: data.players || 2,
-        user_id: user?.id,
-      }
-
-      const result = await createBookingWithPayment.mutateAsync(payload)
-
-      if (result.success && result.bookings && result.paymentDeadline) {
-        setPendingBookings(result.bookings)
-        setPaymentDeadline(result.paymentDeadline)
-        setBookingState('payment')
-        toast.info('Please complete your payment')
-      } else {
-        toast.error(result.error || 'Failed to create booking')
-      }
-    } catch (err) {
-      console.error(err)
-      toast.error('Failed to create booking')
+    const bookingData: BookingData = {
+      name: data.name,
+      phone: data.phone,
+      email: data.email,
+      date: data.date || dateString,
+      timeSlots: data.timeSlots || selectedSlots,
+      courtNumber: data.courtNumber || 1,
+      players: data.players || 2,
+      user_id: user?.id,
     }
+
+    setPendingBookingData(bookingData)
+    setBookingState('payment')
   }
 
+  // When user submits payment
+  const handlePaymentSubmitted = useCallback((bookings: Booking[]) => {
+    setConfirmedBookings(bookings)
+    setBookingState('pending')
+    // Clear pending booking data and selected slots immediately so the booking UI reflects the new state
+    setPendingBookingData(null)
+    setSelectedSlots([])
+    refetch() // Refresh available slots
+  }, [refetch])
+
+  // When admin confirms payment
   const handlePaymentConfirmed = useCallback(() => {
-    setConfirmedBookings(pendingBookings)
-    setPendingBookings([])
-    setPaymentDeadline('')
+    setPendingBookingData(null)
     setBookingState('confirmed')
     setSelectedSlots([])
     toast.success('Payment confirmed! Your booking is secured.')
-  }, [pendingBookings])
-
-  const handlePaymentExpired = useCallback(() => {
-    setPendingBookings([])
-    setPaymentDeadline('')
-    setBookingState('idle')
-    setSelectedSlots([])
-    toast.error('Payment time expired. Please try booking again.')
   }, [])
 
+  // When user cancels payment modal
   const handleCancelPayment = useCallback(() => {
-    // User cancels - the booking will expire automatically
-    setPendingBookings([])
-    setPaymentDeadline('')
+    setPendingBookingData(null)
     setBookingState('idle')
-    setSelectedSlots([])
-    toast.info('Booking cancelled')
+    // No need to clear slots - they weren't booked yet
   }, [])
 
   const handleNewBooking = () => {
     setSelectedSlots([])
     setConfirmedBookings([])
+    setPendingBookingData(null)
     setBookingState('idle')
   }
 
@@ -174,23 +159,22 @@ export default function Home() {
     }
   }
 
-  // Calculate payment amount for pending bookings
-  const paymentAmount = pendingBookings.length > 0 
-    ? pendingBookings[0].payment_amount || calculatePaymentAmount(pendingBookings.length, pendingBookings[0].players)
+  // Calculate payment amount
+  const paymentAmount = pendingBookingData 
+    ? calculatePaymentAmount(pendingBookingData.timeSlots.length, pendingBookingData.players)
     : 0
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-teal-50">
       <NavBar />
       
-      {/* Payment Screen */}
-      {bookingState === 'payment' && pendingBookings.length > 0 && (
+      {/* Payment Screen - only shows when user clicks "Book" */}
+      {bookingState === 'payment' && pendingBookingData && (
         <PaymentScreen
-          bookings={pendingBookings}
+          bookingData={pendingBookingData}
           amount={paymentAmount}
-          deadline={paymentDeadline}
+          onPaymentSubmitted={handlePaymentSubmitted}
           onPaymentConfirmed={handlePaymentConfirmed}
-          onPaymentExpired={handlePaymentExpired}
           onCancel={handleCancelPayment}
         />
       )}
@@ -217,7 +201,7 @@ export default function Home() {
             availableSlots={availableSlots}
             isLoading={isLoading}
             dateString={dateString}
-            createBookingPending={createBookingWithPayment.isPending}
+            createBookingPending={false}
             onSubmit={handleSubmit}
             closedDates={closedDates}
           />

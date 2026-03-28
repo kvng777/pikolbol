@@ -2,8 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import {
-  createBookingsWithPayment,
-  markPaymentSubmitted,
+  createBookingWithPendingPayment,
   confirmPayment,
   rejectPayment,
   getPendingPayments,
@@ -11,14 +10,16 @@ import {
   getBookingWithPayment,
 } from '@/lib/paymentService'
 import { getPaymentSettings } from '@/lib/paymentSettingsService'
+import { isDateClosed } from '@/lib/bookingService'
 import { Booking } from '@/types/booking'
 import { PaymentResult, PendingPaymentBooking, PaymentInfo } from '@/types/payment'
 import { sendPaymentConfirmationEmail, sendPaymentRejectionEmail } from '@/lib/emailService'
 
 /**
- * Create bookings with pending payment status
+ * Submit payment - creates booking with pending status
+ * Called when user clicks "I've Completed Payment"
  */
-export async function createBookingsWithPaymentAction(
+export async function submitPaymentAction(
   payload: {
     name: string
     phone: string
@@ -29,43 +30,27 @@ export async function createBookingsWithPaymentAction(
     players: number
     user_id?: string
   }
-): Promise<{ success: boolean; bookings?: Booking[]; error?: string; paymentDeadline?: string }> {
-  // Get payment settings for timeout
-  const settings = await getPaymentSettings()
-  const timeoutMinutes = settings?.payment_timeout_minutes || 15
-
-  const result = await createBookingsWithPayment(
-    {
-      name: payload.name,
-      phone: payload.phone,
-      email: payload.email,
-      date: payload.date,
-      timeSlots: payload.timeSlots,
-      court_number: payload.courtNumber,
-      players: payload.players,
-      user_id: payload.user_id,
-    },
-    timeoutMinutes
-  )
-
-  if (result.success) {
-    revalidatePath('/')
-    revalidatePath('/admin')
+): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+  // Check if date is closed
+  const isClosed = await isDateClosed(payload.date)
+  if (isClosed) {
+    return { success: false, error: 'The court is closed on this date.' }
   }
 
-  return result
-}
-
-/**
- * Mark payment as submitted (user says they paid)
- */
-export async function markPaymentSubmittedAction(bookingIds: string[]): Promise<PaymentResult> {
-  const result = await markPaymentSubmitted(bookingIds)
+  const result = await createBookingWithPendingPayment({
+    name: payload.name,
+    phone: payload.phone,
+    email: payload.email,
+    date: payload.date,
+    timeSlots: payload.timeSlots,
+    court_number: payload.courtNumber,
+    players: payload.players,
+    user_id: payload.user_id,
+  })
 
   if (result.success) {
     revalidatePath('/')
     revalidatePath('/admin')
-    revalidatePath('/profile')
   }
 
   return result
@@ -171,7 +156,7 @@ export async function getPaymentInfoAction(bookingId: string): Promise<PaymentIn
 
   return {
     amount: booking.payment_amount || 0,
-    deadline: new Date(booking.payment_deadline || ''),
+    deadline: new Date(),
     qrCodeUrl: settings?.gcash_qr_url || null,
     gcashName: settings?.gcash_name || null,
     gcashNumber: settings?.gcash_number || null,

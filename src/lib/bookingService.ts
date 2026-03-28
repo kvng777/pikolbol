@@ -2,12 +2,11 @@ import { supabase } from './supabase-server'
 import { Booking, BookingFormData, CreateBookingResult, DisabledSlot, ClosedDate, CancelBookingResult } from '@/types/booking'
 import { CANCELLATION_HOURS_BEFORE } from './constants'
 import { HELD_PAYMENT_STATUSES, CONFIRMED_PAYMENT_STATUSES } from './paymentConfig'
-import { expireOverduePayments } from './paymentService'
 
 // Re-export the constant for backwards compatibility with server-side code
 export { CANCELLATION_HOURS_BEFORE }
 
-// Payment statuses that indicate a slot is occupied
+// Payment statuses that indicate a slot is occupied (pending or confirmed)
 const ACTIVE_PAYMENT_STATUSES = [...HELD_PAYMENT_STATUSES, ...CONFIRMED_PAYMENT_STATUSES]
 
 /**
@@ -31,13 +30,9 @@ export async function getBookingsByDate(date: string): Promise<Booking[]> {
 
 /**
  * Get ACTIVE bookings by date - only bookings that occupy slots
- * (pending payment, awaiting confirmation, or confirmed)
- * Automatically expires overdue payments first
+ * (pending or confirmed)
  */
 export async function getActiveBookingsByDate(date: string): Promise<Booking[]> {
-  // First, expire any overdue payments
-  await expireOverduePayments()
-
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
@@ -58,9 +53,6 @@ export async function getActiveBookingsByDate(date: string): Promise<Booking[]> 
  * For admin view that needs to see everything
  */
 export async function getAllBookings(): Promise<Booking[]> {
-  // First, expire any overdue payments
-  await expireOverduePayments()
-
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
@@ -79,8 +71,6 @@ export async function getAllBookings(): Promise<Booking[]> {
  * Get confirmed bookings only - for admin booking list
  */
 export async function getConfirmedBookings(): Promise<Booking[]> {
-  await expireOverduePayments()
-
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
@@ -318,9 +308,6 @@ export async function getBookingById(id: string): Promise<Booking | null> {
  * Includes all payment statuses so user can see their full history
  */
 export async function getBookingsByUserId(userId: string): Promise<Booking[]> {
-  // First, expire any overdue payments
-  await expireOverduePayments()
-
   const { data, error } = await supabase
     .from('bookings')
     .select('*')

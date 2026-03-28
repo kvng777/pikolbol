@@ -101,7 +101,7 @@ export default function NavBar() {
               <div className="p-1 rounded-md bg-emerald-50">
                 <Image src="/logo-bw.png" alt="Pikolbol logo" width={32} height={32} className="object-contain" />
               </div>
-              <span className="font-semibold text-gray-900">Pikolbol</span>
+              <span className="font-semibold text-gray-900">Pikolbol Gapan</span>
             </Link>
 
             <div className="flex items-center gap-4">

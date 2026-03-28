@@ -1,6 +1,12 @@
 /**
  * Payment Service
  * Business logic for payment operations
+ * 
+ * Flow:
+ * 1. User clicks "Book" -> Opens payment modal (no DB record)
+ * 2. User clicks "I've Completed Payment" -> Creates booking with 'pending' status
+ * 3. Admin confirms -> 'confirmed' status
+ * 4. Admin rejects -> 'rejected' status
  */
 
 import { supabase } from './supabase-server'
@@ -8,17 +14,16 @@ import { Booking } from '@/types/booking'
 import { PaymentStatus, PaymentResult, PendingPaymentBooking } from '@/types/payment'
 import { 
   calculatePaymentAmount, 
-  calculatePaymentDeadline, 
   HELD_PAYMENT_STATUSES,
   PENDING_VERIFICATION_STATUSES,
-  DEFAULT_PAYMENT_TIMEOUT_MINUTES 
+  CONFIRMED_PAYMENT_STATUSES,
 } from './paymentConfig'
 
 /**
- * Create bookings with awaiting_payment status
- * User has confirmed booking, now needs to pay
+ * Create bookings when user submits payment
+ * This is called when user clicks "I've Completed Payment"
  */
-export async function createBookingsWithPayment(
+export async function createBookingWithPendingPayment(
   payload: {
     name: string
     phone: string
@@ -28,11 +33,8 @@ export async function createBookingsWithPayment(
     court_number: number
     players: number
     user_id?: string
-  },
-  timeoutMinutes: number = DEFAULT_PAYMENT_TIMEOUT_MINUTES
-): Promise<{ success: boolean; bookings?: Booking[]; error?: string; paymentDeadline?: string }> {
-  const now = new Date()
-  const deadline = calculatePaymentDeadline(now, timeoutMinutes)
+  }
+): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
   const amount = calculatePaymentAmount(payload.timeSlots.length, payload.players)
 
   const rows = payload.timeSlots.map((ts) => ({
@@ -44,8 +46,7 @@ export async function createBookingsWithPayment(
     court_number: payload.court_number,
     players: payload.players,
     user_id: payload.user_id || null,
-    payment_status: 'awaiting_payment' as PaymentStatus, // User needs to pay
-    payment_deadline: deadline.toISOString(),
+    payment_status: 'pending' as PaymentStatus,
     payment_amount: amount,
   }))
 
@@ -67,32 +68,11 @@ export async function createBookingsWithPayment(
   return { 
     success: true, 
     bookings: data,
-    paymentDeadline: deadline.toISOString()
   }
-}
-
-/**
- * Mark payment as submitted (user says they paid)
- * Changes from awaiting_payment -> pending (now visible in admin Pending Payments)
- */
-export async function markPaymentSubmitted(bookingIds: string[]): Promise<PaymentResult> {
-  const { error } = await supabase
-    .from('bookings')
-    .update({ payment_status: 'pending' as PaymentStatus })
-    .in('id', bookingIds)
-    .eq('payment_status', 'awaiting_payment')
-
-  if (error) {
-    console.error('Error marking payment as submitted:', error)
-    return { success: false, error: 'Failed to update payment status' }
-  }
-
-  return { success: true }
 }
 
 /**
  * Confirm payment (admin action)
- * Only from 'pending' status (user has submitted payment)
  */
 export async function confirmPayment(bookingIds: string[]): Promise<PaymentResult> {
   const { error } = await supabase
@@ -114,7 +94,6 @@ export async function confirmPayment(bookingIds: string[]): Promise<PaymentResul
 
 /**
  * Reject payment (admin action)
- * Only from 'pending' status
  */
 export async function rejectPayment(bookingIds: string[]): Promise<PaymentResult> {
   const { error } = await supabase
@@ -132,35 +111,9 @@ export async function rejectPayment(bookingIds: string[]): Promise<PaymentResult
 }
 
 /**
- * Expire overdue payments
- * Call this periodically or on each relevant request
- */
-export async function expireOverduePayments(): Promise<{ expiredCount: number; error?: string }> {
-  const now = new Date().toISOString()
-
-  const { data, error } = await supabase
-    .from('bookings')
-    .update({ payment_status: 'expired' as PaymentStatus })
-    .in('payment_status', HELD_PAYMENT_STATUSES)
-    .lt('payment_deadline', now)
-    .select('id')
-
-  if (error) {
-    console.error('Error expiring payments:', error)
-    return { expiredCount: 0, error: 'Failed to expire overdue payments' }
-  }
-
-  return { expiredCount: data?.length || 0 }
-}
-
-/**
- * Get bookings awaiting admin verification (user has submitted payment)
- * Only shows 'pending' status - where user clicked "I've Completed Payment"
+ * Get bookings awaiting admin verification
  */
 export async function getPendingPayments(): Promise<PendingPaymentBooking[]> {
-  // First, expire any overdue payments
-  await expireOverduePayments()
-
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
@@ -179,9 +132,6 @@ export async function getPendingPayments(): Promise<PendingPaymentBooking[]> {
  * Get payment status for specific bookings
  */
 export async function getPaymentStatus(bookingIds: string[]): Promise<Booking[]> {
-  // First, expire any overdue payments
-  await expireOverduePayments()
-
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
@@ -199,9 +149,6 @@ export async function getPaymentStatus(bookingIds: string[]): Promise<Booking[]>
  * Get a single booking by ID with payment info
  */
 export async function getBookingWithPayment(bookingId: string): Promise<Booking | null> {
-  // First, check if this booking should be expired
-  await expireOverduePayments()
-
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
@@ -217,21 +164,18 @@ export async function getBookingWithPayment(bookingId: string): Promise<Booking 
 }
 
 /**
- * Check if any slots are held by pending payments for a given date
+ * Get slots that are occupied (pending or confirmed)
  * Used for slot availability checking
  */
-export async function getHeldSlotsByDate(date: string): Promise<string[]> {
-  // Expire overdue payments first
-  await expireOverduePayments()
-
+export async function getOccupiedSlotsByDate(date: string): Promise<string[]> {
   const { data, error } = await supabase
     .from('bookings')
     .select('time_slot')
     .eq('date', date)
-    .in('payment_status', [...HELD_PAYMENT_STATUSES, 'confirmed'])
+    .in('payment_status', [...HELD_PAYMENT_STATUSES, ...CONFIRMED_PAYMENT_STATUSES])
 
   if (error) {
-    console.error('Error fetching held slots:', error)
+    console.error('Error fetching occupied slots:', error)
     return []
   }
 

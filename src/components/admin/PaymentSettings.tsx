@@ -159,7 +159,7 @@ export function PaymentSettings() {
               />
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              Tip: Open your GCash app, go to "Receive Money", and screenshot the QR code.
+              Tip: Open your GCash app, go to &quot;Receive Money&quot;, and screenshot the QR code.
             </p>
           </div>
         </div>
@@ -198,7 +198,7 @@ export function PaymentSettings() {
               {errors.gcash_number && (
                 <p className="text-sm text-red-500">{errors.gcash_number.message}</p>
               )}
-              <p className="text-xs text-gray-500">Customers can use this if QR scan doesn't work</p>
+              <p className="text-xs text-gray-500">Customers can use this if QR scan doesn&apos;t work</p>
             </div>
           </div>
         </div>

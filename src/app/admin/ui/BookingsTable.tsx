@@ -65,7 +65,7 @@ export default function BookingsTable({ table }: { table: TableUI }) {
             table.pagedBookings.map((group: BookingGroup) => {
               const groupDate = new Date(group.date + 'T00:00:00')
               const isPast = groupDate < today
-              const isInactive = ['expired', 'rejected', 'cancelled'].includes(group.payment_status || '')
+              const isInactive = ['rejected', 'cancelled'].includes(group.payment_status || '')
               
               return (
                 <TableRow 
