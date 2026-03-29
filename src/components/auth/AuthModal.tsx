@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, CalendarCheck } from 'lucide-react'
+import { X, CalendarCheck, KeyRound } from 'lucide-react'
 import { LoginForm } from '@/components/admin/LoginForm'
 import { SignupForm } from '@/components/auth/SignupForm'
+import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm'
 import { useUserAuth } from '@/hooks/useUserAuth'
 
-type AuthTab = 'login' | 'signup'
+type AuthTab = 'login' | 'signup' | 'forgot-password'
 
 interface AuthModalProps {
   open: boolean
@@ -18,7 +19,7 @@ interface AuthModalProps {
 
 export function AuthModal({ open, onClose, onSuccess, defaultTab = 'login' }: AuthModalProps) {
   const [activeTab, setActiveTab] = useState<AuthTab>(defaultTab)
-  const { isLoading, error, login, signup, clearError } = useUserAuth()
+  const { isLoading, error, successMessage, login, signup, resetPassword, clearError, clearSuccess } = useUserAuth()
   const isClient = typeof document !== 'undefined'
 
   // Reset tab when modal opens
@@ -64,9 +65,13 @@ export function AuthModal({ open, onClose, onSuccess, defaultTab = 'login' }: Au
   }
 
   const handleTabChange = (tab: AuthTab) => {
-    console.log('tab change?');
     setActiveTab(tab)
     clearError()
+    clearSuccess()
+  }
+
+  const handleForgotPassword = async (email: string) => {
+    return await resetPassword(email)
   }
 
   if (!open || !isClient) return null
@@ -95,59 +100,78 @@ export function AuthModal({ open, onClose, onSuccess, defaultTab = 'login' }: Au
         {/* Header */}
         <div className="px-6 pt-6 pb-4 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 mb-3 shadow-lg shadow-emerald-500/25">
-            <CalendarCheck className="w-6 h-6 text-white" />
+            {activeTab === 'forgot-password' ? (
+              <KeyRound className="w-6 h-6 text-white" />
+            ) : (
+              <CalendarCheck className="w-6 h-6 text-white" />
+            )}
           </div>
           <h2 className="text-xl font-bold text-gray-900">
-            {activeTab === 'login' ? 'Welcome Back' : 'Create Account'}
+            {activeTab === 'login' && 'Welcome Back'}
+            {activeTab === 'signup' && 'Create Account'}
+            {activeTab === 'forgot-password' && 'Reset Password'}
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            {activeTab === 'login' 
-              ? 'Sign in to book your court' 
-              : 'Sign up to start booking courts'}
+            {activeTab === 'login' && 'Sign in to book your court'}
+            {activeTab === 'signup' && 'Sign up to start booking courts'}
+            {activeTab === 'forgot-password' && 'Enter your email to receive a reset link'}
           </p>
         </div>
 
-        {/* Tabs */}
-        <div className="px-6">
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
-              type="button"
-              onClick={() => handleTabChange('login')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-all ${
-                activeTab === 'login'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTabChange('signup')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-all ${
-                activeTab === 'signup'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Sign Up
-            </button>
+        {/* Tabs - hide when in forgot password view */}
+        {activeTab !== 'forgot-password' && (
+          <div className="px-6">
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                type="button"
+                onClick={() => handleTabChange('login')}
+                className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-all ${
+                  activeTab === 'login'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTabChange('signup')}
+                className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-all ${
+                  activeTab === 'signup'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Form content */}
         <div className="p-6">
-          {activeTab === 'login' ? (
+          {activeTab === 'login' && (
             <LoginForm
               onSubmit={handleLogin}
+              onForgotPassword={() => handleTabChange('forgot-password')}
               isLoading={isLoading}
               error={error}
             />
-          ) : (
+          )}
+          {activeTab === 'signup' && (
             <SignupForm
               onSubmit={handleSignup}
               isLoading={isLoading}
               error={error}
+            />
+          )}
+          {activeTab === 'forgot-password' && (
+            <ForgotPasswordForm
+              onSubmit={handleForgotPassword}
+              onBack={() => handleTabChange('login')}
+              isLoading={isLoading}
+              error={error}
+              successMessage={successMessage}
             />
           )}
         </div>
