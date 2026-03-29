@@ -162,7 +162,7 @@ export default function Home() {
 
   // Calculate payment amount
   const paymentAmount = pendingBookingData 
-    ? calculatePaymentAmount(pendingBookingData.timeSlots.length, pendingBookingData.players)
+    ? calculatePaymentAmount(pendingBookingData.timeSlots, pendingBookingData.players)
     : 0
 
   return (

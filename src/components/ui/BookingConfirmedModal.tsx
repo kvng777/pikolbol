@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { Booking } from '@/types/booking'
 import { format } from 'date-fns'
 import { CheckCircle2, Calendar, Clock, User, Phone, Mail, CreditCard, X } from 'lucide-react'
+import { calculatePaymentAmount } from '@/lib/paymentConfig'
 
 type Props = {
   open: boolean
@@ -130,10 +131,9 @@ export default function BookingConfirmedModal({ open, onClose, bookings, booking
                           <p className="text-xs text-gray-500">Total</p>
                           <p className="text-gray-900 font-medium">
                             {(() => {
-                              const slotsCount = bookings.length
+                              const timeSlots = bookings.map(b => b.time_slot)
                               const players = bookings[0]?.players ?? 1
-                              const extraPlayers = Math.max(0, players - 4)
-                              const totalCost = slotsCount * 200 + extraPlayers * 50
+                              const totalCost = calculatePaymentAmount(timeSlots, players)
                               return `Php${totalCost.toLocaleString()}`
                             })()}
                           </p>

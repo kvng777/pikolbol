@@ -36,7 +36,7 @@ export async function createBookingWithPendingPayment(
     user_id?: string
   }
 ): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
-  const amount = calculatePaymentAmount(payload.timeSlots.length, payload.players)
+  const amount = calculatePaymentAmount(payload.timeSlots, payload.players)
 
   // Generate IDs once for the entire booking order
   // All time slots share the same short_id and booking_group_id

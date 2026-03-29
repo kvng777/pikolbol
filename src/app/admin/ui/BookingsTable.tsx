@@ -14,6 +14,7 @@ import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { BookingStatusBadge } from '@/components/ui/BookingStatusBadge'
 import { PaymentStatus } from '@/types/payment'
+import { calculatePaymentAmount } from '@/lib/paymentConfig'
 import type { TableUI } from '@/app/admin/hooks/useAdminTable'
 
 // Type for grouped bookings used by this UI
@@ -159,9 +160,7 @@ export default function BookingsTable({ table }: { table: TableUI }) {
                       ? `₱${group.payment_amount.toLocaleString()}`
                       : (() => {
                           const players = typeof group.players === 'number' ? group.players : 4
-                          const extra = Math.max(0, players - 4)
-                          const perSlot = 200 + extra * 50
-                          const total = perSlot * group.timeSlots.length
+                          const total = calculatePaymentAmount(group.timeSlots, players)
                           return `₱${total.toLocaleString()}`
                         })()
                     }

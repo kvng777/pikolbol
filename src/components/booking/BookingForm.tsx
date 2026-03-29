@@ -4,6 +4,7 @@ import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { BulkBookingPayload } from '@/types/booking'
+import { calculatePaymentAmount } from '@/lib/paymentConfig'
 
 export interface BookingFormDefaultValues {
   name?: string
@@ -26,10 +27,9 @@ export function BookingForm({
   isSubmitting,
   defaultValues,
 }: BookingFormProps) {
-  // Pricing: Php200 per slot
+  // Calculate total cost based on time slots (daytime vs evening pricing)
   const slotsCount = Math.max(1, selectedSlots.length)
-  const pricePerSlot = 200
-  const totalCost = pricePerSlot * slotsCount
+  const totalCost = calculatePaymentAmount(selectedSlots.length > 0 ? selectedSlots : ['12:00'], 2)
   const formattedTotal = `Php${totalCost.toLocaleString()}`
 
   const handleFormSubmit = async (e: React.FormEvent) => {
