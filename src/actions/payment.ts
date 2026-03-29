@@ -13,7 +13,7 @@ import { getPaymentSettings } from '@/lib/paymentSettingsService'
 import { isDateClosed } from '@/lib/bookingService'
 import { Booking } from '@/types/booking'
 import { PaymentResult, PendingPaymentBooking, PaymentInfo } from '@/types/payment'
-import { sendPaymentConfirmationEmail, sendPaymentRejectionEmail } from '@/lib/emailService'
+import { sendPaymentConfirmationEmail, sendPaymentRejectionEmail, sendAdminPaymentAlertEmail } from '@/lib/emailService'
 
 /**
  * Submit payment - creates booking with pending status
@@ -48,9 +48,25 @@ export async function submitPaymentAction(
     user_id: payload.user_id,
   })
 
-  if (result.success) {
+  if (result.success && result.bookings && result.bookings.length > 0) {
     revalidatePath('/')
     revalidatePath('/admin')
+    
+    // Send admin notification email
+    const booking = result.bookings[0]
+    try {
+      await sendAdminPaymentAlertEmail({
+        userName: payload.name,
+        userEmail: payload.email,
+        bookingDate: payload.date,
+        bookingTime: payload.timeSlots.join(', '),
+        amount: booking.payment_amount || 0,
+        bookingId: booking.id,
+      })
+    } catch (emailError) {
+      console.error('Failed to send admin alert email:', emailError)
+      // Don't fail the action if email fails
+    }
   }
 
   return result

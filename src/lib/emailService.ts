@@ -3,10 +3,29 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY
 const EMAIL_FROM = process.env.EMAIL_FROM || 'bookings@pikolbol.fun'
 const APP_NAME = 'Pikolbol'
 
+// Admin contact for alerts when a user indicates they've completed payment
+const ADMIN_EMAIL = 'gamboa_rolando61@yahoo.com'
+const ADMIN_CC = 'kjangamboa@hotmail.com'
+
+// Small helpers to keep templates DRY
+function formatBookingDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+function formatAmount(amount: number) {
+  return amount.toLocaleString()
+}
+
 interface EmailOptions {
   to: string
   subject: string
   html: string
+  cc?: string | string[]
 }
 
 /**
@@ -19,18 +38,24 @@ async function sendEmail(options: EmailOptions): Promise<{ success: boolean; err
   }
 
   try {
+    const payload: Record<string, unknown> = {
+      from: `${APP_NAME} <${EMAIL_FROM}>`,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+    }
+
+    if (options.cc) {
+      payload.cc = options.cc
+    }
+
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from: `${APP_NAME} <${EMAIL_FROM}>`,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-      }),
+      body: JSON.stringify(payload),
     })
 
     if (!response.ok) {
@@ -56,12 +81,7 @@ export async function sendPaymentConfirmationEmail(data: {
   bookingTime: string
   amount: number
 }): Promise<{ success: boolean; error?: string }> {
-  const formattedDate = new Date(data.bookingDate).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  const formattedDate = formatBookingDate(data.bookingDate)
 
   const html = `
     <!DOCTYPE html>
@@ -103,7 +123,7 @@ export async function sendPaymentConfirmationEmail(data: {
             
             <div>
               <span style="color: #6b7280; font-size: 14px;">Amount Paid:</span>
-              <p style="color: #166534; font-size: 20px; margin: 4px 0 0 0; font-weight: 600;">Php ${data.amount.toLocaleString()}</p>
+              <p style="color: #166534; font-size: 20px; margin: 4px 0 0 0; font-weight: 600;">Php ${formatAmount(data.amount)}</p>
             </div>
           </div>
           
@@ -141,12 +161,7 @@ export async function sendPaymentRejectionEmail(data: {
   amount: number
   reason?: string
 }): Promise<{ success: boolean; error?: string }> {
-  const formattedDate = new Date(data.bookingDate).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  const formattedDate = formatBookingDate(data.bookingDate)
 
   const html = `
     <!DOCTYPE html>
@@ -188,7 +203,7 @@ export async function sendPaymentRejectionEmail(data: {
             
             <div>
               <span style="color: #6b7280; font-size: 14px;">Amount:</span>
-              <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">Php ${data.amount.toLocaleString()}</p>
+              <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">Php ${formatAmount(data.amount)}</p>
             </div>
 
             ${data.reason ? `
@@ -222,6 +237,116 @@ export async function sendPaymentRejectionEmail(data: {
   return sendEmail({
     to: data.recipientEmail,
     subject: `Payment Not Verified - ${formattedDate}`,
+    html,
+  })
+}
+
+/**
+ * Send admin alert when user indicates they've completed payment
+ * Uses urgent orange/amber styling to grab attention
+ */
+export async function sendAdminPaymentAlertEmail(data: {
+  userName: string
+  userEmail: string
+  bookingDate: string
+  bookingTime: string
+  amount: number
+  reference?: string
+  bookingId?: string | number
+}): Promise<{ success: boolean; error?: string }> {
+  const formattedDate = formatBookingDate(data.bookingDate)
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px;">
+      <div style="max-width: 500px; margin: 0 auto; background-color: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+        <!-- Header - Urgent Orange -->
+        <div style="background-color: #ea580c; padding: 24px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">ACTION REQUIRED</h1>
+          <p style="color: #fed7aa; margin: 8px 0 0 0; font-size: 14px; font-weight: 500;">New payment awaiting verification</p>
+        </div>
+        
+        <!-- Content -->
+        <div style="padding: 24px;">
+          <!-- Urgent Alert Banner -->
+          <div style="background-color: #fff7ed; border: 2px solid #fdba74; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; text-align: center;">
+            <p style="color: #c2410c; font-size: 14px; font-weight: 600; margin: 0;">
+              A user has submitted payment and is waiting for your confirmation.
+            </p>
+          </div>
+          
+          <!-- Customer Info -->
+          <div style="margin-bottom: 20px;">
+            <h3 style="color: #9a3412; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Customer</h3>
+            <p style="color: #111827; font-size: 16px; margin: 0; font-weight: 600;">${data.userName}</p>
+            <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">${data.userEmail}</p>
+          </div>
+          
+          <!-- Booking Details Card -->
+          <div style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #9a3412; margin: 0 0 16px 0; font-size: 16px;">Booking Details</h3>
+            
+            <div style="margin-bottom: 12px;">
+              <span style="color: #6b7280; font-size: 14px;">Date:</span>
+              <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${formattedDate}</p>
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+              <span style="color: #6b7280; font-size: 14px;">Time:</span>
+              <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${data.bookingTime}</p>
+            </div>
+            
+            <div style="margin-bottom: ${data.reference || data.bookingId ? '12px' : '0'};">
+              <span style="color: #6b7280; font-size: 14px;">Amount to Verify:</span>
+              <p style="color: #c2410c; font-size: 20px; margin: 4px 0 0 0; font-weight: 700;">Php ${formatAmount(data.amount)}</p>
+            </div>
+
+            ${data.reference ? `
+            <div style="margin-bottom: ${data.bookingId ? '12px' : '0'}; padding-top: 12px; border-top: 1px solid #fed7aa;">
+              <span style="color: #6b7280; font-size: 14px;">Reference Number:</span>
+              <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${data.reference}</p>
+            </div>
+            ` : ''}
+
+            ${data.bookingId ? `
+            <div style="${!data.reference ? 'padding-top: 12px; border-top: 1px solid #fed7aa;' : ''}">
+              <span style="color: #6b7280; font-size: 14px;">Booking ID:</span>
+              <p style="color: #111827; font-size: 14px; margin: 4px 0 0 0; font-family: monospace;">${data.bookingId}</p>
+            </div>
+            ` : ''}
+          </div>
+          
+          <!-- Call to Action -->
+          <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; text-align: center;">
+            <p style="color: #991b1b; font-size: 14px; font-weight: 600; margin: 0 0 8px 0;">
+              Please verify this payment promptly
+            </p>
+            <p style="color: #6b7280; font-size: 13px; margin: 0;">
+              Check your GCash for the incoming payment, then confirm or reject in the admin panel.
+            </p>
+          </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="background-color: #f9fafb; padding: 16px 24px; text-align: center; border-top: 1px solid #e5e7eb;">
+          <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+            ${APP_NAME} - Admin Alert
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  return sendEmail({
+    to: ADMIN_EMAIL,
+    cc: ADMIN_CC,
+    subject: `[ACTION REQUIRED] Payment Verification - ${data.userName} - Php ${formatAmount(data.amount)}`,
     html,
   })
 }
