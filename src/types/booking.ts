@@ -11,6 +11,9 @@ export interface Booking {
   created_at: string
   players: number
   user_id?: string | null
+  // Booking identification
+  short_id?: string | null          // Human-readable ID (e.g., 'A1B2')
+  booking_group_id?: string | null  // UUID linking slots from same order
   // Payment fields
   payment_status?: PaymentStatus
   payment_deadline?: string | null

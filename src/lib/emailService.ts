@@ -80,6 +80,7 @@ export async function sendPaymentConfirmationEmail(data: {
   bookingDate: string
   bookingTime: string
   amount: number
+  shortId?: string  // Human-readable booking ID (e.g., 'A1B2')
 }): Promise<{ success: boolean; error?: string }> {
   const formattedDate = formatBookingDate(data.bookingDate)
 
@@ -93,8 +94,8 @@ export async function sendPaymentConfirmationEmail(data: {
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px;">
       <div style="max-width: 500px; margin: 0 auto; background-color: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
         <!-- Header -->
-        <div style="background: linear-gradient(to right, #10b981, #14b8a6); padding: 24px; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">Payment Confirmed!</h1>
+        <div style="background-color: #10b981; padding: 24px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Payment Confirmed!</h1>
         </div>
         
         <!-- Content -->
@@ -110,6 +111,13 @@ export async function sendPaymentConfirmationEmail(data: {
           <!-- Booking Details Card -->
           <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
             <h3 style="color: #166534; margin: 0 0 16px 0; font-size: 16px;">Booking Details</h3>
+            
+            ${data.shortId ? `
+            <div style="margin-bottom: 12px;">
+              <span style="color: #6b7280; font-size: 14px;">Booking ID:</span>
+              <p style="color: #166534; font-size: 18px; margin: 4px 0 0 0; font-weight: 600; font-family: monospace;">${data.shortId}</p>
+            </div>
+            ` : ''}
             
             <div style="margin-bottom: 12px;">
               <span style="color: #6b7280; font-size: 14px;">Date:</span>
@@ -145,7 +153,7 @@ export async function sendPaymentConfirmationEmail(data: {
 
   return sendEmail({
     to: data.recipientEmail,
-    subject: `Booking Confirmed - ${formattedDate}`,
+    subject: `Booking Confirmed${data.shortId ? ` - ${data.shortId}` : ''} - ${formattedDate}`,
     html,
   })
 }
@@ -160,6 +168,7 @@ export async function sendPaymentRejectionEmail(data: {
   bookingTime: string
   amount: number
   reason?: string
+  shortId?: string  // Human-readable booking ID (e.g., 'A1B2')
 }): Promise<{ success: boolean; error?: string }> {
   const formattedDate = formatBookingDate(data.bookingDate)
 
@@ -173,8 +182,8 @@ export async function sendPaymentRejectionEmail(data: {
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px;">
       <div style="max-width: 500px; margin: 0 auto; background-color: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
         <!-- Header -->
-        <div style="background-color: #fef2f2; padding: 24px; text-align: center; border-bottom: 1px solid #fecaca;">
-          <h1 style="color: #dc2626; margin: 0; font-size: 24px;">Payment Not Verified</h1>
+        <div style="background-color: #dc2626; padding: 24px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Payment Not Verified</h1>
         </div>
         
         <!-- Content -->
@@ -190,6 +199,13 @@ export async function sendPaymentRejectionEmail(data: {
           <!-- Booking Details Card -->
           <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
             <h3 style="color: #991b1b; margin: 0 0 16px 0; font-size: 16px;">Booking Details</h3>
+            
+            ${data.shortId ? `
+            <div style="margin-bottom: 12px;">
+              <span style="color: #6b7280; font-size: 14px;">Booking ID:</span>
+              <p style="color: #991b1b; font-size: 18px; margin: 4px 0 0 0; font-weight: 600; font-family: monospace;">${data.shortId}</p>
+            </div>
+            ` : ''}
             
             <div style="margin-bottom: 12px;">
               <span style="color: #6b7280; font-size: 14px;">Date:</span>
@@ -236,7 +252,7 @@ export async function sendPaymentRejectionEmail(data: {
 
   return sendEmail({
     to: data.recipientEmail,
-    subject: `Payment Not Verified - ${formattedDate}`,
+    subject: `Payment Not Verified${data.shortId ? ` - ${data.shortId}` : ''} - ${formattedDate}`,
     html,
   })
 }
@@ -252,7 +268,7 @@ export async function sendAdminPaymentAlertEmail(data: {
   bookingTime: string
   amount: number
   reference?: string
-  bookingId?: string | number
+  shortId?: string  // Human-readable booking ID (e.g., 'A1B2')
 }): Promise<{ success: boolean; error?: string }> {
   const formattedDate = formatBookingDate(data.bookingDate)
 
@@ -301,22 +317,22 @@ export async function sendAdminPaymentAlertEmail(data: {
               <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${data.bookingTime}</p>
             </div>
             
-            <div style="margin-bottom: ${data.reference || data.bookingId ? '12px' : '0'};">
+            ${data.shortId ? `
+            <div style="margin-bottom: 12px;">
+              <span style="color: #6b7280; font-size: 14px;">Booking ID:</span>
+              <p style="color: #111827; font-size: 18px; margin: 4px 0 0 0; font-weight: 600; font-family: monospace;">${data.shortId}</p>
+            </div>
+            ` : ''}
+
+            <div style="margin-bottom: ${data.reference ? '12px' : '0'};">
               <span style="color: #6b7280; font-size: 14px;">Amount to Verify:</span>
               <p style="color: #c2410c; font-size: 20px; margin: 4px 0 0 0; font-weight: 700;">Php ${formatAmount(data.amount)}</p>
             </div>
 
             ${data.reference ? `
-            <div style="margin-bottom: ${data.bookingId ? '12px' : '0'}; padding-top: 12px; border-top: 1px solid #fed7aa;">
+            <div style="padding-top: 12px; border-top: 1px solid #fed7aa;">
               <span style="color: #6b7280; font-size: 14px;">Reference Number:</span>
               <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${data.reference}</p>
-            </div>
-            ` : ''}
-
-            ${data.bookingId ? `
-            <div style="${!data.reference ? 'padding-top: 12px; border-top: 1px solid #fed7aa;' : ''}">
-              <span style="color: #6b7280; font-size: 14px;">Booking ID:</span>
-              <p style="color: #111827; font-size: 14px; margin: 4px 0 0 0; font-family: monospace;">${data.bookingId}</p>
             </div>
             ` : ''}
           </div>

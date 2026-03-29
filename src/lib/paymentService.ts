@@ -18,6 +18,7 @@ import {
   PENDING_VERIFICATION_STATUSES,
   CONFIRMED_PAYMENT_STATUSES,
 } from './paymentConfig'
+import { generateUniqueShortId, generateBookingGroupId } from './bookingIdGenerator'
 
 /**
  * Create bookings when user submits payment
@@ -37,6 +38,11 @@ export async function createBookingWithPendingPayment(
 ): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
   const amount = calculatePaymentAmount(payload.timeSlots.length, payload.players)
 
+  // Generate IDs once for the entire booking order
+  // All time slots share the same short_id and booking_group_id
+  const shortId = await generateUniqueShortId()
+  const bookingGroupId = generateBookingGroupId()
+
   const rows = payload.timeSlots.map((ts) => ({
     name: payload.name,
     phone: payload.phone,
@@ -46,6 +52,8 @@ export async function createBookingWithPendingPayment(
     court_number: payload.court_number,
     players: payload.players,
     user_id: payload.user_id || null,
+    short_id: shortId,
+    booking_group_id: bookingGroupId,
     payment_status: 'pending' as PaymentStatus,
     payment_amount: amount,
   }))

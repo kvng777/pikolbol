@@ -61,7 +61,7 @@ export async function submitPaymentAction(
         bookingDate: payload.date,
         bookingTime: payload.timeSlots.join(', '),
         amount: booking.payment_amount || 0,
-        bookingId: booking.id,
+        shortId: booking.short_id || undefined,
       })
     } catch (emailError) {
       console.error('Failed to send admin alert email:', emailError)
@@ -96,6 +96,7 @@ export async function confirmPaymentAction(bookingIds: string[]): Promise<Paymen
           bookingDate: booking.date,
           bookingTime: bookings.map(b => b.time_slot).join(', '),
           amount: booking.payment_amount || 0,
+          shortId: booking.short_id || undefined,
         })
       } catch (emailError) {
         console.error('Failed to send confirmation email:', emailError)
@@ -132,6 +133,7 @@ export async function rejectPaymentAction(bookingIds: string[], reason?: string)
           bookingTime: bookings.map(b => b.time_slot).join(', '),
           amount: booking.payment_amount || 0,
           reason,
+          shortId: booking.short_id || undefined,
         })
       } catch (emailError) {
         console.error('Failed to send rejection email:', emailError)

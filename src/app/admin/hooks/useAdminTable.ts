@@ -73,7 +73,7 @@ export function useAdminTable() {
     })
   }, [sortedBookings, statusFilter, timeFilter])
 
-  // Apply search filter
+  // Apply search filter (includes short_id for booking ID search)
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const searchedBookings = useMemo(() => {
     if (!normalizedQuery) return filteredBookings
@@ -82,9 +82,12 @@ export function useAdminTable() {
       const name = (g.name || '').toLowerCase()
       const phone = (g.phone || '').toString().toLowerCase()
       const email = (g.email || '').toLowerCase()
+      const shortId = (g.short_id || '').toLowerCase()
+      
       return name.includes(normalizedQuery) || 
              phone.includes(normalizedQuery) || 
-             email.includes(normalizedQuery)
+             email.includes(normalizedQuery) ||
+             shortId.includes(normalizedQuery)
     })
   }, [filteredBookings, normalizedQuery])
 

@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Table,
   TableBody,
@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Copy, Check } from 'lucide-react'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { BookingStatusBadge } from '@/components/ui/BookingStatusBadge'
@@ -28,17 +28,32 @@ interface BookingGroup {
   bookingIds: string[]
   payment_status: PaymentStatus | null
   payment_amount?: number
+  short_id?: string | null
 }
 
 export default function BookingsTable({ table }: { table: TableUI }) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+
+  // Track which booking ID was recently copied
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const handleCopyId = async (shortId: string) => {
+    try {
+      await navigator.clipboard.writeText(shortId)
+      setCopiedId(shortId)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
   
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="border-gray-100 hover:bg-gray-50">
+            <TableHead className="text-gray-500">Booking ID</TableHead>
             <TableHead className="text-gray-500">Status</TableHead>
             <TableHead className="cursor-pointer text-gray-500 hover:text-gray-900" onClick={() => table.handleSort('date')}>
               <div className="flex items-center gap-2">Date</div>
@@ -49,7 +64,6 @@ export default function BookingsTable({ table }: { table: TableUI }) {
             <TableHead className="cursor-pointer text-gray-500 hover:text-gray-900" onClick={() => table.handleSort('name')}>
               <div className="flex items-center gap-2">Name</div>
             </TableHead>
-            <TableHead className="text-gray-500">Players</TableHead>
             <TableHead className="text-gray-500">Contact</TableHead>
             <TableHead className="text-gray-500">Total ₱</TableHead>
             <TableHead className="text-gray-500">Actions</TableHead>
@@ -72,6 +86,26 @@ export default function BookingsTable({ table }: { table: TableUI }) {
                   key={group.key} 
                   className={`border-gray-100 hover:bg-gray-50 ${isPast || isInactive ? 'opacity-60' : ''}`}
                 >
+                  {/* Booking ID */}
+                  <TableCell>
+                    {group.short_id ? (
+                      <button
+                        onClick={() => handleCopyId(group.short_id!)}
+                        className="font-mono text-sm font-medium text-gray-900 hover:text-emerald-600 flex items-center gap-1.5 transition-colors"
+                        title="Click to copy"
+                      >
+                        {group.short_id}
+                        {copiedId === group.short_id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-gray-400" />
+                        )}
+                      </button>
+                    ) : (
+                      <span className="text-gray-400 text-sm">—</span>
+                    )}
+                  </TableCell>
+
                   {/* Status */}
                   <TableCell>
                     <BookingStatusBadge 
@@ -107,9 +141,8 @@ export default function BookingsTable({ table }: { table: TableUI }) {
                   {/* Name */}
                   <TableCell className="text-gray-900 font-medium">{group.name}</TableCell>
                   
-                  {/* Players */}
-                  <TableCell className="text-gray-900">{group.players ?? '-'}</TableCell>
-                  
+                  {/* Removed Players cell */}
+
                   {/* Contact (Phone + Email) */}
                   <TableCell>
                     <div className="flex flex-col text-sm">

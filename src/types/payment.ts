@@ -61,6 +61,9 @@ export interface PendingPaymentBooking {
   payment_amount: number
   created_at: string
   user_id: string | null
+  // Booking identification
+  short_id?: string | null          // Human-readable ID (e.g., 'A1B2')
+  booking_group_id?: string | null  // UUID linking slots from same order
 }
 
 // Email notification types

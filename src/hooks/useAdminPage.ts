@@ -33,6 +33,7 @@ export interface GroupedBooking {
   players?: number
   payment_status: PaymentStatus | null
   payment_amount?: number
+  short_id: string | null  // Human-readable booking ID (e.g., 'A1B2')
 }
 
 export function useAdminPage() {
@@ -86,8 +87,11 @@ export function useAdminPage() {
     const groups = new Map<string, GroupedBooking>()
 
     filtered.forEach((booking: Booking) => {
-      // Group by user + date + payment_status (same user may have multiple bookings with different statuses)
-      const key = `${booking.name}-${booking.email}-${booking.phone}-${booking.date}-${booking.payment_status}`
+      // Group by booking_group_id (unique per booking order)
+      // This ensures separate booking orders are shown as separate rows, even if same user/date
+      // Fallback to legacy grouping for old bookings without booking_group_id
+      const key = booking.booking_group_id || 
+        `legacy-${booking.name}-${booking.email}-${booking.phone}-${booking.date}-${booking.payment_status}-${booking.created_at}`
       
       if (groups.has(key)) {
         const group = groups.get(key)!
@@ -106,6 +110,7 @@ export function useAdminPage() {
           players: booking.players,
           payment_status: booking.payment_status || null,
           payment_amount: booking.payment_amount ?? undefined,
+          short_id: booking.short_id || null,
         })
       }
     })
