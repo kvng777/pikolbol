@@ -141,7 +141,10 @@ export default function NavBar() {
               {isAdminPath && (
                 <button
                   type="button"
-                  onClick={() => router.push('/')}
+                  onClick={() => {
+                    const win = window.open('/', '_blank')
+                    if (win) win.opener = null
+                  }}
                   className="inline-flex items-center px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-md text-sm font-medium"
                 >
                   Switch to customer view
