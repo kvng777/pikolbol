@@ -8,11 +8,12 @@ import { Lock, Mail, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 interface LoginFormProps {
   onSubmit: (credentials: { email: string; password: string }) => Promise<void>
+  onForgotPassword?: () => void
   isLoading: boolean
   error: string
 }
 
-export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
+export function LoginForm({ onSubmit, onForgotPassword, isLoading, error }: LoginFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -44,9 +45,20 @@ export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-          Password
-        </Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+            Password
+          </Label>
+          {onForgotPassword && (
+            <button
+              type="button"
+              onClick={onForgotPassword}
+              className="text-sm text-emerald-600 hover:text-emerald-700 transition-colors"
+            >
+              Forgot password?
+            </button>
+          )}
+        </div>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <Input
