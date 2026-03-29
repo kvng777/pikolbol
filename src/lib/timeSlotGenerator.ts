@@ -1,6 +1,6 @@
 import { Booking, TimeSlot, DisabledSlot } from '@/types/booking'
 
-const OPERATING_HOURS = { start: 6, end: 18 }
+const OPERATING_HOURS = { start: 6, end: 21 }
 const SLOT_DURATION = 1
 
 export function generateTimeSlots(): string[] {

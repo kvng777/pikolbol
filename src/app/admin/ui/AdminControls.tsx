@@ -3,22 +3,25 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { BOOKING_FILTER_OPTIONS, TIME_FILTER_OPTIONS, BookingFilterValue, TimeFilterValue } from '@/lib/bookingStatus'
 import type { TableUI } from '@/app/admin/hooks/useAdminTable'
 
 export default function AdminControls({ table }: { table: TableUI }) {
   const handleExportCSV = () => {
     const rows = table.filteredBookings.map((g) => ({
+      Status: g.payment_status || 'unknown',
       Name: g.name,
       Email: g.email,
       Phone: g.phone,
       Date: g.date,
       TimeSlots: (g.timeSlots || []).join('; '),
       Players: g.players ?? '',
+      Amount: g.payment_amount ?? '',
       BookingIDs: (g.bookingIds || []).join('; '),
       CreatedAt: g.created_at,
     }))
 
-    const headers = ['Name', 'Email', 'Phone', 'Date', 'TimeSlots', 'Players', 'BookingIDs', 'CreatedAt']
+    const headers = ['Status', 'Name', 'Email', 'Phone', 'Date', 'TimeSlots', 'Players', 'Amount', 'BookingIDs', 'CreatedAt']
 
     const escape = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`
 
@@ -42,12 +45,14 @@ export default function AdminControls({ table }: { table: TableUI }) {
     try {
       const XLSX = await import('xlsx')
       const rows = table.filteredBookings.map((g) => ({
+        Status: g.payment_status || 'unknown',
         Name: g.name,
         Email: g.email,
         Phone: g.phone,
         Date: g.date,
         TimeSlots: (g.timeSlots || []).join('; '),
         Players: g.players ?? '',
+        Amount: g.payment_amount ?? '',
         BookingIDs: (g.bookingIds || []).join('; '),
         CreatedAt: g.created_at,
       }))
@@ -116,28 +121,20 @@ export default function AdminControls({ table }: { table: TableUI }) {
         </Button>
       </div>
 
-      <div className=" ">
-        <span>Filter view: </span>
-        <div className='inline-flex rounded-md bg-gray-100 p-1'>
-          <button
-            onClick={() => { table.setFilterMode('all'); table.setPage(1) }}
-            className={`px-3 py-1 text-sm rounded-md ${table.filterMode === 'all' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => { table.setFilterMode('incoming'); table.setPage(1) }}
-            className={`px-3 py-1 text-sm rounded-md ${table.filterMode === 'incoming' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
-          >
-            Incoming
-          </button>
-          <button
-            onClick={() => { table.setFilterMode('passed'); table.setPage(1) }}
-            className={`px-3 py-1 text-sm rounded-md ${table.filterMode === 'passed' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
-          >
-            Passed
-          </button>
-        </div>
+      {/* Status Filter */}
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-600">Status:</span>
+        <select
+          value={table.statusFilter}
+          onChange={(e) => table.setStatusFilter(e.target.value as BookingFilterValue)}
+          className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+        >
+          {BOOKING_FILTER_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   )

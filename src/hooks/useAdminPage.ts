@@ -15,11 +15,13 @@ import {
   useRemoveClosedDate,
 } from '@/hooks/useBookings'
 import { Booking } from '@/types/booking'
+import { PaymentStatus } from '@/types/payment'
+import { BookingFilterValue, TimeFilterValue } from '@/lib/bookingStatus'
 
-type SortField = 'date' | 'time_slot' | 'name' | 'created_at'
+type SortField = 'date' | 'time_slot' | 'name' | 'created_at' | 'payment_status'
 type SortOrder = 'asc' | 'desc'
 
-interface GroupedBooking {
+export interface GroupedBooking {
   key: string
   name: string
   email: string
@@ -29,6 +31,9 @@ interface GroupedBooking {
   bookingIds: string[]
   created_at: string
   players?: number
+  payment_status: PaymentStatus | null
+  payment_amount?: number
+  short_id: string | null  // Human-readable booking ID (e.g., 'A1B2')
 }
 
 export function useAdminPage() {
@@ -82,7 +87,11 @@ export function useAdminPage() {
     const groups = new Map<string, GroupedBooking>()
 
     filtered.forEach((booking: Booking) => {
-      const key = `${booking.name}-${booking.email}-${booking.phone}-${booking.date}`
+      // Group by booking_group_id (unique per booking order)
+      // This ensures separate booking orders are shown as separate rows, even if same user/date
+      // Fallback to legacy grouping for old bookings without booking_group_id
+      const key = booking.booking_group_id || 
+        `legacy-${booking.name}-${booking.email}-${booking.phone}-${booking.date}-${booking.payment_status}-${booking.created_at}`
       
       if (groups.has(key)) {
         const group = groups.get(key)!
@@ -99,6 +108,9 @@ export function useAdminPage() {
           bookingIds: [booking.id],
           created_at: booking.created_at,
           players: booking.players,
+          payment_status: booking.payment_status || null,
+          payment_amount: booking.payment_amount ?? undefined,
+          short_id: booking.short_id || null,
         })
       }
     })

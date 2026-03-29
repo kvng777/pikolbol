@@ -4,31 +4,27 @@ import { useState } from 'react'
 import { format, parseISO, isAfter, addHours } from 'date-fns'
 import { Booking } from '@/types/booking'
 import { PaymentStatus } from '@/types/payment'
-import { Calendar, Clock, Users, X, AlertTriangle, Loader2, CreditCard } from 'lucide-react'
+import { Calendar, Clock, X, AlertTriangle, Loader2, CreditCard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CANCELLATION_HOURS_BEFORE } from '@/lib/constants'
 
 // Payment status badge configuration
 const paymentStatusConfig: Record<PaymentStatus, { label: string; className: string }> = {
   pending: {
-    label: 'Payment Pending',
-    className: 'bg-yellow-100 text-yellow-700',
-  },
-  awaiting_confirmation: {
-    label: 'Awaiting Verification',
+    label: 'Pending Verification',
     className: 'bg-orange-100 text-orange-700',
   },
   confirmed: {
     label: 'Paid',
     className: 'bg-green-100 text-green-700',
   },
-  expired: {
-    label: 'Payment Expired',
-    className: 'bg-red-100 text-red-700',
-  },
   rejected: {
     label: 'Payment Rejected',
     className: 'bg-red-100 text-red-700',
+  },
+  cancelled: {
+    label: 'Cancelled',
+    className: 'bg-gray-100 text-gray-500',
   },
 }
 
@@ -58,10 +54,10 @@ function getBookingStatus(booking: Booking): BookingStatus {
 function canCancelBooking(booking: Booking): { canCancel: boolean; reason?: string } {
   // Cannot cancel if payment is not confirmed (for bookings with payment)
   if (booking.payment_status && booking.payment_status !== 'confirmed') {
-    if (booking.payment_status === 'pending' || booking.payment_status === 'awaiting_confirmation') {
-      return { canCancel: false, reason: 'Complete or wait for payment to expire' }
+    if (booking.payment_status === 'pending') {
+      return { canCancel: false, reason: 'Wait for payment verification' }
     }
-    if (booking.payment_status === 'expired' || booking.payment_status === 'rejected') {
+    if (booking.payment_status === 'rejected' || booking.payment_status === 'cancelled') {
       return { canCancel: false, reason: 'Booking already cancelled' }
     }
   }
@@ -282,17 +278,6 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
                   <Clock className="w-4 h-4 text-gray-400" />
                   {booking.time_slot}
                 </div>
-
-                {/* Players */}
-                <div className="flex items-center gap-2 text-gray-600 mt-1">
-                  <Users className="w-4 h-4 text-gray-400" />
-                  {booking.players} players
-                </div>
-
-                {/* Court */}
-                <p className="text-sm text-gray-500 mt-2">
-                  Court {booking.court_number}
-                </p>
 
                 {/* Payment amount */}
                 {booking.payment_amount && booking.payment_status === 'confirmed' && (
