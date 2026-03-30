@@ -18,7 +18,7 @@ export default function ContactSection() {
           </div>
           <div>
             <p className="text-xs text-gray-500">Location</p>
-            <p className="text-sm text-gray-900">No.051 Sitio Garcia, Sto. Cristo Norte, Gapan <span className="text-gray-400">(In front of Casa Granja)</span></p>
+            <p className="text-sm text-gray-900">No.051 Sitio Garcia St, Sto. Cristo Norte, Gapan <span className="text-gray-400">(In front of Casa Granja)</span></p>
           </div>
         </div>
 
@@ -28,7 +28,7 @@ export default function ContactSection() {
           </div>
           <div>
             <p className="text-xs text-gray-500">Hours</p>
-            <p className="text-sm text-gray-900">Open daily: 7:00 AM — 5:00 PM</p>
+            <p className="text-sm text-gray-900">Open daily: 6:00 AM — 9:00 PM</p>
           </div>
         </div>
 

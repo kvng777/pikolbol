@@ -49,7 +49,10 @@ export default function HeroSection({
               }}
               tabIndex={0}
             >
-              <div className="inline-flex items-center justify-center md:w-36 md:h-36 w-18 h-18 rounded-full mb-2">
+              <div
+                className="hidden sm:inline-flex items-center justify-center sm:w-24 sm:h-24 md:w-36 md:h-36 rounded-full mb-2"
+                aria-hidden="true"
+              >
                 <Image src="/logo-color.png" alt="Pikolbol logo" width={144} height={144} className="object-contain" />
               </div>
             </div>
