@@ -5,14 +5,16 @@ import { format } from 'date-fns'
 import { useAdminTable } from './hooks/useAdminTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Calendar, Clock, Plus, Ban, Lock, CreditCard, Settings } from 'lucide-react'
+import { Calendar, Clock, Plus, Ban, Lock, CreditCard, Settings, Banknote } from 'lucide-react'
 import AdminHeader from './ui/AdminHeader'
 import AdminControls from './ui/AdminControls'
 import BookingsTable from './ui/BookingsTable'
 import NavBar from '@/components/NavBar'
 import { PendingPayments } from '@/components/admin/PendingPayments'
+import { PendingRefunds } from '@/components/admin/PendingRefunds'
 import { PaymentSettings } from '@/components/admin/PaymentSettings'
 import { usePendingPayments } from '@/hooks/usePayment'
+import { usePendingRefunds } from '@/hooks/useRefunds'
 import { useProfile } from '@/hooks/useProfile'
 
 export default function AdminPage() {
@@ -31,6 +33,19 @@ export default function AdminPage() {
     })
     return keys.size
   }, [pendingQuery.data])
+
+  const refundsQuery = usePendingRefunds()
+  const refundsCount = useMemo(() => {
+    const bookings = refundsQuery.data
+    if (!bookings || bookings.length === 0) return 0
+    const keys = new Set<string>()
+    bookings.forEach((b: any) => {
+      const key = b.booking_group_id || `legacy-${b.id}`
+      keys.add(key)
+    })
+    return keys.size
+  }, [refundsQuery.data])
+
   const { data: profile } = useProfile()
   const displayName = profile?.name ?? table.user?.user_metadata?.full_name ?? table.user?.email ?? 'User'
 
@@ -92,6 +107,23 @@ export default function AdminPage() {
               )}
             </div>
 
+            <div className="relative inline-block">
+              <Button
+                variant={table.activeTab === 'refunds' ? 'default' : 'outline'}
+                onClick={() => table.setActiveTab('refunds')}
+                className={table.activeTab === 'refunds' ? 'bg-blue-500 hover:bg-blue-600' : ''}
+              >
+                <Banknote className="w-4 h-4 mr-2" />
+                Pending Refunds
+              </Button>
+
+              {refundsCount > 0 && (
+                <span className="absolute -top-2 -right-1 inline-flex items-center justify-center p-1 h-5 w-5 text-[12px] font-semibold leading-none text-white bg-red-600 rounded-full">
+                  {refundsCount > 99 ? '99+' : refundsCount}
+                </span>
+              )}
+            </div>
+
             <Button
               variant={table.activeTab === 'slots' ? 'default' : 'outline'}
               onClick={() => table.setActiveTab('slots')}
@@ -128,6 +160,12 @@ export default function AdminPage() {
           {table.activeTab === 'payments' && (
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
               <PendingPayments />
+            </div>
+          )}
+
+          {table.activeTab === 'refunds' && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+              <PendingRefunds />
             </div>
           )}
 

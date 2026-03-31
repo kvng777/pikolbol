@@ -1,10 +1,11 @@
 import { supabase } from './supabase-server'
 import { Booking, BookingFormData, CreateBookingResult, DisabledSlot, ClosedDate, CancelBookingResult } from '@/types/booking'
-import { CANCELLATION_HOURS_BEFORE } from './constants'
+import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from './constants'
 import { HELD_PAYMENT_STATUSES, CONFIRMED_PAYMENT_STATUSES } from './paymentConfig'
+import { sendAdminRefundAlertEmail, sendUserRefundCompletedEmail } from './emailService'
 
-// Re-export the constant for backwards compatibility with server-side code
-export { CANCELLATION_HOURS_BEFORE }
+// Re-export constants for backwards compatibility with server-side code
+export { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT }
 
 // Payment statuses that indicate a slot is occupied (pending or confirmed)
 const ACTIVE_PAYMENT_STATUSES = [...HELD_PAYMENT_STATUSES, ...CONFIRMED_PAYMENT_STATUSES]
@@ -400,6 +401,246 @@ export async function cancelBooking(bookingId: string, userId: string): Promise<
   if (error) {
     console.error('Error cancelling booking:', error)
     return { success: false, error: 'Failed to cancel booking' }
+  }
+
+  return { success: true }
+}
+
+/**
+ * Calculate hours until the earliest booking in a group
+ */
+export function calculateHoursUntilBooking(bookings: Booking[]): number {
+  if (bookings.length === 0) return 0
+  
+  // Find the earliest time slot
+  const sortedBookings = [...bookings].sort((a, b) => 
+    a.time_slot.localeCompare(b.time_slot)
+  )
+  const earliest = sortedBookings[0]
+  
+  const bookingDateTime = parseBookingDateTime(earliest.date, earliest.time_slot)
+  const now = new Date()
+  return (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
+}
+
+/**
+ * Calculate cancellation fee and refund amount based on timing
+ * - Free cancellation: > 24 hours before booking (full refund)
+ * - P100/slot fee: <= 24 hours before booking (partial refund)
+ */
+export function calculateCancellationFee(
+  totalAmount: number,
+  numberOfSlots: number,
+  hoursUntilBooking: number
+): { cancellationFee: number; refundAmount: number } {
+  if (hoursUntilBooking > CANCELLATION_HOURS_BEFORE) {
+    // Free cancellation - full refund
+    return { cancellationFee: 0, refundAmount: totalAmount }
+  } else {
+    // Fee applies: P100 per slot
+    const fee = numberOfSlots * CANCELLATION_FEE_PER_SLOT
+    const refund = Math.max(0, totalAmount - fee)
+    return { cancellationFee: fee, refundAmount: refund }
+  }
+}
+
+/**
+ * Get all bookings in a booking group
+ */
+export async function getBookingsByGroupId(bookingGroupId: string): Promise<Booking[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('booking_group_id', bookingGroupId)
+    .order('time_slot', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching bookings by group ID:', error)
+    return []
+  }
+
+  return data || []
+}
+
+/**
+ * Cancel all bookings in a booking group
+ * Calculates cancellation fee based on timing and updates records
+ */
+export async function cancelBookingGroup(
+  bookingGroupId: string | null,
+  legacyBookingId: string | null,
+  userId: string
+): Promise<CancelBookingResult> {
+  let bookings: Booking[] = []
+
+  // Fetch bookings - either by group ID or legacy single booking
+  if (bookingGroupId) {
+    bookings = await getBookingsByGroupId(bookingGroupId)
+  } else if (legacyBookingId) {
+    const booking = await getBookingById(legacyBookingId)
+    if (booking) bookings = [booking]
+  }
+
+  if (bookings.length === 0) {
+    return { success: false, error: 'Booking not found' }
+  }
+
+  // Verify user owns all bookings in the group
+  const userOwnsAll = bookings.every(b => b.user_id === userId)
+  if (!userOwnsAll) {
+    return { success: false, error: 'You can only cancel your own bookings' }
+  }
+
+  // Check payment status - only confirmed bookings can be cancelled for refund
+  const firstBooking = bookings[0]
+  if (firstBooking.payment_status !== 'confirmed') {
+    return { success: false, error: 'Only confirmed bookings can be cancelled' }
+  }
+
+  // Calculate hours until the earliest booking
+  const hoursUntilBooking = calculateHoursUntilBooking(bookings)
+  
+  // Bookings in the past cannot be cancelled
+  if (hoursUntilBooking < 0) {
+    return { success: false, error: 'Cannot cancel past bookings' }
+  }
+
+  // Calculate cancellation fee and refund
+  const totalAmount = firstBooking.payment_amount || 0
+  const numberOfSlots = bookings.length
+  const { cancellationFee, refundAmount } = calculateCancellationFee(
+    totalAmount,
+    numberOfSlots,
+    hoursUntilBooking
+  )
+
+  // Determine refund status (only 'pending' if there's actually a refund to process)
+  const refundStatus = refundAmount > 0 ? 'pending' : null
+
+  // Get all booking IDs to update
+  const bookingIds = bookings.map(b => b.id)
+
+  // Update all bookings in the group
+  const { error } = await supabase
+    .from('bookings')
+    .update({
+      payment_status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      cancellation_fee: cancellationFee,
+      refund_amount: refundAmount,
+      refund_status: refundStatus,
+    })
+    .in('id', bookingIds)
+    .eq('user_id', userId) // Extra safety check
+
+  if (error) {
+    console.error('Error cancelling booking group:', error)
+    return { success: false, error: 'Failed to cancel booking' }
+  }
+
+  // Send admin alert email if there's a refund to process
+  if (refundAmount > 0) {
+    try {
+      await sendAdminRefundAlertEmail({
+        userName: firstBooking.name,
+        userEmail: firstBooking.email,
+        userPhone: firstBooking.phone,
+        bookingDate: firstBooking.date,
+        bookingTime: bookings.map(b => b.time_slot).join(', '),
+        originalAmount: totalAmount,
+        cancellationFee,
+        refundAmount,
+        shortId: firstBooking.short_id || undefined,
+      })
+    } catch (emailError) {
+      // Log but don't fail the cancellation if email fails
+      console.error('Failed to send admin refund alert email:', emailError)
+    }
+  }
+
+  return { 
+    success: true, 
+    cancellationFee, 
+    refundAmount 
+  }
+}
+
+/**
+ * Get all bookings with pending refunds (for admin)
+ */
+export async function getPendingRefunds(): Promise<Booking[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('refund_status', 'pending')
+    .order('cancelled_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching pending refunds:', error)
+    return []
+  }
+
+  return data || []
+}
+
+/**
+ * Mark a booking group's refund as completed (admin action)
+ * Sends confirmation email to the user
+ */
+export async function markRefundCompleted(
+  bookingGroupId: string | null,
+  legacyBookingId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  // First, fetch the booking details before updating (needed for email)
+  let bookingsToNotify: Booking[] = []
+  
+  if (bookingGroupId) {
+    bookingsToNotify = await getBookingsByGroupId(bookingGroupId)
+    
+    const { error } = await supabase
+      .from('bookings')
+      .update({ refund_status: 'completed' })
+      .eq('booking_group_id', bookingGroupId)
+
+    if (error) {
+      console.error('Error marking refund completed:', error)
+      return { success: false, error: error.message }
+    }
+  } else if (legacyBookingId) {
+    const booking = await getBookingById(legacyBookingId)
+    if (booking) bookingsToNotify = [booking]
+    
+    const { error } = await supabase
+      .from('bookings')
+      .update({ refund_status: 'completed' })
+      .eq('id', legacyBookingId)
+
+    if (error) {
+      console.error('Error marking refund completed:', error)
+      return { success: false, error: error.message }
+    }
+  } else {
+    return { success: false, error: 'No booking identifier provided' }
+  }
+
+  // Send user refund completed email
+  if (bookingsToNotify.length > 0) {
+    const first = bookingsToNotify[0]
+    try {
+      await sendUserRefundCompletedEmail({
+        recipientEmail: first.email,
+        recipientName: first.name,
+        bookingDate: first.date,
+        bookingTime: bookingsToNotify.map(b => b.time_slot).join(', '),
+        originalAmount: first.payment_amount || 0,
+        cancellationFee: first.cancellation_fee || 0,
+        refundAmount: first.refund_amount || 0,
+        shortId: first.short_id || undefined,
+      })
+    } catch (emailError) {
+      // Log but don't fail the operation if email fails
+      console.error('Failed to send user refund completed email:', emailError)
+    }
   }
 
   return { success: true }

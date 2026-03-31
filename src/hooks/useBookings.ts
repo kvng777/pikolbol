@@ -15,6 +15,7 @@ import {
   deleteBookingAction,
   getBookingsByUserIdAction,
   cancelBookingAction,
+  cancelBookingGroupAction,
 } from '@/actions/bookings'
 
 const CACHE_TIME = 5 * 60 * 1000 // 5 minutes
@@ -177,6 +178,7 @@ export function useUserBookings(userId: string | undefined) {
 
 /**
  * Hook to cancel a user's booking (24-hour policy applies)
+ * @deprecated Use useCancelBookingGroup instead for proper grouped booking cancellation
  */
 export function useCancelBooking() {
   const queryClient = useQueryClient()
@@ -188,6 +190,35 @@ export function useCancelBooking() {
       queryClient.invalidateQueries({ queryKey: ['userBookings'] })
       queryClient.invalidateQueries({ queryKey: ['allBookings'] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
+    },
+  })
+}
+
+/**
+ * Hook to cancel a booking group (all slots in the same order)
+ * Calculates cancellation fee based on timing:
+ * - Free cancellation: > 24 hours before booking
+ * - P100/slot fee: <= 24 hours before booking
+ */
+export function useCancelBookingGroup() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ 
+      bookingGroupId, 
+      legacyBookingId, 
+      userId 
+    }: { 
+      bookingGroupId: string | null
+      legacyBookingId: string | null
+      userId: string 
+    }) => cancelBookingGroupAction(bookingGroupId, legacyBookingId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['allBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
+      queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['pendingRefunds'] })
     },
   })
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { User, CalendarDays, Loader2, ArrowLeft } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useProfile, useUpsertProfile } from '@/hooks/useProfile'
-import { useUserBookings, useCancelBooking } from '@/hooks/useBookings'
+import { useUserBookings, useCancelBookingGroup } from '@/hooks/useBookings'
 import { ProfileForm } from '@/components/profile/ProfileForm'
 import { BookingHistory } from '@/components/profile/BookingHistory'
 import NavBar from '@/components/NavBar'
@@ -18,7 +18,7 @@ export default function ProfilePage() {
   const { data: profile, isLoading: profileLoading } = useProfile()
   const { data: bookings = [], isLoading: bookingsLoading } = useUserBookings(user?.id)
   const upsertProfile = useUpsertProfile()
-  const cancelBooking = useCancelBooking()
+  const cancelBookingGroup = useCancelBookingGroup()
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -37,13 +37,21 @@ export default function ProfilePage() {
     }
   }
 
-  const handleCancelBooking = async (bookingId: string) => {
+  const handleCancelBooking = async (bookingGroupId: string | null, legacyBookingId: string) => {
     if (!user?.id) return
 
     try {
-      const result = await cancelBooking.mutateAsync({ bookingId, userId: user.id })
+      const result = await cancelBookingGroup.mutateAsync({ 
+        bookingGroupId, 
+        legacyBookingId,
+        userId: user.id 
+      })
       if (result.success) {
-        toast.success('Booking cancelled successfully')
+        if (result.refundAmount && result.refundAmount > 0) {
+          toast.success(`Booking cancelled. Refund of P${result.refundAmount.toLocaleString()} will be processed.`)
+        } else {
+          toast.success('Booking cancelled successfully')
+        }
       } else {
         toast.error(result.error || 'Failed to cancel booking')
       }
@@ -120,7 +128,7 @@ export default function ProfilePage() {
               bookings={bookings}
               isLoading={bookingsLoading}
               onCancelBooking={handleCancelBooking}
-              isCancelling={cancelBooking.isPending}
+              isCancelling={cancelBookingGroup.isPending}
             />
           </div>
         </div>

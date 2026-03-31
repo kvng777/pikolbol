@@ -1,5 +1,7 @@
 import { PaymentStatus } from './payment'
 
+export type RefundStatus = 'pending' | 'completed'
+
 export interface Booking {
   id: string
   name: string
@@ -19,6 +21,11 @@ export interface Booking {
   payment_deadline?: string | null
   payment_confirmed_at?: string | null
   payment_amount?: number | null
+  // Cancellation & refund fields
+  cancelled_at?: string | null
+  cancellation_fee?: number | null
+  refund_amount?: number | null
+  refund_status?: RefundStatus | null
 }
 
 export interface TimeSlot {
@@ -73,4 +80,6 @@ export interface BulkBookingPayload {
 export interface CancelBookingResult {
   success: boolean
   error?: string
+  cancellationFee?: number
+  refundAmount?: number
 }
