@@ -65,7 +65,8 @@ export default function BookingsTable({ table }: { table: TableUI }) {
             <TableHead className="cursor-pointer text-gray-500 hover:text-gray-900" onClick={() => table.handleSort('name')}>
               <div className="flex items-center gap-2">Name</div>
             </TableHead>
-            <TableHead className="text-gray-500">Contact</TableHead>
+            <TableHead className="text-gray-500">Mobile</TableHead>
+            <TableHead className="text-gray-500">Email</TableHead>
             <TableHead className="text-gray-500">Total ₱</TableHead>
             <TableHead className="text-gray-500">Actions</TableHead>
           </TableRow>
@@ -74,7 +75,7 @@ export default function BookingsTable({ table }: { table: TableUI }) {
         <TableBody>
           {table.filteredBookings.length === 0 ? (
             <TableRow className="border-gray-100">
-              <TableCell colSpan={8} className="text-center py-12 text-gray-500">No bookings found</TableCell>
+              <TableCell colSpan={9} className="text-center py-12 text-gray-500">No bookings found</TableCell>
             </TableRow>
           ) : (
             table.pagedBookings.map((group: BookingGroup) => {
@@ -142,16 +143,14 @@ export default function BookingsTable({ table }: { table: TableUI }) {
                   {/* Name */}
                   <TableCell className="text-gray-900 font-medium">{group.name}</TableCell>
                   
-                  {/* Removed Players cell */}
+                  {/* Mobile */}
+                  <TableCell className="text-gray-700 text-sm">
+                    {group.phone ?? <span className="text-gray-400">—</span>}
+                  </TableCell>
 
-                  {/* Contact (Phone + Email) */}
-                  <TableCell>
-                    <div className="flex flex-col text-sm">
-                      <span className="text-gray-700">{group.phone}</span>
-                      <span className="text-gray-400 text-xs truncate max-w-[150px]" title={group.email}>
-                        {group.email}
-                      </span>
-                    </div>
+                  {/* Email */}
+                  <TableCell className="text-gray-400 text-sm truncate max-w-[150px]" title={group.email}>
+                    {group.email ?? <span className="text-gray-400">—</span>}
                   </TableCell>
 
                   {/* Total */}

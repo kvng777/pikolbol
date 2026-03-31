@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { useAdminTable } from './hooks/useAdminTable'
 import { Button } from '@/components/ui/button'
@@ -12,11 +13,26 @@ import NavBar from '@/components/NavBar'
 import { PendingPayments } from '@/components/admin/PendingPayments'
 import { PaymentSettings } from '@/components/admin/PaymentSettings'
 import { usePendingPayments } from '@/hooks/usePayment'
+import { useProfile } from '@/hooks/useProfile'
 
 export default function AdminPage() {
   const table = useAdminTable()
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+
+  const pendingQuery = usePendingPayments()
+  const pendingCount = useMemo(() => {
+    const bookings = pendingQuery.data
+    if (!bookings || bookings.length === 0) return 0
+    const keys = new Set<string>()
+    bookings.forEach((b: any) => {
+      const key = b.booking_group_id || `legacy-${b.name}-${b.email}-${b.date}-${b.created_at}`
+      keys.add(key)
+    })
+    return keys.size
+  }, [pendingQuery.data])
+  const { data: profile } = useProfile()
+  const displayName = profile?.name ?? table.user?.user_metadata?.full_name ?? table.user?.email ?? 'User'
 
   if (table.authLoading) {
     return (
@@ -44,7 +60,7 @@ export default function AdminPage() {
       <div className="relative z-10 min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           <div className='pb-2 text-2xl'>
-            Hi! {table.user.email}
+            Hi! {displayName}
           </div>
 
           <AdminHeader table={table} />
@@ -58,14 +74,24 @@ export default function AdminPage() {
               <Calendar className="w-4 h-4 mr-2" />
               Bookings
             </Button>
-            <Button
-              variant={table.activeTab === 'payments' ? 'default' : 'outline'}
-              onClick={() => table.setActiveTab('payments')}
-              className={table.activeTab === 'payments' ? 'bg-amber-500 hover:bg-amber-600' : ''}
-            >
-              <CreditCard className="w-4 h-4 mr-2" />
-              Pending Payments
-            </Button>
+
+            <div className="relative inline-block">
+              <Button
+                variant={table.activeTab === 'payments' ? 'default' : 'outline'}
+                onClick={() => table.setActiveTab('payments')}
+                className={table.activeTab === 'payments' ? 'bg-amber-500 hover:bg-amber-600' : ''}
+              >
+                <CreditCard className="w-4 h-4 mr-2" />
+                Pending Payments
+              </Button>
+
+              {pendingCount > 0 && (
+                <span className="absolute -top-2 -right-1 inline-flex items-center justify-center p-1 h-5 w-5 text-[12px] font-semibold leading-none text-white bg-red-600 rounded-full">
+                  {pendingCount > 99 ? '99+' : pendingCount}
+                </span>
+              )}
+            </div>
+
             <Button
               variant={table.activeTab === 'slots' ? 'default' : 'outline'}
               onClick={() => table.setActiveTab('slots')}

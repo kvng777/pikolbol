@@ -1,7 +1,9 @@
+import { format } from 'date-fns'
 import { Booking, TimeSlot, DisabledSlot } from '@/types/booking'
 
 const OPERATING_HOURS = { start: 6, end: 21 }
 const SLOT_DURATION = 1
+const BOOKING_BUFFER_MINUTES = 30 // Slots must start at least this many minutes from now
 
 export function generateTimeSlots(): string[] {
   const slots: string[] = []
@@ -28,10 +30,29 @@ export function getAvailableSlotsForCourt(
     .filter(s => s.date === date)
     .map(s => s.time_slot)
 
-  return allSlots.map(slot => ({
-    time: slot,
-    available: !bookedSlots.includes(slot) && !disabledTimeSlots.includes(slot)
-  }))
+  // Check if the date is today to disable past/imminent slots
+  const now = new Date()
+  const isToday = date === format(now, 'yyyy-MM-dd')
+  
+  // Calculate cutoff time (current time + buffer)
+  // Slots starting before this cutoff should be disabled
+  const cutoffMinutes = now.getHours() * 60 + now.getMinutes() + BOOKING_BUFFER_MINUTES
+
+  return allSlots.map(slot => {
+    // Parse the slot start hour (e.g., "06:00-07:00" -> 6 * 60 = 360 minutes)
+    const slotStartHour = parseInt(slot.split(':')[0], 10)
+    const slotStartMinutes = slotStartHour * 60
+    
+    // Slot is past/too soon if it's today and starts before the cutoff
+    const isPastOrTooSoon = isToday && slotStartMinutes < cutoffMinutes
+
+    return {
+      time: slot,
+      available: !bookedSlots.includes(slot) && 
+                 !disabledTimeSlots.includes(slot) && 
+                 !isPastOrTooSoon
+    }
+  })
 }
 
 export function getAllCourts(): number[] {

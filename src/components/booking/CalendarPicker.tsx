@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { DayPicker } from 'react-day-picker'
-import { format } from 'date-fns'
+import { format, startOfMonth, isSameMonth, isBefore, startOfDay } from 'date-fns'
 import 'react-day-picker/style.css'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { ClosedDate } from '@/types/booking'
@@ -21,6 +21,42 @@ export function CalendarPicker({ selected, onSelect, closedDates = [] }: Calenda
     return () => cancelAnimationFrame(id)
   }, [])
 
+  const today = startOfDay(new Date())
+
+  // Helper to check if a date is closed
+  const isDateClosed = useCallback((date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    return closedDates.some(cd => dateStr >= cd.start_date && dateStr <= cd.end_date)
+  }, [closedDates])
+
+  // Find the first available date in a given month
+  const findFirstAvailableDate = useCallback((monthDate: Date): Date | null => {
+    const monthStart = startOfMonth(monthDate)
+    const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate()
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day)
+      // Skip if before today
+      if (isBefore(date, today)) continue
+      // Skip if closed
+      if (isDateClosed(date)) continue
+      // Found an available date
+      return date
+    }
+    return null
+  }, [today, isDateClosed])
+
+  // Handle month navigation - auto-select first available date in the new month
+  const handleMonthChange = useCallback((newMonth: Date) => {
+    // Only auto-select if we're navigating to a different month than the currently selected date
+    if (!isSameMonth(newMonth, selected)) {
+      const firstAvailable = findFirstAvailableDate(newMonth)
+      if (firstAvailable) {
+        onSelect(firstAvailable)
+      }
+    }
+  }, [selected, findFirstAvailableDate, onSelect])
+
   if (!mounted) {
     return (
       <div className="flex flex-col items-center">
@@ -29,9 +65,6 @@ export function CalendarPicker({ selected, onSelect, closedDates = [] }: Calenda
       </div>
     )
   }
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
 
   return (
     <div className="flex flex-col items-center">
@@ -54,6 +87,7 @@ export function CalendarPicker({ selected, onSelect, closedDates = [] }: Calenda
           })
           if (!isClosed) onSelect(date)
         }}
+        onMonthChange={handleMonthChange}
         fromDate={today}
         className="font-sans!"
         components={{
