@@ -58,10 +58,8 @@ export function AuthModal({ open, onClose, onSuccess, defaultTab = 'login' }: Au
 
   const handleSignup = async (credentials: { email: string; password: string; name: string; phone: string }) => {
     const success = await signup(credentials)
-    if (success) {
-      onSuccess()
-      onClose()
-    }
+    // Don't close modal - let SignupForm show success state with email verification message
+    return success
   }
 
   const handleTabChange = (tab: AuthTab) => {
@@ -161,6 +159,7 @@ export function AuthModal({ open, onClose, onSuccess, defaultTab = 'login' }: Au
           {activeTab === 'signup' && (
             <SignupForm
               onSubmit={handleSignup}
+              onBackToLogin={() => handleTabChange('login')}
               isLoading={isLoading}
               error={error}
             />

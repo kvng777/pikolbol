@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Lock, Mail, Eye, EyeOff, Loader2, User, Phone } from 'lucide-react'
+import { Lock, Mail, Eye, EyeOff, Loader2, User, Phone, ArrowLeft } from 'lucide-react'
 
 const signupSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -23,14 +23,17 @@ const signupSchema = z.object({
 type SignupFormData = z.infer<typeof signupSchema>
 
 interface SignupFormProps {
-  onSubmit: (credentials: { email: string; password: string; name: string; phone: string }) => Promise<void>
+  onSubmit: (credentials: { email: string; password: string; name: string; phone: string }) => Promise<boolean>
+  onBackToLogin: () => void
   isLoading: boolean
   error: string
 }
 
-export function SignupForm({ onSubmit, isLoading, error }: SignupFormProps) {
+export function SignupForm({ onSubmit, onBackToLogin, isLoading, error }: SignupFormProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [submittedEmail, setSubmittedEmail] = useState('')
 
   const {
     register,
@@ -41,12 +44,53 @@ export function SignupForm({ onSubmit, isLoading, error }: SignupFormProps) {
   })
 
   const handleFormSubmit = async (data: SignupFormData) => {
-    await onSubmit({
+    const success = await onSubmit({
       email: data.email,
       password: data.password,
       name: data.name,
       phone: data.phone,
     })
+    if (success) {
+      setSubmittedEmail(data.email)
+      setSubmitted(true)
+    }
+  }
+
+  // Success state - show email verification message
+  if (submitted) {
+    return (
+      <div className="space-y-5 text-center">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100 mx-auto">
+          <Mail className="w-6 h-6 text-emerald-600" />
+        </div>
+        
+        <div className="space-y-2">
+          <h3 className="text-lg font-semibold text-gray-900">Check your email</h3>
+          <p className="text-sm text-gray-600">
+            We sent a verification link to <span className="font-medium">{submittedEmail}</span>
+          </p>
+        </div>
+
+        <p className="text-sm text-gray-600">
+          Please verify your email to secure your bookings.
+        </p>
+
+        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+          <p className="text-xs text-amber-700">
+            Didn&apos;t receive the email? Check your spam or junk folder.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onBackToLogin}
+          className="inline-flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to login
+        </button>
+      </div>
+    )
   }
 
   return (
