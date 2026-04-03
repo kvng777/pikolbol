@@ -14,6 +14,7 @@ import { isDateClosed } from '@/lib/bookingService'
 import { Booking } from '@/types/booking'
 import { PaymentResult, PendingPaymentBooking, PaymentInfo } from '@/types/payment'
 import { sendPaymentConfirmationEmail, sendPaymentRejectionEmail, sendAdminPaymentAlertEmail } from '@/lib/emailService'
+import { generateConfirmToken } from '@/lib/adminTokens'
 
 /**
  * Submit payment - creates booking with pending status
@@ -55,14 +56,24 @@ export async function submitPaymentAction(
     // Send admin notification email
     const booking = result.bookings[0]
     try {
-      await sendAdminPaymentAlertEmail({
+      const groupId = booking.booking_group_id
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+      const confirmUrl = groupId
+        ? `${appUrl}/api/admin/confirm-payment?groupId=${groupId}&token=${generateConfirmToken(groupId)}`
+        : undefined
+
+      const emailResult = await sendAdminPaymentAlertEmail({
         userName: payload.name,
         userEmail: payload.email,
         bookingDate: payload.date,
         bookingTime: payload.timeSlots.join(', '),
         amount: booking.payment_amount || 0,
         shortId: booking.short_id || undefined,
+        confirmUrl,
       })
+      if (!emailResult.success) {
+        console.error('Admin alert email failed:', emailResult.error)
+      }
     } catch (emailError) {
       console.error('Failed to send admin alert email:', emailError)
       // Don't fail the action if email fails

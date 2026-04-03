@@ -269,6 +269,7 @@ export async function sendAdminPaymentAlertEmail(data: {
   amount: number
   reference?: string
   shortId?: string  // Human-readable booking ID (e.g., 'A1B2')
+  confirmUrl?: string  // Signed URL to confirm payment directly from email
 }): Promise<{ success: boolean; error?: string }> {
   const formattedDate = formatBookingDate(data.bookingDate)
 
@@ -343,11 +344,23 @@ export async function sendAdminPaymentAlertEmail(data: {
               Please verify this payment promptly
             </p>
             <p style="color: #6b7280; font-size: 13px; margin: 0;">
-              Check your GCash for the incoming payment, then confirm or reject in the admin panel.
+              Check your GCash for the incoming payment, then confirm below or reject in the admin panel.
             </p>
           </div>
+
+          ${data.confirmUrl ? `
+          <!-- Confirm Button -->
+          <div style="margin-top: 20px; text-align: center;">
+            <a href="${data.confirmUrl}" style="display: inline-block; background-color: #10b981; color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 10px; letter-spacing: 0.3px;">
+              ✓ Confirm Payment
+            </a>
+            <p style="color: #9ca3af; font-size: 12px; margin: 10px 0 0 0;">
+              Clicking will confirm the payment and notify the customer.
+            </p>
+          </div>
+          ` : ''}
         </div>
-        
+
         <!-- Footer -->
         <div style="background-color: #f9fafb; padding: 16px 24px; text-align: center; border-top: 1px solid #e5e7eb;">
           <p style="color: #9ca3af; font-size: 12px; margin: 0;">
