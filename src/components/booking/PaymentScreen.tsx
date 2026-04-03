@@ -39,6 +39,7 @@ export function PaymentScreen({
 }: PaymentScreenProps) {
   const [copiedField, setCopiedField] = useState<'name' | 'number' | null>(null)
   const [submittedBookings, setSubmittedBookings] = useState<Booking[] | null>(null)
+  const [confirmChecked, setConfirmChecked] = useState(false)
   
   const { data: settings, isLoading: settingsLoading } = usePaymentSettings()
   const submitPayment = useSubmitPayment()
@@ -222,23 +223,36 @@ export function PaymentScreen({
 
           {/* Action Buttons */}
           <div className="space-y-3">
+            <div className="flex items-start justify-center gap-3">
+              <input
+                id="confirm-payment"
+                type="checkbox"
+                checked={confirmChecked}
+                onChange={(e) => setConfirmChecked(e.target.checked)}
+                disabled={submitPayment.isPending}
+                className="w-4 h-4 mt-1 text-emerald-600 border-gray-300 rounded"
+              />
+              <label htmlFor="confirm-payment" className="text-sm text-gray-700">
+                I confirm that I have completed the payment.
+              </label>
+            </div>
             <Button
               onClick={handleSubmitPayment}
-              disabled={submitPayment.isPending}
-              className="w-full h-12 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium"
-            >
-              {submitPayment.isPending ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Submitting...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5" />
-                  I&apos;ve Completed Payment
-                </span>
-              )}
-            </Button>
+              disabled={submitPayment.isPending || !confirmChecked}
+               className="w-full h-12 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium"
+             >
+               {submitPayment.isPending ? (
+                 <span className="flex items-center gap-2">
+                   <Loader2 className="w-5 h-5 animate-spin" />
+                   Submitting...
+                 </span>
+               ) : (
+                 <span className="flex items-center gap-2">
+                   <CheckCircle className="w-5 h-5" />
+                   I&apos;ve Completed Payment
+                 </span>
+               )}
+             </Button>
 
             <Button
               variant="outline"

@@ -1,8 +1,7 @@
 'use client'
 
-import React from 'react'
 import { Button } from '@/components/ui/button'
-import { LogOut } from 'lucide-react'
+import { LogOut, UserStar } from 'lucide-react'
 import type { TableUI } from '@/app/admin/hooks/useAdminTable'
 
 export default function AdminHeader({ table }: { table: TableUI }) {
@@ -10,12 +9,8 @@ export default function AdminHeader({ table }: { table: TableUI }) {
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-emerald-100">
-            <svg className="w-6 h-6 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M3 8h18M3 16h18" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          Reservations
+          <UserStar size={38} />
+          Your admin dashboard
         </h1>
         <p className="text-gray-500 mt-1">Manage all court bookings</p>
       </div>

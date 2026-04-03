@@ -18,6 +18,9 @@ import {
   isDateClosed,
   getBookingsByUserId,
   cancelBooking,
+  cancelBookingGroup,
+  getPendingRefunds,
+  markRefundCompleted,
 } from '@/lib/bookingService'
 import { BookingFormData, Booking, CreateBookingResult, DisabledSlot, ClosedDate, CancelBookingResult } from '@/types/booking'
 import { revalidatePath } from 'next/cache'
@@ -165,6 +168,7 @@ export async function getBookingsByUserIdAction(userId: string): Promise<Booking
 
 /**
  * Cancel a booking (user can only cancel their own bookings, 24h policy applies)
+ * @deprecated Use cancelBookingGroupAction instead for proper grouped booking cancellation
  */
 export async function cancelBookingAction(bookingId: string, userId: string): Promise<CancelBookingResult> {
   const result = await cancelBooking(bookingId, userId)
@@ -173,6 +177,51 @@ export async function cancelBookingAction(bookingId: string, userId: string): Pr
     revalidatePath('/')
     revalidatePath('/admin')
     revalidatePath('/profile')
+  }
+
+  return result
+}
+
+/**
+ * Cancel a booking group (all slots in the same order)
+ * Calculates cancellation fee based on timing:
+ * - Free cancellation: > 24 hours before booking
+ * - P100/slot fee: <= 24 hours before booking
+ */
+export async function cancelBookingGroupAction(
+  bookingGroupId: string | null,
+  legacyBookingId: string | null,
+  userId: string
+): Promise<CancelBookingResult> {
+  const result = await cancelBookingGroup(bookingGroupId, legacyBookingId, userId)
+
+  if (result.success) {
+    revalidatePath('/')
+    revalidatePath('/admin')
+    revalidatePath('/profile')
+  }
+
+  return result
+}
+
+/**
+ * Get all bookings with pending refunds (admin only)
+ */
+export async function getPendingRefundsAction(): Promise<Booking[]> {
+  return getPendingRefunds()
+}
+
+/**
+ * Mark a refund as completed (admin action after processing via GCash)
+ */
+export async function markRefundCompletedAction(
+  bookingGroupId: string | null,
+  legacyBookingId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  const result = await markRefundCompleted(bookingGroupId, legacyBookingId)
+
+  if (result.success) {
+    revalidatePath('/admin')
   }
 
   return result
