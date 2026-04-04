@@ -65,6 +65,7 @@ export async function submitPaymentAction(
       const emailResult = await sendAdminPaymentAlertEmail({
         userName: payload.name,
         userEmail: payload.email,
+        userPhone: payload.phone,
         bookingDate: payload.date,
         bookingTime: payload.timeSlots.join(', '),
         amount: booking.payment_amount || 0,
