@@ -1,5 +1,7 @@
 'use client'
 
+import React from 'react'
+import { Clock, Lock, Ban } from 'lucide-react'
 import { TimeSlot } from '@/types/booking'
 import { Button } from '@/components/ui/button'
 
@@ -55,6 +57,22 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {slots.map((slot) => {
               const isSelected = selectedSlots.includes(slot.time)
+
+              let unavailableClass = ''
+              let icon: React.ReactNode = null
+              if (!slot.available) {
+                if (slot.reason === 'past') {
+                  unavailableClass = 'bg-gray-300 cursor-not-allowed border border-gray-100'
+                  icon = <Clock className="w-3.5 h-3.5 shrink-0" />
+                } else if (slot.reason === 'booked') {
+                  unavailableClass = 'bg-orange-50 text-orange-300 cursor-not-allowed border border-orange-100'
+                  icon = <Lock className="w-3.5 h-3.5 shrink-0" />
+                } else {
+                  unavailableClass = 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                  icon = <Ban className="w-3.5 h-3.5 shrink-0" />
+                }
+              }
+
               return (
                 <Button
                   key={slot.time}
@@ -64,14 +82,19 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
                   className={`
                     h-11 text-sm font-medium transition-all duration-200
                     ${!slot.available
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                      ? unavailableClass
                       : isSelected
                         ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-0 shadow-lg shadow-emerald-500/25'
                         : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                     }
                   `}
                 >
-                  {slot.time}
+                  {icon ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      {icon}
+                      {slot.time}
+                    </span>
+                  ) : slot.time}
                 </Button>
               )
             })}

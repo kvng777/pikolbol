@@ -264,6 +264,7 @@ export async function sendPaymentRejectionEmail(data: {
 export async function sendAdminPaymentAlertEmail(data: {
   userName: string
   userEmail: string
+  userPhone?: string
   bookingDate: string
   bookingTime: string
   amount: number
@@ -302,6 +303,7 @@ export async function sendAdminPaymentAlertEmail(data: {
             <h3 style="color: #9a3412; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Customer</h3>
             <p style="color: #111827; font-size: 16px; margin: 0; font-weight: 600;">${data.userName}</p>
             <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">${data.userEmail}</p>
+            <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">${data.userPhone}</p>
           </div>
           
           <!-- Booking Details Card -->
