@@ -31,6 +31,7 @@ export interface Booking {
 export interface TimeSlot {
   time: string
   available: boolean
+  reason?: 'past' | 'booked' | 'disabled'
 }
 
 export interface BookingFormData {

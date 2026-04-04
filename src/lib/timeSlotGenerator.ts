@@ -42,15 +42,19 @@ export function getAvailableSlotsForCourt(
     // Parse the slot start hour (e.g., "06:00-07:00" -> 6 * 60 = 360 minutes)
     const slotStartHour = parseInt(slot.split(':')[0], 10)
     const slotStartMinutes = slotStartHour * 60
-    
+
     // Slot is past/too soon if it's today and starts before the cutoff
     const isPastOrTooSoon = isToday && slotStartMinutes < cutoffMinutes
 
+    let reason: TimeSlot['reason']
+    if (isPastOrTooSoon) reason = 'past'
+    else if (bookedSlots.includes(slot)) reason = 'booked'
+    else if (disabledTimeSlots.includes(slot)) reason = 'disabled'
+
     return {
       time: slot,
-      available: !bookedSlots.includes(slot) && 
-                 !disabledTimeSlots.includes(slot) && 
-                 !isPastOrTooSoon
+      available: !reason,
+      reason,
     }
   })
 }
