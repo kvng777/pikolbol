@@ -18,6 +18,7 @@ interface BookingGroup {
   groupKey: string
   bookingGroupId: string | null
   shortId: string | null
+  gcashReference: string | null
   bookings: Booking[]
   date: string
   timeSlots: string[]
@@ -159,6 +160,7 @@ function groupBookings(bookings: Booking[]): BookingGroup[] {
       groupKey,
       bookingGroupId: first.booking_group_id || null,
       shortId: first.short_id || null,
+      gcashReference: first.gcash_reference || null,
       bookings: sorted,
       date: first.date,
       timeSlots: sorted.map(b => b.time_slot),
@@ -359,6 +361,14 @@ function BookingGroupCard({ group, onCancelClick }: BookingGroupCardProps) {
             <Clock className="w-4 h-4 text-gray-400" />
             {group.timeSlots.join(', ')}
           </div>
+
+          {/* GCash reference number */}
+          {group.gcashReference && (
+            <div className="flex flex-col gap-1.5 mt-1 text-sm">
+              <span className="text-xs font-medium uppercase text-gray-400">GCash Ref:</span>
+              <span className="font-mono text-blue-700">{group.gcashReference}</span>
+            </div>
+          )}
 
           {/* Payment amount (shown once for the group) */}
           {group.totalAmount && group.totalAmount > 0 && group.paymentStatus === 'confirmed' && (

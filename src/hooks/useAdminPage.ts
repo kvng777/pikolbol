@@ -34,6 +34,7 @@ export interface GroupedBooking {
   payment_status: PaymentStatus | null
   payment_amount?: number
   short_id: string | null  // Human-readable booking ID (e.g., 'A1B2')
+  gcash_reference?: string | null
 }
 
 export function useAdminPage() {
@@ -111,6 +112,7 @@ export function useAdminPage() {
           payment_status: booking.payment_status || null,
           payment_amount: booking.payment_amount ?? undefined,
           short_id: booking.short_id || null,
+          gcash_reference: booking.gcash_reference || null,
         })
       }
     })
