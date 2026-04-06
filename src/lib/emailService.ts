@@ -334,7 +334,7 @@ export async function sendAdminPaymentAlertEmail(data: {
 
             ${data.reference ? `
             <div style="padding-top: 12px; border-top: 1px solid #fed7aa;">
-              <span style="color: #6b7280; font-size: 14px;">Reference Number:</span>
+              <span style="color: #6b7280; font-size: 14px;">GCASH Reference Number:</span>
               <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${data.reference}</p>
             </div>
             ` : ''}

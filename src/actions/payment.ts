@@ -30,6 +30,7 @@ export async function submitPaymentAction(
     courtNumber: number
     players: number
     user_id?: string
+    gcashReference?: string
   }
 ): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
   // Check if date is closed
@@ -47,6 +48,7 @@ export async function submitPaymentAction(
     court_number: payload.courtNumber,
     players: payload.players,
     user_id: payload.user_id,
+    gcash_reference: payload.gcashReference,
   })
 
   if (result.success && result.bookings && result.bookings.length > 0) {
@@ -70,6 +72,7 @@ export async function submitPaymentAction(
         bookingTime: payload.timeSlots.join(', '),
         amount: booking.payment_amount || 0,
         shortId: booking.short_id || undefined,
+        reference: payload.gcashReference,
         confirmUrl,
       })
       if (!emailResult.success) {

@@ -64,6 +64,8 @@ export interface PendingPaymentBooking {
   // Booking identification
   short_id?: string | null          // Human-readable ID (e.g., 'A1B2')
   booking_group_id?: string | null  // UUID linking slots from same order
+  // Payment reference
+  gcash_reference?: string | null
 }
 
 // Email notification types

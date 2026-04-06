@@ -30,6 +30,7 @@ interface BookingGroup {
   payment_status: PaymentStatus | null
   payment_amount?: number
   short_id?: string | null
+  gcash_reference?: string | null
 }
 
 export default function BookingsTable({ table }: { table: TableUI }) {
@@ -55,6 +56,7 @@ export default function BookingsTable({ table }: { table: TableUI }) {
         <TableHeader>
           <TableRow className="border-gray-100 hover:bg-gray-50">
             <TableHead className="text-gray-500">Booking ID</TableHead>
+            <TableHead className="text-gray-500">GCash Ref</TableHead>
             <TableHead className="text-gray-500">Status</TableHead>
             <TableHead className="cursor-pointer text-gray-500 hover:text-gray-900" onClick={() => table.handleSort('date')}>
               <div className="flex items-center gap-2">Date</div>
@@ -75,7 +77,7 @@ export default function BookingsTable({ table }: { table: TableUI }) {
         <TableBody>
           {table.filteredBookings.length === 0 ? (
             <TableRow className="border-gray-100">
-              <TableCell colSpan={9} className="text-center py-12 text-gray-500">No bookings found</TableCell>
+              <TableCell colSpan={10} className="text-center py-12 text-gray-500">No bookings found</TableCell>
             </TableRow>
           ) : (
             table.pagedBookings.map((group: BookingGroup) => {
@@ -108,11 +110,20 @@ export default function BookingsTable({ table }: { table: TableUI }) {
                     )}
                   </TableCell>
 
+                  {/* GCash Ref */}
+                  <TableCell>
+                    {group.gcash_reference ? (
+                      <span className="font-mono text-sm text-gray-800">{group.gcash_reference}</span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </TableCell>
+
                   {/* Status */}
                   <TableCell>
-                    <BookingStatusBadge 
-                      paymentStatus={group.payment_status} 
-                      bookingDate={group.date} 
+                    <BookingStatusBadge
+                      paymentStatus={group.payment_status}
+                      bookingDate={group.date}
                     />
                   </TableCell>
 

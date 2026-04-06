@@ -21,6 +21,8 @@ export interface Booking {
   payment_deadline?: string | null
   payment_confirmed_at?: string | null
   payment_amount?: number | null
+  // Payment reference
+  gcash_reference?: string | null
   // Cancellation & refund fields
   cancelled_at?: string | null
   cancellation_fee?: number | null

@@ -34,6 +34,7 @@ export async function createBookingWithPendingPayment(
     court_number: number
     players: number
     user_id?: string
+    gcash_reference?: string
   }
 ): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
   const amount = calculatePaymentAmount(payload.timeSlots, payload.players)
@@ -56,6 +57,7 @@ export async function createBookingWithPendingPayment(
     booking_group_id: bookingGroupId,
     payment_status: 'pending' as PaymentStatus,
     payment_amount: amount,
+    gcash_reference: payload.gcash_reference || null,
   }))
 
   const { data, error } = await supabase

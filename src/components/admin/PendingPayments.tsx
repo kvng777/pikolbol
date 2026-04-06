@@ -22,6 +22,7 @@ interface PendingAction {
     amount: string
     timeSlots: string
     date: string
+    gcashReference?: string | null
   }
 }
 
@@ -99,6 +100,7 @@ function BookingGroupCard({ bookings, onConfirmClick, onRejectClick, isProcessin
     amount: formattedAmount,
     timeSlots,
     date: formattedDate,
+    gcashReference: firstBooking.gcash_reference,
   }
 
   const handleConfirmClick = () => {
@@ -167,6 +169,12 @@ function BookingGroupCard({ bookings, onConfirmClick, onRejectClick, isProcessin
               <CreditCard className="w-4 h-4" />
               Php {formattedAmount}
             </div>
+            {firstBooking.gcash_reference && (
+              <div className="flex items-center gap-2 text-gray-600 text-sm mt-1">
+                <span className="text-gray-400 text-xs uppercase font-medium">GCash Ref:</span>
+                <span className="font-mono font-semibold text-gray-800">{firstBooking.gcash_reference}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -226,6 +234,12 @@ function BookingDetailsSummary({ details }: { details: PendingAction['bookingDet
         <span className="text-gray-500">Amount</span>
         <span className="font-semibold text-emerald-600">Php {details.amount}</span>
       </div>
+      {details.gcashReference && (
+        <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
+          <span className="text-gray-500">GCash Ref</span>
+          <span className="font-mono font-semibold text-gray-900">{details.gcashReference}</span>
+        </div>
+      )}
     </div>
   )
 }
