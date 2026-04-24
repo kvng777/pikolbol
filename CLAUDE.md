@@ -61,7 +61,7 @@ Key query key patterns:
 
 **Payment statuses:** `pending | awaiting_confirmation | confirmed | rejected | expired | cancelled`
 
-**Slots:** 1-hour slots, 6:00 AM–9:00 PM (18 slots/day), single court (`court_number = 1`)
+**Slots:** 1-hour slots, 6:00 AM–10:00 PM (18 slots/day), single court (`court_number = 1`)
 
 **Bulk bookings:** Multiple consecutive slots share a `booking_group_id`; each slot is a separate row.
 

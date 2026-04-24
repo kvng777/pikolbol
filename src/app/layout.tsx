@@ -12,8 +12,20 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Pikolbol - Book Your Court",
-  description: "Book your pickleball court online",
+  title: "Pikolbol — Book Your Pickleball Court",
+  description: "Reserve your pickleball court online. Easy booking, instant confirmation.",
+  openGraph: {
+    title: "Pikolbol — Book Your Pickleball Court",
+    description: "Reserve your pickleball court online. Easy booking, instant confirmation.",
+    type: "website",
+    images: [{ width: 1200, height: 630, url: "/opengraph-image" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Pikolbol — Book Your Pickleball Court",
+    description: "Reserve your pickleball court online. Easy booking, instant confirmation.",
+    images: ["/opengraph-image"],
+  },
 };
 
 export default function RootLayout({
