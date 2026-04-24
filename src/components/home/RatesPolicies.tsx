@@ -41,7 +41,7 @@ export default function RatesPolicies() {
                   <div className="flex flex-row justify-between w-full items-center">
                     <div>
                       <h3 className="text-lg font-semibold">Evening Rate</h3>
-                      <p className="text-white/80 text-sm">(6:00 PM - 9:00 PM)</p>
+                      <p className="text-white/80 text-sm">(6:00 PM - 10:00 PM)</p>
                     </div>
                     <div className="mt-2">
                       <span className="text-sm">Php</span>

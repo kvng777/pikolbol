@@ -28,7 +28,7 @@ export default function ContactSection() {
           </div>
           <div>
             <p className="text-xs text-gray-500">Hours</p>
-            <p className="text-sm text-gray-900">Open daily: 6:00 AM — 9:00 PM</p>
+            <p className="text-sm text-gray-900">Open daily: 6:00 AM — 10:00 PM</p>
           </div>
         </div>
 
