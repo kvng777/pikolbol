@@ -97,7 +97,7 @@ export default function BookSection({
               </div>
             </div>
 
-            <p className="text-sm text-gray-500 mb-5">
+            <p className="text-xl font-bold mb-5">
               {new Date(selectedDate).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
             </p>
 
