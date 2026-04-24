@@ -1,7 +1,7 @@
 import { format } from 'date-fns'
 import { Booking, TimeSlot, DisabledSlot } from '@/types/booking'
 
-const OPERATING_HOURS = { start: 6, end: 21 }
+const OPERATING_HOURS = { start: 6, end: 22 }
 const SLOT_DURATION = 1
 const BOOKING_BUFFER_MINUTES = 30 // Slots must start at least this many minutes from now
 
