@@ -52,7 +52,7 @@ export function useAdminPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [filterDate, setFilterDate] = useState<string>('')
 
-  const [activeTab, setActiveTab] = useState<'bookings' | 'slots' | 'closed' | 'payments' | 'settings' | 'refunds'>('bookings')
+  const [activeTab, setActiveTab] = useState<'bookings' | 'slots' | 'closed' | 'payments' | 'settings' | 'refunds' | 'finance'>('bookings')
   const [selectedDateForSlots, setSelectedDateForSlots] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
   const [closeStartDate, setCloseStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
