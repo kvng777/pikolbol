@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { useAdminTable } from './hooks/useAdminTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Calendar, Clock, Plus, Ban, Lock, CreditCard, Settings, Banknote } from 'lucide-react'
+import { Calendar, Clock, Plus, Ban, Lock, CreditCard, Settings, Banknote, DollarSign } from 'lucide-react'
 import AdminHeader from './ui/AdminHeader'
 import AdminControls from './ui/AdminControls'
 import BookingsTable from './ui/BookingsTable'
@@ -13,6 +13,7 @@ import NavBar from '@/components/NavBar'
 import { PendingPayments } from '@/components/admin/PendingPayments'
 import { PendingRefunds } from '@/components/admin/PendingRefunds'
 import { PaymentSettings } from '@/components/admin/PaymentSettings'
+import { FinanceTab } from '@/components/admin/FinanceTab'
 import { usePendingPayments } from '@/hooks/usePayment'
 import { usePendingRefunds } from '@/hooks/useRefunds'
 import { useProfile } from '@/hooks/useProfile'
@@ -147,6 +148,14 @@ export default function AdminPage() {
             >
               <Settings className="w-4 h-4 mr-2" />
               Payment Settings
+            </Button>
+            <Button
+              variant={table.activeTab === 'finance' ? 'default' : 'outline'}
+              onClick={() => table.setActiveTab('finance')}
+              className={table.activeTab === 'finance' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}
+            >
+              <DollarSign className="w-4 h-4 mr-2" />
+              Finance
             </Button>
           </div>
 
@@ -306,6 +315,10 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
+          )}
+
+          {table.activeTab === 'finance' && (
+            <FinanceTab />
           )}
         </div>
       </div>
