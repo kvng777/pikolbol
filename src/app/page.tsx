@@ -16,6 +16,7 @@ import { PaymentScreen, BookingData } from '@/components/booking/PaymentScreen'
 import { useAuth } from '@/components/AuthProvider'
 import { calculatePaymentAmount } from '@/lib/paymentConfig'
 import RatesPolicies from '@/components/home/RatesPolicies'
+import NoticeToast from '@/components/NoticeToast'
 
 type BookingState = 'idle' | 'payment' | 'pending' | 'confirmed'
 
@@ -167,6 +168,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-teal-50">
+      <NoticeToast />
       <NavBar />
       
       {/* Payment Screen - only shows when user clicks "Book" */}
