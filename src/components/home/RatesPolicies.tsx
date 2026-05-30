@@ -1,4 +1,4 @@
-import { Sun, Moon, CalendarX2, UserX, Package } from 'lucide-react'
+import { Sun, Moon, CalendarX2, UserX, Package, Clock } from 'lucide-react'
 
 export default function RatesPolicies() {
   return (
@@ -54,13 +54,19 @@ export default function RatesPolicies() {
             </div>
 
             {/* Promo Banner */}
-            <div className="rounded-xl bg-amber-400 px-5 py-4 flex items-center justify-between gap-3 shadow-sm">
-              <div className="bg-amber-500 rounded-md px-2.5 py-1">
+            <div className="rounded-xl bg-amber-400 px-5 py-4 flex items-center gap-4 shadow-sm">
+              <div className="bg-amber-500 rounded-md px-2.5 py-1 shrink-0">
                 <span className="text-white text-lg font-bold">FREE</span>
               </div>
-              <span className="text-emerald-900 font-semibold text-sm">
-                FREE use of paddles & balls (promo!)
-              </span>
+              <div className="flex flex-col">
+                <span className="text-emerald-900 font-semibold text-sm">
+                  FREE use of paddles &amp; balls (promo!)
+                </span>
+                <span className="mt-1 inline-flex items-center gap-1.5 text-emerald-900 font-extrabold text-base">
+                  <Clock className="w-4 h-4 shrink-0 animate-pulse" />
+                  Only until May 31, 2026!
+                </span>
+              </div>
             </div>
           </div>
 

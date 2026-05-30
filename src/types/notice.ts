@@ -4,8 +4,9 @@ export interface Notice {
   title: string
   message: string
   is_enabled: boolean
-  start_date: string | null // 'YYYY-MM-DD' (PH date) or null for no lower bound
-  end_date: string | null   // 'YYYY-MM-DD' (PH date) or null for no upper bound
+  auto_close_seconds: number // Seconds before the notice toast auto-closes
+  start_date: string | null  // 'YYYY-MM-DD' (PH date) or null for no lower bound
+  end_date: string | null    // 'YYYY-MM-DD' (PH date) or null for no upper bound
   created_at: string
   updated_at: string
 }
@@ -15,6 +16,7 @@ export interface UpdateNoticeData {
   title?: string
   message?: string
   is_enabled?: boolean
+  auto_close_seconds?: number
   start_date?: string | null
   end_date?: string | null
 }

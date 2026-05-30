@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { QrCode, CheckCircle, Loader2, Copy, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSubmitPayment, usePaymentStatus, usePaymentSettings } from '@/hooks/usePayment'
+import { isEquipmentChargeable } from '@/lib/paymentConfig'
 import { Booking } from '@/types/booking'
 import { PaymentStatus } from '@/types/payment'
 import { toast } from 'sonner'
@@ -19,6 +20,8 @@ export interface BookingData {
   timeSlots: string[]
   courtNumber: number
   players: number
+  paddles: number
+  needsBalls: boolean
   user_id?: string
 }
 
@@ -68,6 +71,8 @@ export function PaymentScreen({
         timeSlots: bookingData.timeSlots,
         courtNumber: bookingData.courtNumber,
         players: bookingData.players,
+        paddles: bookingData.paddles,
+        needsBalls: bookingData.needsBalls,
         user_id: bookingData.user_id,
         gcashReference: gcashReference.trim(),
       })
@@ -92,6 +97,17 @@ export function PaymentScreen({
 
   const formattedDate = format(new Date(bookingData.date), 'EEEE, MMMM d, yyyy')
   const timeSlots = bookingData.timeSlots.join(', ')
+
+  // Equipment rental summary (only relevant once chargeable, i.e. from June 1, 2026)
+  const equipmentChargeable = isEquipmentChargeable(bookingData.date)
+  const equipmentItems: string[] = []
+  if (bookingData.paddles > 0) {
+    equipmentItems.push(`${bookingData.paddles} paddle${bookingData.paddles > 1 ? 's' : ''}`)
+  }
+  if (bookingData.needsBalls) {
+    equipmentItems.push('balls (set of 4)')
+  }
+  const equipmentSummary = equipmentItems.length > 0 ? equipmentItems.join(', ') : null
 
   // Show "Awaiting Verification" after payment is submitted
   if (submittedBookings) {
@@ -220,6 +236,12 @@ export function PaymentScreen({
             <h3 className="text-sm font-medium text-gray-500 mb-2">Booking Summary</h3>
             <p className="text-gray-900 font-medium">{formattedDate}</p>
             <p className="text-gray-600 text-sm">{timeSlots}</p>
+            {equipmentSummary && (
+              <p className="text-gray-600 text-sm mt-1">
+                Equipment: {equipmentSummary}
+                {!equipmentChargeable && <span className="text-emerald-600 font-medium"> (FREE)</span>}
+              </p>
+            )}
           </div>
 
           {/* Action Buttons */}

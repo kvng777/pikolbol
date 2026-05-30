@@ -29,6 +29,8 @@ export async function submitPaymentAction(
     timeSlots: string[]
     courtNumber: number
     players: number
+    paddles?: number
+    needsBalls?: boolean
     user_id?: string
     gcashReference?: string
   }
@@ -47,6 +49,8 @@ export async function submitPaymentAction(
     timeSlots: payload.timeSlots,
     court_number: payload.courtNumber,
     players: payload.players,
+    paddles: payload.paddles,
+    needs_balls: payload.needsBalls,
     user_id: payload.user_id,
     gcash_reference: payload.gcashReference,
   })

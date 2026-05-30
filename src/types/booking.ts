@@ -12,6 +12,9 @@ export interface Booking {
   court_number: number
   created_at: string
   players: number
+  // Equipment rental
+  paddles_count?: number | null
+  needs_balls?: boolean | null
   user_id?: string | null
   // Booking identification
   short_id?: string | null          // Human-readable ID (e.g., 'A1B2')
@@ -77,6 +80,8 @@ export interface BulkBookingPayload {
   timeSlots: string[]
   courtNumber: number
   players?: number
+  paddles?: number
+  needsBalls?: boolean
   user_id?: string
 }
 

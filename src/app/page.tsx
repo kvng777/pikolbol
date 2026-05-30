@@ -60,6 +60,8 @@ export default function Home() {
       timeSlots: data.timeSlots || selectedSlots,
       courtNumber: data.courtNumber || 1,
       players: data.players || 2,
+      paddles: data.paddles ?? 0,
+      needsBalls: data.needsBalls ?? false,
       user_id: user?.id,
     }
 
@@ -161,9 +163,13 @@ export default function Home() {
     }
   }
 
-  // Calculate payment amount
+  // Calculate payment amount (includes equipment rental for play dates from June 1, 2026)
   const paymentAmount = pendingBookingData 
-    ? calculatePaymentAmount(pendingBookingData.timeSlots, pendingBookingData.players)
+    ? calculatePaymentAmount(pendingBookingData.timeSlots, pendingBookingData.players, {
+        date: pendingBookingData.date,
+        paddles: pendingBookingData.paddles,
+        needsBalls: pendingBookingData.needsBalls,
+      })
     : 0
 
   return (

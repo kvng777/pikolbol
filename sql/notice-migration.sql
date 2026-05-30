@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS site_notice (
   title TEXT NOT NULL DEFAULT '',           -- Notice headline
   message TEXT NOT NULL DEFAULT '',         -- Notice body / description
   is_enabled BOOLEAN NOT NULL DEFAULT true, -- Master on/off toggle
+  auto_close_seconds INTEGER NOT NULL DEFAULT 10, -- Seconds before the notice auto-closes
   start_date DATE,                          -- Optional: show from this date (PH). NULL = no lower bound
   end_date DATE,                            -- Optional: show until this date (PH). NULL = no upper bound
   created_at TIMESTAMPTZ DEFAULT now(),

@@ -131,6 +131,12 @@ export default function BookingConfirmedModal({ open, onClose, bookings, booking
                           <p className="text-xs text-gray-500">Total</p>
                           <p className="text-gray-900 font-medium">
                             {(() => {
+                              // Prefer the amount actually charged (includes equipment rental);
+                              // fall back to recompute for legacy rows without a stored amount
+                              const storedAmount = bookings[0]?.payment_amount
+                              if (typeof storedAmount === 'number') {
+                                return `Php${storedAmount.toLocaleString()}`
+                              }
                               const timeSlots = bookings.map(b => b.time_slot)
                               const players = bookings[0]?.players ?? 1
                               const totalCost = calculatePaymentAmount(timeSlots, players)
