@@ -15,6 +15,11 @@ const noticeSchema = z
     title: z.string().min(1, 'Title is required').max(120, 'Keep the title under 120 characters'),
     message: z.string().min(1, 'Description is required'),
     is_enabled: z.boolean(),
+    auto_close_seconds: z
+      .number({ message: 'Enter a number of seconds' })
+      .int('Use a whole number')
+      .min(1, 'Minimum 1 second')
+      .max(60, 'Maximum 60 seconds'),
     start_date: z.string(),
     end_date: z.string(),
   })
@@ -39,6 +44,7 @@ export function NoticeSettings() {
       title: notice?.title || '',
       message: notice?.message || '',
       is_enabled: notice?.is_enabled ?? false,
+      auto_close_seconds: notice?.auto_close_seconds ?? 10,
       start_date: notice?.start_date || '',
       end_date: notice?.end_date || '',
     },
@@ -50,6 +56,7 @@ export function NoticeSettings() {
         title: data.title,
         message: data.message,
         is_enabled: data.is_enabled,
+        auto_close_seconds: data.auto_close_seconds,
         // Normalize empty date inputs to null (no bound)
         start_date: data.start_date || null,
         end_date: data.end_date || null,
@@ -124,6 +131,26 @@ export function NoticeSettings() {
           />
           {errors.message && <p className="text-sm text-red-500">{errors.message.message}</p>}
           <p className="text-xs text-gray-500">Line breaks are preserved in the notice.</p>
+        </div>
+
+        {/* Auto-close timer */}
+        <div className="space-y-2 mt-6 max-w-xs">
+          <Label htmlFor="auto_close_seconds" className="text-sm font-medium text-gray-700">
+            Auto-close after (seconds)
+          </Label>
+          <Input
+            id="auto_close_seconds"
+            type="number"
+            min={1}
+            max={60}
+            {...register('auto_close_seconds', { valueAsNumber: true })}
+          />
+          {errors.auto_close_seconds && (
+            <p className="text-sm text-red-500">{errors.auto_close_seconds.message}</p>
+          )}
+          <p className="text-xs text-gray-500">
+            How long the notice stays on screen before closing automatically (1-60s).
+          </p>
         </div>
       </div>
 

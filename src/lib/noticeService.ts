@@ -12,6 +12,7 @@ const DEFAULT_NOTICE: Notice = {
   title: '',
   message: '',
   is_enabled: false,
+  auto_close_seconds: 10,
   start_date: null,
   end_date: null,
   created_at: new Date().toISOString(),

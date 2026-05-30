@@ -33,11 +33,21 @@ export async function createBookingWithPendingPayment(
     timeSlots: string[]
     court_number: number
     players: number
+    paddles?: number
+    needs_balls?: boolean
     user_id?: string
     gcash_reference?: string
   }
 ): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
-  const amount = calculatePaymentAmount(payload.timeSlots, payload.players)
+  const paddlesCount = Math.max(0, payload.paddles ?? 0)
+  const needsBalls = payload.needs_balls ?? false
+
+  // Total includes equipment rental, charged only for play dates on/after the promo end
+  const amount = calculatePaymentAmount(payload.timeSlots, payload.players, {
+    date: payload.date,
+    paddles: paddlesCount,
+    needsBalls,
+  })
 
   // Generate IDs once for the entire booking order
   // All time slots share the same short_id and booking_group_id
@@ -52,6 +62,8 @@ export async function createBookingWithPendingPayment(
     time_slot: ts,
     court_number: payload.court_number,
     players: payload.players,
+    paddles_count: paddlesCount,
+    needs_balls: needsBalls,
     user_id: payload.user_id || null,
     short_id: shortId,
     booking_group_id: bookingGroupId,

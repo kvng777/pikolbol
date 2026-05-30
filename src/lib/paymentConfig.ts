@@ -10,6 +10,15 @@ export const EVENING_START_HOUR = 18       // 6:00 PM (18:00) - slots starting a
 export const EXTRA_PLAYER_CHARGE = 50      // PHP per player beyond 4
 export const BASE_PLAYERS_INCLUDED = 4     // Players included in base price
 
+// Equipment rental (paddles & balls)
+export const PADDLE_PRICE = 50             // PHP per paddle, per booking
+export const BALL_SET_PRICE = 25           // PHP per booking for a set of 4 balls
+export const MAX_PADDLES = 8               // UI cap for paddle quantity selector
+
+// Free use of paddles & balls promo ends on this date (PH date, inclusive).
+// Equipment is charged for play dates on/after EQUIPMENT_CHARGE_START_DATE.
+export const EQUIPMENT_CHARGE_START_DATE = '2026-06-01'
+
 // Legacy constant for backwards compatibility (use getPriceForSlot instead)
 export const PRICE_PER_SLOT = 200
 
@@ -83,18 +92,55 @@ export function getPriceForSlot(timeSlot: string): number {
 }
 
 /**
- * Calculate the total payment amount for a booking with multiple time slots
- * Each slot is priced based on its time (daytime vs evening)
+ * Equipment rental selection for a booking.
  */
-export function calculatePaymentAmount(timeSlots: string[], playersCount: number): number {
+export interface EquipmentSelection {
+  date?: string        // Play date ('YYYY-MM-DD'). Charge applies on/after EQUIPMENT_CHARGE_START_DATE
+  paddles?: number     // Number of paddles to rent
+  needsBalls?: boolean // Whether a set of balls is needed
+}
+
+/**
+ * Whether equipment is chargeable for a given play date.
+ * Free during the promo (before EQUIPMENT_CHARGE_START_DATE).
+ * Compares ISO date strings lexicographically ('YYYY-MM-DD').
+ */
+export function isEquipmentChargeable(date?: string): boolean {
+  if (!date) return false
+  return date >= EQUIPMENT_CHARGE_START_DATE
+}
+
+/**
+ * Calculate the equipment rental charge for a booking.
+ * Returns 0 during the free promo period or when nothing is selected.
+ */
+export function calculateEquipmentCharge(equipment?: EquipmentSelection): number {
+  if (!equipment || !isEquipmentChargeable(equipment.date)) return 0
+
+  const paddles = Math.max(0, equipment.paddles ?? 0)
+  const ballsCharge = equipment.needsBalls ? BALL_SET_PRICE : 0
+
+  return paddles * PADDLE_PRICE + ballsCharge
+}
+
+/**
+ * Calculate the total payment amount for a booking with multiple time slots.
+ * Each slot is priced based on its time (daytime vs evening). Optionally includes
+ * equipment rental, which is only charged for play dates on/after the promo end.
+ */
+export function calculatePaymentAmount(
+  timeSlots: string[],
+  playersCount: number,
+  equipment?: EquipmentSelection
+): number {
   // Calculate base amount from all slots
   const baseAmount = timeSlots.reduce((total, slot) => total + getPriceForSlot(slot), 0)
-  
+
   // Calculate extra player charge
   const extraPlayers = Math.max(0, playersCount - BASE_PLAYERS_INCLUDED)
   const extraCharge = extraPlayers * EXTRA_PLAYER_CHARGE
-  
-  return baseAmount + extraCharge
+
+  return baseAmount + extraCharge + calculateEquipmentCharge(equipment)
 }
 
 /**
