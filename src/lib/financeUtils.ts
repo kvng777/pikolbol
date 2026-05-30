@@ -168,12 +168,17 @@ export function calculateCancellationFees(bookings: Booking[]): number {
 
 /**
  * Calculate net revenue
- * Net = Gross Revenue - Refunds (cancellation fees are already excluded from refunds)
+ * Net = Gross Revenue + Cancellation Fees Retained
+ * 
+ * Rationale: Gross only counts confirmed bookings, so a cancelled booking's
+ * original payment is never in gross. Retained cancellation fees are real
+ * income that must be added. Refunds are informational (displayed separately)
+ * but not subtracted, as that would double-penalize.
  */
 export function calculateNetRevenue(bookings: Booking[]): number {
   const gross = calculateGrossRevenue(bookings)
-  const refunds = calculateTotalRefunds(bookings)
-  return gross - refunds
+  const cancellationFees = calculateCancellationFees(bookings)
+  return gross + cancellationFees
 }
 
 // ============================================================================
