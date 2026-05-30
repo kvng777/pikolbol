@@ -109,7 +109,7 @@ export function FinanceSummaryCards({ summary, isLoading }: FinanceSummaryCardsP
       <SummaryCard
         title="Net Revenue"
         value={formatCurrency(summary.netRevenue)}
-        subtitle="After refunds"
+        subtitle="Gross + retained fees"
         icon={<DollarSign className="w-5 h-5 text-emerald-600" />}
         colorClass="text-emerald-600"
         bgClass="bg-emerald-100"
