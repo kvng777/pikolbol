@@ -53,7 +53,7 @@ export default function RatesPolicies() {
               </div>
             </div>
 
-            {/* Promo Banner */}
+            {/* Promo Banner
             <div className="rounded-xl bg-amber-400 px-5 py-4 flex items-center gap-4 shadow-sm">
               <div className="bg-amber-500 rounded-md px-2.5 py-1 shrink-0">
                 <span className="text-white text-lg font-bold">FREE</span>
@@ -67,7 +67,7 @@ export default function RatesPolicies() {
                   Only until May 31, 2026!
                 </span>
               </div>
-            </div>
+            </div> */}
           </div>
 
           {/* Right Column - Policy Cards */}
@@ -115,6 +115,39 @@ export default function RatesPolicies() {
                   <p className="text-gray-600 text-sm">Charged separately upon request</p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Equipment Rental Card */}
+        <div className="mt-6 rounded-xl border-2 border-emerald-500 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-emerald-50 rounded-full flex items-center justify-center h-11 w-11 shrink-0">
+              <Package className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Equipment Rental</h3>
+              <p className="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                Effective June 1, 2026
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex items-center gap-3 rounded-lg bg-emerald-50/60 px-4 py-3">
+              <span className="text-xl font-bold text-emerald-600 shrink-0">Php50</span>
+              <span className="text-gray-500">—</span>
+              <span className="text-sm text-gray-700">
+                Paddle <span className="text-gray-500">(per booking)</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg bg-emerald-50/60 px-4 py-3">
+              <span className="text-xl font-bold text-emerald-600 shrink-0">Php25</span>
+              <span className="text-gray-500">—</span>
+              <span className="text-sm text-gray-700">
+                Balls, set of 4 <span className="text-gray-500">(per booking)</span>
+              </span>
             </div>
           </div>
         </div>
