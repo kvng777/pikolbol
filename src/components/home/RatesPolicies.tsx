@@ -53,7 +53,7 @@ export default function RatesPolicies() {
               </div>
             </div>
 
-            {/* Promo Banner */}
+            {/* Promo Banner
             <div className="rounded-xl bg-amber-400 px-5 py-4 flex items-center gap-4 shadow-sm">
               <div className="bg-amber-500 rounded-md px-2.5 py-1 shrink-0">
                 <span className="text-white text-lg font-bold">FREE</span>
@@ -67,7 +67,7 @@ export default function RatesPolicies() {
                   Only until May 31, 2026!
                 </span>
               </div>
-            </div>
+            </div> */}
           </div>
 
           {/* Right Column - Policy Cards */}
