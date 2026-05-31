@@ -119,6 +119,39 @@ export default function RatesPolicies() {
           </div>
         </div>
 
+        {/* Equipment Rental Card */}
+        <div className="mt-6 rounded-xl border-2 border-emerald-500 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-emerald-50 rounded-full flex items-center justify-center h-11 w-11 shrink-0">
+              <Package className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Equipment Rental</h3>
+              <p className="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                Effective June 1, 2026
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex items-center gap-3 rounded-lg bg-emerald-50/60 px-4 py-3">
+              <span className="text-xl font-bold text-emerald-600 shrink-0">Php50</span>
+              <span className="text-gray-500">—</span>
+              <span className="text-sm text-gray-700">
+                Paddle <span className="text-gray-500">(per booking)</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg bg-emerald-50/60 px-4 py-3">
+              <span className="text-xl font-bold text-emerald-600 shrink-0">Php25</span>
+              <span className="text-gray-500">—</span>
+              <span className="text-sm text-gray-700">
+                Balls, set of 4 <span className="text-gray-500">(per booking)</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
         <p className="text-xs text-gray-500 text-center mt-6">
           Prices and policies are subject to change. For group bookings or special requests, please contact us.
         </p>
