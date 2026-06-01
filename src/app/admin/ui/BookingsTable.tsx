@@ -14,7 +14,7 @@ import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { BookingStatusBadge } from '@/components/ui/BookingStatusBadge'
 import { PaymentStatus } from '@/types/payment'
-import { calculatePaymentAmount } from '@/lib/paymentConfig'
+import { calculatePaymentAmount, formatEquipmentSummary } from '@/lib/paymentConfig'
 import type { TableUI } from '@/app/admin/hooks/useAdminTable'
 
 // Type for grouped bookings used by this UI
@@ -31,6 +31,8 @@ interface BookingGroup {
   payment_amount?: number
   short_id?: string | null
   gcash_reference?: string | null
+  paddles_count?: number | null
+  needs_balls?: boolean | null
 }
 
 export default function BookingsTable({ table }: { table: TableUI }) {
@@ -69,6 +71,7 @@ export default function BookingsTable({ table }: { table: TableUI }) {
             </TableHead>
             <TableHead className="text-gray-500">Mobile</TableHead>
             <TableHead className="text-gray-500">Email</TableHead>
+            <TableHead className="text-gray-500">Equipment</TableHead>
             <TableHead className="text-gray-500">Total ₱</TableHead>
             <TableHead className="text-gray-500">Actions</TableHead>
           </TableRow>
@@ -77,7 +80,7 @@ export default function BookingsTable({ table }: { table: TableUI }) {
         <TableBody>
           {table.filteredBookings.length === 0 ? (
             <TableRow className="border-gray-100">
-              <TableCell colSpan={10} className="text-center py-12 text-gray-500">No bookings found</TableCell>
+              <TableCell colSpan={11} className="text-center py-12 text-gray-500">No bookings found</TableCell>
             </TableRow>
           ) : (
             table.pagedBookings.map((group: BookingGroup) => {
@@ -162,6 +165,16 @@ export default function BookingsTable({ table }: { table: TableUI }) {
                   {/* Email */}
                   <TableCell className="text-gray-400 text-sm truncate max-w-[150px]" title={group.email}>
                     {group.email ?? <span className="text-gray-400">—</span>}
+                  </TableCell>
+
+                  {/* Equipment */}
+                  <TableCell className="text-gray-700 text-sm max-w-[160px]">
+                    {(() => {
+                      const summary = formatEquipmentSummary(group.paddles_count, group.needs_balls)
+                      return summary
+                        ? <span className="capitalize">{summary}</span>
+                        : <span className="text-gray-400">—</span>
+                    })()}
                   </TableCell>
 
                   {/* Total */}

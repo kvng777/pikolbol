@@ -6,7 +6,7 @@ import { format } from 'date-fns'
 import { QrCode, CheckCircle, Loader2, Copy, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSubmitPayment, usePaymentStatus, usePaymentSettings } from '@/hooks/usePayment'
-import { isEquipmentChargeable } from '@/lib/paymentConfig'
+import { isEquipmentChargeable, formatEquipmentSummary } from '@/lib/paymentConfig'
 import { Booking } from '@/types/booking'
 import { PaymentStatus } from '@/types/payment'
 import { toast } from 'sonner'
@@ -98,16 +98,9 @@ export function PaymentScreen({
   const formattedDate = format(new Date(bookingData.date), 'EEEE, MMMM d, yyyy')
   const timeSlots = bookingData.timeSlots.join(', ')
 
-  // Equipment rental summary (only relevant once chargeable, i.e. from June 1, 2026)
+  // Equipment rental summary (charge only applies from June 1, 2026)
   const equipmentChargeable = isEquipmentChargeable(bookingData.date)
-  const equipmentItems: string[] = []
-  if (bookingData.paddles > 0) {
-    equipmentItems.push(`${bookingData.paddles} paddle${bookingData.paddles > 1 ? 's' : ''}`)
-  }
-  if (bookingData.needsBalls) {
-    equipmentItems.push('balls (set of 4)')
-  }
-  const equipmentSummary = equipmentItems.length > 0 ? equipmentItems.join(', ') : null
+  const equipmentSummary = formatEquipmentSummary(bookingData.paddles, bookingData.needsBalls)
 
   // Show "Awaiting Verification" after payment is submitted
   if (submittedBookings) {
