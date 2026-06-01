@@ -66,6 +66,9 @@ export interface PendingPaymentBooking {
   booking_group_id?: string | null  // UUID linking slots from same order
   // Payment reference
   gcash_reference?: string | null
+  // Equipment rental
+  paddles_count?: number | null
+  needs_balls?: boolean | null
 }
 
 // Email notification types

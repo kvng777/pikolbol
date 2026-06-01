@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
-import { CheckCircle, XCircle, AlertTriangle, Loader2, User, Calendar, Clock, CreditCard, Copy, Check } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle, Loader2, User, Calendar, Clock, CreditCard, Copy, Check, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { usePendingPayments, useConfirmPayment, useRejectPayment } from '@/hooks/usePayment'
+import { formatEquipmentSummary } from '@/lib/paymentConfig'
 import { PendingPaymentBooking } from '@/types/payment'
 import { toast } from 'sonner'
 
@@ -23,6 +24,7 @@ interface PendingAction {
     timeSlots: string
     date: string
     gcashReference?: string | null
+    equipment?: string | null
   }
 }
 
@@ -74,6 +76,7 @@ function BookingGroupCard({ bookings, onConfirmClick, onRejectClick, isProcessin
   const formattedAmount = Number.isFinite(totalAmount) ? totalAmount.toLocaleString() : '0'
   const timeSlots = bookings.map(b => b.time_slot).join(', ')
   const formattedDate = format(parseISO(firstBooking.date), 'EEEE, MMM d, yyyy')
+  const equipmentSummary = formatEquipmentSummary(firstBooking.paddles_count, firstBooking.needs_balls)
   
   // Calculate time since submission
   const submittedAt = createdAt ? new Date(createdAt) : new Date()
@@ -101,6 +104,7 @@ function BookingGroupCard({ bookings, onConfirmClick, onRejectClick, isProcessin
     timeSlots,
     date: formattedDate,
     gcashReference: firstBooking.gcash_reference,
+    equipment: equipmentSummary,
   }
 
   const handleConfirmClick = () => {
@@ -165,6 +169,12 @@ function BookingGroupCard({ bookings, onConfirmClick, onRejectClick, isProcessin
               <Clock className="w-4 h-4 text-gray-400" />
               {timeSlots}
             </div>
+            {equipmentSummary && (
+              <div className="flex items-center gap-2 text-gray-600">
+                <Package className="w-4 h-4 text-gray-400" />
+                <span className="capitalize">{equipmentSummary}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-emerald-600 font-semibold">
               <CreditCard className="w-4 h-4" />
               Php {formattedAmount}
@@ -230,6 +240,12 @@ function BookingDetailsSummary({ details }: { details: PendingAction['bookingDet
         <span className="text-gray-500">Time</span>
         <span className="text-gray-900">{details.timeSlots}</span>
       </div>
+      {details.equipment && (
+        <div className="flex justify-between">
+          <span className="text-gray-500">Equipment</span>
+          <span className="text-gray-900 capitalize text-right">{details.equipment}</span>
+        </div>
+      )}
       <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
         <span className="text-gray-500">Amount</span>
         <span className="font-semibold text-emerald-600">Php {details.amount}</span>

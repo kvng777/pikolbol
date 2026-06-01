@@ -35,6 +35,8 @@ export interface GroupedBooking {
   payment_amount?: number
   short_id: string | null  // Human-readable booking ID (e.g., 'A1B2')
   gcash_reference?: string | null
+  paddles_count?: number | null
+  needs_balls?: boolean | null
 }
 
 export function useAdminPage() {
@@ -113,6 +115,8 @@ export function useAdminPage() {
           payment_amount: booking.payment_amount ?? undefined,
           short_id: booking.short_id || null,
           gcash_reference: booking.gcash_reference || null,
+          paddles_count: booking.paddles_count ?? 0,
+          needs_balls: booking.needs_balls ?? false,
         })
       }
     })

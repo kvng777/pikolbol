@@ -1,3 +1,5 @@
+import { formatEquipmentSummary } from './paymentConfig'
+
 // Email configuration
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const EMAIL_FROM = process.env.EMAIL_FROM || 'bookings@pikolbol.fun'
@@ -270,9 +272,12 @@ export async function sendAdminPaymentAlertEmail(data: {
   amount: number
   reference?: string
   shortId?: string  // Human-readable booking ID (e.g., 'A1B2')
+  paddles?: number | null      // Paddles rented for this booking
+  needsBalls?: boolean | null  // Whether a set of balls was rented
   confirmUrl?: string  // Signed URL to confirm payment directly from email
 }): Promise<{ success: boolean; error?: string }> {
   const formattedDate = formatBookingDate(data.bookingDate)
+  const equipmentSummary = formatEquipmentSummary(data.paddles, data.needsBalls)
 
   const html = `
     <!DOCTYPE html>
@@ -319,6 +324,13 @@ export async function sendAdminPaymentAlertEmail(data: {
               <span style="color: #6b7280; font-size: 14px;">Time:</span>
               <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${data.bookingTime}</p>
             </div>
+
+            ${equipmentSummary ? `
+            <div style="margin-bottom: 12px;">
+              <span style="color: #6b7280; font-size: 14px;">Equipment:</span>
+              <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${equipmentSummary}</p>
+            </div>
+            ` : ''}
             
             ${data.shortId ? `
             <div style="margin-bottom: 12px;">

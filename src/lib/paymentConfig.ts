@@ -111,6 +111,28 @@ export function isEquipmentChargeable(date?: string): boolean {
 }
 
 /**
+ * Format the selected equipment into a human-readable summary.
+ * Returns null when no equipment was selected.
+ * e.g. "2 paddles, balls (set of 4)", "1 paddle", "Balls (set of 4)"
+ */
+export function formatEquipmentSummary(
+  paddles?: number | null,
+  needsBalls?: boolean | null
+): string | null {
+  const items: string[] = []
+  const paddleCount = paddles ?? 0
+
+  if (paddleCount > 0) {
+    items.push(`${paddleCount} paddle${paddleCount > 1 ? 's' : ''}`)
+  }
+  if (needsBalls) {
+    items.push(items.length === 0 ? 'Balls (set of 4)' : 'balls (set of 4)')
+  }
+
+  return items.length > 0 ? items.join(', ') : null
+}
+
+/**
  * Calculate the equipment rental charge for a booking.
  * Returns 0 during the free promo period or when nothing is selected.
  */

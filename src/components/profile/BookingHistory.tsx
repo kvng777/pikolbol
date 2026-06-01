@@ -4,8 +4,9 @@ import { useState, useMemo } from 'react'
 import { format, parseISO, isAfter, addHours } from 'date-fns'
 import { Booking } from '@/types/booking'
 import { PaymentStatus } from '@/types/payment'
-import { Calendar, Clock, AlertTriangle, Loader2, CreditCard } from 'lucide-react'
+import { Calendar, Clock, AlertTriangle, Loader2, CreditCard, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { formatEquipmentSummary } from '@/lib/paymentConfig'
 import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from '@/lib/constants'
 
 // ============================================================================
@@ -302,6 +303,10 @@ interface BookingGroupCardProps {
 
 function BookingGroupCard({ group, onCancelClick }: BookingGroupCardProps) {
   const cancelCheck = canCancelBookingGroup(group)
+  const equipmentSummary = formatEquipmentSummary(
+    group.bookings[0]?.paddles_count,
+    group.bookings[0]?.needs_balls
+  )
   
   return (
     <div
@@ -361,6 +366,14 @@ function BookingGroupCard({ group, onCancelClick }: BookingGroupCardProps) {
             <Clock className="w-4 h-4 text-gray-400" />
             {group.timeSlots.join(', ')}
           </div>
+
+          {/* Equipment rental */}
+          {equipmentSummary && (
+            <div className="flex items-center gap-2 text-gray-600 mt-1">
+              <Package className="w-4 h-4 text-gray-400" />
+              <span className="capitalize">{equipmentSummary}</span>
+            </div>
+          )}
 
           {/* GCash reference number */}
           {group.gcashReference && (

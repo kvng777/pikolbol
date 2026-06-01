@@ -76,6 +76,8 @@ export async function submitPaymentAction(
         bookingTime: payload.timeSlots.join(', '),
         amount: booking.payment_amount || 0,
         shortId: booking.short_id || undefined,
+        paddles: booking.paddles_count,
+        needsBalls: booking.needs_balls,
         reference: payload.gcashReference,
         confirmUrl,
       })
