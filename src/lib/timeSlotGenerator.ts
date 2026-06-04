@@ -1,7 +1,7 @@
 import { format } from 'date-fns'
 import { Booking, TimeSlot, DisabledSlot } from '@/types/booking'
 
-const OPERATING_HOURS = { start: 6, end: 22 }
+const OPERATING_HOURS = { start: 5, end: 22 }
 const SLOT_DURATION = 1
 const BOOKING_BUFFER_MINUTES = 30 // Slots must start at least this many minutes from now
 
@@ -19,7 +19,10 @@ export function getAvailableSlotsForCourt(
   bookings: Booking[],
   date: string,
   courtNumber: number,
-  disabledSlots: DisabledSlot[] = []
+  disabledSlots: DisabledSlot[] = [],
+  // Admin manual bookings bypass the "too soon" buffer (they may log imminent/past slots).
+  // Data integrity is still protected by the DB unique index and booked/disabled checks.
+  ignoreTimeBuffer = false
 ): TimeSlot[] {
   const allSlots = generateTimeSlots()
   const bookedSlots = bookings
@@ -44,7 +47,7 @@ export function getAvailableSlotsForCourt(
     const slotStartMinutes = slotStartHour * 60
 
     // Slot is past/too soon if it's today and starts before the cutoff
-    const isPastOrTooSoon = isToday && slotStartMinutes < cutoffMinutes
+    const isPastOrTooSoon = !ignoreTimeBuffer && isToday && slotStartMinutes < cutoffMinutes
 
     let reason: TimeSlot['reason']
     if (isPastOrTooSoon) reason = 'past'

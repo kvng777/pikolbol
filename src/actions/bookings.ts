@@ -21,8 +21,18 @@ import {
   cancelBookingGroup,
   getPendingRefunds,
   markRefundCompleted,
+  createAdminBooking,
+  updateAdminBooking,
 } from '@/lib/bookingService'
-import { BookingFormData, Booking, CreateBookingResult, DisabledSlot, ClosedDate, CancelBookingResult } from '@/types/booking'
+import {
+  BookingFormData,
+  Booking,
+  CreateBookingResult,
+  DisabledSlot,
+  ClosedDate,
+  CancelBookingResult,
+  AdminBookingPayload,
+} from '@/types/booking'
 import { revalidatePath } from 'next/cache'
 
 export async function createBookingAction(data: BookingFormData): Promise<CreateBookingResult> {
@@ -60,6 +70,50 @@ export async function createBookingsAction(data: { name: string; phone: string; 
     players: data.players,
     user_id: data.user_id,
   })
+
+  if (result.success) {
+    revalidatePath('/')
+    revalidatePath('/admin')
+  }
+
+  return result
+}
+
+/**
+ * Create a manual booking on behalf of a player (admin only).
+ * Confirmed immediately, flagged manual, no emails. Blocks closed dates.
+ */
+export async function createAdminBookingAction(
+  payload: AdminBookingPayload
+): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+  const isClosed = await isDateClosed(payload.date)
+  if (isClosed) {
+    return { success: false, error: 'The court is closed on this date. Please select another date.' }
+  }
+
+  const result = await createAdminBooking(payload)
+
+  if (result.success) {
+    revalidatePath('/')
+    revalidatePath('/admin')
+  }
+
+  return result
+}
+
+/**
+ * Update an existing manual booking group (admin only). Editable anytime.
+ */
+export async function updateAdminBookingAction(
+  bookingGroupId: string,
+  payload: AdminBookingPayload
+): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+  const isClosed = await isDateClosed(payload.date)
+  if (isClosed) {
+    return { success: false, error: 'The court is closed on this date. Please select another date.' }
+  }
+
+  const result = await updateAdminBooking(bookingGroupId, payload)
 
   if (result.success) {
     revalidatePath('/')

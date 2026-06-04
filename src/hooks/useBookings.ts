@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Booking, DisabledSlot, ClosedDate } from '@/types/booking'
+import { Booking, DisabledSlot, ClosedDate, AdminBookingPayload } from '@/types/booking'
 import { 
   getBookingsByDateAction,
   getActiveBookingsByDateAction,
@@ -16,6 +16,8 @@ import {
   getBookingsByUserIdAction,
   cancelBookingAction,
   cancelBookingGroupAction,
+  createAdminBookingAction,
+  updateAdminBookingAction,
 } from '@/actions/bookings'
 
 const CACHE_TIME = 5 * 60 * 1000 // 5 minutes
@@ -158,6 +160,39 @@ export function useDeleteBooking() {
     mutationFn: (id: string) => deleteBookingAction(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
+    },
+  })
+}
+
+/**
+ * Hook to create a manual booking (admin only)
+ */
+export function useCreateAdminBooking() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: AdminBookingPayload) => createAdminBookingAction(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['allBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
+    },
+  })
+}
+
+/**
+ * Hook to update a manual booking group (admin only)
+ */
+export function useUpdateAdminBooking() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ bookingGroupId, payload }: { bookingGroupId: string; payload: AdminBookingPayload }) =>
+      updateAdminBookingAction(bookingGroupId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['allBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
     },
   })

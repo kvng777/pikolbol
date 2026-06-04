@@ -1,7 +1,20 @@
 import { supabase } from './supabase-server'
-import { Booking, BookingFormData, CreateBookingResult, DisabledSlot, ClosedDate, CancelBookingResult } from '@/types/booking'
+import {
+  Booking,
+  BookingFormData,
+  CreateBookingResult,
+  DisabledSlot,
+  ClosedDate,
+  CancelBookingResult,
+  AdminBookingPayload,
+} from '@/types/booking'
 import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from './constants'
-import { HELD_PAYMENT_STATUSES, CONFIRMED_PAYMENT_STATUSES } from './paymentConfig'
+import {
+  HELD_PAYMENT_STATUSES,
+  CONFIRMED_PAYMENT_STATUSES,
+  calculatePaymentAmount,
+} from './paymentConfig'
+import { generateUniqueShortId, generateBookingGroupId } from './bookingIdGenerator'
 import { sendAdminRefundAlertEmail, sendUserRefundCompletedEmail } from './emailService'
 
 // Re-export constants for backwards compatibility with server-side code
@@ -143,6 +156,160 @@ export async function createBookings(payload: { name: string; phone: string; ema
       return { success: false, error: 'One or more selected time slots are already booked. Please refresh and try again.' }
     }
     return { success: false, error: error.message || 'Failed to create bookings' }
+  }
+
+  return { success: true, bookings: data }
+}
+
+// ============================================================================
+// Admin (manual) bookings
+// ============================================================================
+
+const MANUAL_COURT_NUMBER = 1
+const MANUAL_DEFAULT_PLAYERS = 2
+
+/**
+ * Create a manual booking on behalf of a player (admin only).
+ * Created as a single confirmed group, flagged is_manual, with no emails sent.
+ */
+export async function createAdminBooking(
+  payload: AdminBookingPayload
+): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+  if (!payload.name.trim()) {
+    return { success: false, error: 'Player name is required' }
+  }
+  if (!payload.timeSlots || payload.timeSlots.length === 0) {
+    return { success: false, error: 'Please select at least one time slot' }
+  }
+
+  const paddlesCount = Math.max(0, payload.paddles ?? 0)
+  const needsBalls = payload.needsBalls ?? false
+
+  const amount = calculatePaymentAmount(payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
+    date: payload.date,
+    paddles: paddlesCount,
+    needsBalls,
+  })
+
+  const shortId = await generateUniqueShortId()
+  const bookingGroupId = generateBookingGroupId()
+  const nowIso = new Date().toISOString()
+
+  const rows = payload.timeSlots.map((ts) => ({
+    name: payload.name.trim(),
+    phone: '',
+    email: '',
+    date: payload.date,
+    time_slot: ts,
+    court_number: MANUAL_COURT_NUMBER,
+    players: MANUAL_DEFAULT_PLAYERS,
+    paddles_count: paddlesCount,
+    needs_balls: needsBalls,
+    user_id: null,
+    short_id: shortId,
+    booking_group_id: bookingGroupId,
+    payment_status: 'confirmed' as const,
+    payment_amount: amount,
+    payment_confirmed_at: nowIso,
+    is_manual: true,
+  }))
+
+  const { data, error } = await supabase.from('bookings').insert(rows).select()
+
+  if (error) {
+    if (error.code === '23505') {
+      return { success: false, error: 'One or more selected time slots are already booked.' }
+    }
+    return { success: false, error: error.message || 'Failed to create booking' }
+  }
+
+  return { success: true, bookings: data }
+}
+
+/**
+ * Update an existing manual booking group (admin only).
+ * Uses a "replace group" strategy: validate the target slots are free
+ * (ignoring this group's own rows), then delete the group's rows and
+ * re-insert with the same booking_group_id and short_id.
+ * Editable anytime, including past/completed bookings. Manual bookings only.
+ */
+export async function updateAdminBooking(
+  bookingGroupId: string,
+  payload: AdminBookingPayload
+): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+  if (!payload.name.trim()) {
+    return { success: false, error: 'Player name is required' }
+  }
+  if (!payload.timeSlots || payload.timeSlots.length === 0) {
+    return { success: false, error: 'Please select at least one time slot' }
+  }
+
+  // Load the existing group and verify it is a manual booking
+  const existing = await getBookingsByGroupId(bookingGroupId)
+  if (existing.length === 0) {
+    return { success: false, error: 'Booking not found' }
+  }
+  if (!existing.every((b) => b.is_manual)) {
+    return { success: false, error: 'Only manually-created bookings can be edited' }
+  }
+
+  // Preserve the original human-readable ID
+  const shortId = existing[0].short_id || (await generateUniqueShortId())
+
+  // Validate target slots are free, excluding this group's own rows
+  const activeOnDate = await getActiveBookingsByDate(payload.date)
+  const conflict = activeOnDate.find(
+    (b) =>
+      b.court_number === MANUAL_COURT_NUMBER &&
+      b.booking_group_id !== bookingGroupId &&
+      payload.timeSlots.includes(b.time_slot)
+  )
+  if (conflict) {
+    return { success: false, error: `Time slot ${conflict.time_slot} is already booked.` }
+  }
+
+  const paddlesCount = Math.max(0, payload.paddles ?? 0)
+  const needsBalls = payload.needsBalls ?? false
+  const amount = calculatePaymentAmount(payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
+    date: payload.date,
+    paddles: paddlesCount,
+    needsBalls,
+  })
+
+  // Replace the group's rows
+  const { error: deleteError } = await supabase
+    .from('bookings')
+    .delete()
+    .eq('booking_group_id', bookingGroupId)
+
+  if (deleteError) {
+    return { success: false, error: deleteError.message || 'Failed to update booking' }
+  }
+
+  const nowIso = new Date().toISOString()
+  const rows = payload.timeSlots.map((ts) => ({
+    name: payload.name.trim(),
+    phone: '',
+    email: '',
+    date: payload.date,
+    time_slot: ts,
+    court_number: MANUAL_COURT_NUMBER,
+    players: MANUAL_DEFAULT_PLAYERS,
+    paddles_count: paddlesCount,
+    needs_balls: needsBalls,
+    user_id: null,
+    short_id: shortId,
+    booking_group_id: bookingGroupId,
+    payment_status: 'confirmed' as const,
+    payment_amount: amount,
+    payment_confirmed_at: existing[0].payment_confirmed_at || nowIso,
+    is_manual: true,
+  }))
+
+  const { data, error } = await supabase.from('bookings').insert(rows).select()
+
+  if (error) {
+    return { success: false, error: error.message || 'Failed to update booking' }
   }
 
   return { success: true, bookings: data }

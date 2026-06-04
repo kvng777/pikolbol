@@ -31,6 +31,8 @@ export interface Booking {
   cancellation_fee?: number | null
   refund_amount?: number | null
   refund_status?: RefundStatus | null
+  // Manual booking (created by admin on behalf of a player)
+  is_manual?: boolean | null
 }
 
 export interface TimeSlot {
@@ -90,4 +92,18 @@ export interface CancelBookingResult {
   error?: string
   cancellationFee?: number
   refundAmount?: number
+}
+
+// Payload for an admin-created (manual) booking
+export interface AdminBookingPayload {
+  name: string
+  date: string
+  timeSlots: string[]
+  paddles?: number
+  needsBalls?: boolean
+}
+
+// Payload for editing an existing manual booking (identified by its group)
+export interface AdminBookingUpdatePayload extends AdminBookingPayload {
+  bookingGroupId: string
 }
