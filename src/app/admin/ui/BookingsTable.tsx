@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Trash2, Copy, Check } from 'lucide-react'
+import { Trash2, Copy, Check, Pencil, UserCog } from 'lucide-react'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { BookingStatusBadge } from '@/components/ui/BookingStatusBadge'
@@ -18,7 +18,7 @@ import { calculatePaymentAmount, formatEquipmentSummary } from '@/lib/paymentCon
 import type { TableUI } from '@/app/admin/hooks/useAdminTable'
 
 // Type for grouped bookings used by this UI
-interface BookingGroup {
+export interface BookingGroup {
   key: string
   date: string
   timeSlots: string[]
@@ -33,9 +33,15 @@ interface BookingGroup {
   gcash_reference?: string | null
   paddles_count?: number | null
   needs_balls?: boolean | null
+  is_manual?: boolean | null
 }
 
-export default function BookingsTable({ table }: { table: TableUI }) {
+interface BookingsTableProps {
+  table: TableUI
+  onEditBooking?: (group: BookingGroup) => void
+}
+
+export default function BookingsTable({ table, onEditBooking }: BookingsTableProps) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -91,7 +97,7 @@ export default function BookingsTable({ table }: { table: TableUI }) {
               return (
                 <TableRow 
                   key={group.key} 
-                  className={`border-gray-100 hover:bg-gray-50 ${isPast || isInactive ? 'opacity-60' : ''}`}
+                  className={`border-gray-100 hover:bg-gray-50 ${isPast || isInactive ? 'opacity-60' : ''} ${group.is_manual ? 'bg-indigo-50/50' : ''}`}
                 >
                   {/* Booking ID */}
                   <TableCell>
@@ -124,10 +130,21 @@ export default function BookingsTable({ table }: { table: TableUI }) {
 
                   {/* Status */}
                   <TableCell>
-                    <BookingStatusBadge
-                      paymentStatus={group.payment_status}
-                      bookingDate={group.date}
-                    />
+                    <div className="flex flex-col items-start gap-1">
+                      <BookingStatusBadge
+                        paymentStatus={group.payment_status}
+                        bookingDate={group.date}
+                      />
+                      {group.is_manual && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-0.5 text-xs font-medium"
+                          title="Created manually by admin"
+                        >
+                          <UserCog className="w-3 h-3" />
+                          Manual
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
 
                   {/* Date */}
@@ -196,15 +213,28 @@ export default function BookingsTable({ table }: { table: TableUI }) {
 
                   {/* Actions */}
                   <TableCell>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => table.handleDeleteGroupedBooking(group.bookingIds)} 
-                      className="text-gray-400 hover:text-red-600 hover:bg-red-50"
-                      title="Delete booking"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center">
+                      {group.is_manual && onEditBooking && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onEditBooking(group)}
+                          className="text-gray-400 hover:text-indigo-600 hover:bg-indigo-50"
+                          title="Edit manual booking"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => table.handleDeleteGroupedBooking(group.bookingIds)} 
+                        className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                        title="Delete booking"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               )

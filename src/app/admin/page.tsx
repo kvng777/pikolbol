@@ -1,14 +1,15 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { useAdminTable } from './hooks/useAdminTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Calendar, Clock, Plus, Ban, Lock, CreditCard, Settings, Banknote, DollarSign, Megaphone } from 'lucide-react'
+import { Calendar, Clock, Plus, Ban, Lock, CreditCard, Settings, Banknote, DollarSign, Megaphone, UserCog } from 'lucide-react'
 import AdminHeader from './ui/AdminHeader'
 import AdminControls from './ui/AdminControls'
-import BookingsTable from './ui/BookingsTable'
+import BookingsTable, { type BookingGroup } from './ui/BookingsTable'
+import { AdminBookingForm, type AdminBookingInitialValues } from '@/components/admin/AdminBookingForm'
 import NavBar from '@/components/NavBar'
 import { PendingPayments } from '@/components/admin/PendingPayments'
 import { PendingRefunds } from '@/components/admin/PendingRefunds'
@@ -50,6 +51,32 @@ export default function AdminPage() {
 
   const { data: profile } = useProfile()
   const displayName = profile?.name ?? table.user?.user_metadata?.full_name ?? table.user?.email ?? 'User'
+
+  // Manual booking modal (create + edit)
+  const [bookingModalOpen, setBookingModalOpen] = useState(false)
+  const [editingBooking, setEditingBooking] = useState<AdminBookingInitialValues | null>(null)
+
+  const handleNewBooking = () => {
+    setEditingBooking(null)
+    setBookingModalOpen(true)
+  }
+
+  const handleEditBooking = (group: BookingGroup) => {
+    setEditingBooking({
+      bookingGroupId: group.key,
+      name: group.name ?? '',
+      date: group.date,
+      timeSlots: group.timeSlots,
+      paddles: group.paddles_count ?? 0,
+      needsBalls: group.needs_balls ?? false,
+    })
+    setBookingModalOpen(true)
+  }
+
+  const handleCloseBookingModal = () => {
+    setBookingModalOpen(false)
+    setEditingBooking(null)
+  }
 
   if (table.authLoading) {
     return (
@@ -169,9 +196,20 @@ export default function AdminPage() {
           </div>
 
           {table.activeTab === 'bookings' && (
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
-              <AdminControls table={table} />
-              <BookingsTable table={table} />
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleNewBooking}
+                  className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white"
+                >
+                  <UserCog className="w-4 h-4 mr-2" />
+                  New Booking
+                </Button>
+              </div>
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
+                <AdminControls table={table} />
+                <BookingsTable table={table} onEditBooking={handleEditBooking} />
+              </div>
             </div>
           )}
 
@@ -335,6 +373,14 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {bookingModalOpen && (
+        <AdminBookingForm
+          key={editingBooking?.bookingGroupId ?? 'new'}
+          onClose={handleCloseBookingModal}
+          initialValues={editingBooking}
+        />
+      )}
     </div>
   )
 }
