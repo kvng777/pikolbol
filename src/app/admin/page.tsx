@@ -18,6 +18,7 @@ import { FinanceTab } from '@/components/admin/FinanceTab'
 import { NoticeSettings } from '@/components/admin/NoticeSettings'
 import { usePendingPayments } from '@/hooks/usePayment'
 import { usePendingRefunds } from '@/hooks/useRefunds'
+import { useRescheduledBookings } from '@/hooks/useBookings'
 import { useProfile } from '@/hooks/useProfile'
 
 export default function AdminPage() {
@@ -36,6 +37,20 @@ export default function AdminPage() {
     })
     return keys.size
   }, [pendingQuery.data])
+
+  const rescheduledQuery = useRescheduledBookings()
+  const rescheduledCount = useMemo(() => {
+    const bookings = rescheduledQuery.data
+    if (!bookings || bookings.length === 0) return 0
+    const keys = new Set<string>()
+    bookings.forEach((b) => {
+      const key = b.booking_group_id || `legacy-${b.id}`
+      keys.add(key)
+    })
+    return keys.size
+  }, [rescheduledQuery.data])
+
+  const pendingTabCount = pendingCount + rescheduledCount
 
   const refundsQuery = usePendingRefunds()
   const refundsCount = useMemo(() => {
@@ -126,12 +141,12 @@ export default function AdminPage() {
                 className={table.activeTab === 'payments' ? 'bg-amber-500 hover:bg-amber-600' : ''}
               >
                 <CreditCard className="w-4 h-4 mr-2" />
-                Pending Payments
+                Pending
               </Button>
 
-              {pendingCount > 0 && (
+              {pendingTabCount > 0 && (
                 <span className="absolute -top-2 -right-1 inline-flex items-center justify-center p-1 h-5 w-5 text-[12px] font-semibold leading-none text-white bg-red-600 rounded-full">
-                  {pendingCount > 99 ? '99+' : pendingCount}
+                  {pendingTabCount > 99 ? '99+' : pendingTabCount}
                 </span>
               )}
             </div>

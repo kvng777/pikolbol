@@ -18,6 +18,8 @@ import {
   cancelBookingGroupAction,
   createAdminBookingAction,
   updateAdminBookingAction,
+  rescheduleBookingGroupAction,
+  getRescheduledBookingsAction,
 } from '@/actions/bookings'
 
 const CACHE_TIME = 5 * 60 * 1000 // 5 minutes
@@ -255,5 +257,48 @@ export function useCancelBookingGroup() {
       queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
       queryClient.invalidateQueries({ queryKey: ['pendingRefunds'] })
     },
+  })
+}
+
+/**
+ * Hook to reschedule a booking group (user action).
+ * Free, no price adjustment, same slot count, unlimited reschedules.
+ */
+export function useRescheduleBookingGroup() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      bookingGroupId,
+      legacyBookingId,
+      userId,
+      newDate,
+      newTimeSlots,
+    }: {
+      bookingGroupId: string | null
+      legacyBookingId: string | null
+      userId: string
+      newDate: string
+      newTimeSlots: string[]
+    }) => rescheduleBookingGroupAction(bookingGroupId, legacyBookingId, userId, newDate, newTimeSlots),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['allBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
+      queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['rescheduledBookings'] })
+    },
+  })
+}
+
+/**
+ * Hook to fetch all rescheduled bookings (for admin view)
+ */
+export function useRescheduledBookings() {
+  return useQuery<Booking[]>({
+    queryKey: ['rescheduledBookings'],
+    queryFn: getRescheduledBookingsAction,
+    staleTime: CACHE_TIME,
+    gcTime: CACHE_TIME,
   })
 }

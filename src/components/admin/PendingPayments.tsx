@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
-import { CheckCircle, XCircle, AlertTriangle, Loader2, User, Calendar, Clock, CreditCard, Copy, Check, Package } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle, Loader2, User, Calendar, Clock, CreditCard, Copy, Check, Package, RefreshCw, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { usePendingPayments, useConfirmPayment, useRejectPayment } from '@/hooks/usePayment'
+import { useRescheduledBookings } from '@/hooks/useBookings'
 import { formatEquipmentSummary } from '@/lib/paymentConfig'
 import { PendingPaymentBooking } from '@/types/payment'
+import { Booking } from '@/types/booking'
 import { toast } from 'sonner'
 
 // ============================================================================
@@ -261,11 +263,121 @@ function BookingDetailsSummary({ details }: { details: PendingAction['bookingDet
 }
 
 // ============================================================================
+// Rescheduled Booking Types & Helpers
+// ============================================================================
+
+interface RescheduledGroup {
+  groupKey: string
+  bookings: Booking[]
+  name: string
+  shortId: string | null
+  oldDate: string
+  oldTimeSlots: string[]
+  newDate: string
+  newTimeSlots: string[]
+  rescheduledAt: string
+}
+
+function groupRescheduledBookings(bookings: Booking[]): RescheduledGroup[] {
+  const groups = new Map<string, Booking[]>()
+
+  bookings.forEach((b) => {
+    const key = b.booking_group_id || `legacy-${b.id}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(b)
+  })
+
+  return Array.from(groups.entries()).map(([groupKey, groupBookings]) => {
+    const sorted = [...groupBookings].sort((a, b) => a.time_slot.localeCompare(b.time_slot))
+    const first = sorted[0]
+    return {
+      groupKey,
+      bookings: sorted,
+      name: first.name,
+      shortId: first.short_id || null,
+      oldDate: first.rescheduled_from_date || first.date,
+      oldTimeSlots: sorted.map((b) => b.rescheduled_from_time_slot || b.time_slot),
+      newDate: first.date,
+      newTimeSlots: sorted.map((b) => b.time_slot),
+      rescheduledAt: first.rescheduled_at || first.created_at,
+    }
+  })
+}
+
+// ============================================================================
+// RescheduledBookingCard Component
+// ============================================================================
+
+function RescheduledBookingCard({ group }: { group: RescheduledGroup }) {
+  const rescheduledAt = group.rescheduledAt
+    ? format(parseISO(group.rescheduledAt), 'MMM d, yyyy h:mm a')
+    : ''
+
+  return (
+    <div className="rounded-xl border p-4 bg-teal-50 border-teal-200">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            {group.shortId && (
+              <span className="px-2 py-1 rounded-md text-sm font-mono font-semibold bg-gray-100 text-gray-800">
+                {group.shortId}
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+              <RefreshCw className="w-3 h-3" />
+              Rescheduled
+            </span>
+            {rescheduledAt && <span className="text-xs text-gray-500">{rescheduledAt}</span>}
+          </div>
+
+          {/* Customer */}
+          <div className="flex items-center gap-2 text-gray-900 font-medium mb-3">
+            <User className="w-4 h-4 text-gray-400" />
+            {group.name}
+          </div>
+
+          {/* Old -> New schedule */}
+          <div className="flex items-center gap-3 text-sm">
+            <div className="flex-1 bg-red-50 rounded-lg p-3 border border-red-100">
+              <p className="text-xs font-medium text-red-600 uppercase mb-1">From</p>
+              <div className="flex items-center gap-1.5 text-gray-700">
+                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                {format(parseISO(group.oldDate), 'MMM d, yyyy')}
+              </div>
+              <div className="flex items-center gap-1.5 text-gray-600 mt-0.5">
+                <Clock className="w-3.5 h-3.5 text-gray-400" />
+                {group.oldTimeSlots.join(', ')}
+              </div>
+            </div>
+
+            <ArrowRight className="w-4 h-4 text-teal-500 shrink-0" />
+
+            <div className="flex-1 bg-teal-50 rounded-lg p-3 border border-teal-200">
+              <p className="text-xs font-medium text-teal-700 uppercase mb-1">To</p>
+              <div className="flex items-center gap-1.5 text-gray-700 font-medium">
+                <Calendar className="w-3.5 h-3.5 text-teal-500" />
+                {format(parseISO(group.newDate), 'MMM d, yyyy')}
+              </div>
+              <div className="flex items-center gap-1.5 text-gray-600 mt-0.5">
+                <Clock className="w-3.5 h-3.5 text-teal-500" />
+                {group.newTimeSlots.join(', ')}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
 // Main PendingPayments Component
 // ============================================================================
 
 export function PendingPayments() {
   const { data: pendingBookings = [], isLoading } = usePendingPayments()
+  const { data: rescheduledBookings = [], isLoading: rescheduledLoading } = useRescheduledBookings()
   const confirmPayment = useConfirmPayment()
   const rejectPayment = useRejectPayment()
   
@@ -320,8 +432,14 @@ export function PendingPayments() {
     }
   }
 
+  // Group rescheduled bookings
+  const rescheduledGroups = useMemo(
+    () => groupRescheduledBookings(rescheduledBookings),
+    [rescheduledBookings]
+  )
+
   // Loading state
-  if (isLoading) {
+  if (isLoading && rescheduledLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
@@ -329,21 +447,10 @@ export function PendingPayments() {
     )
   }
 
-  // Empty state
-  if (pendingBookings.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-          <CreditCard className="w-8 h-8 text-gray-400" />
-        </div>
-        <h3 className="text-lg font-medium text-gray-900 mb-1">No Pending Payments</h3>
-        <p className="text-gray-500">All payments have been processed.</p>
-      </div>
-    )
-  }
-
   // Group bookings by booking_group_id
   const groupedBookings = Array.from(groupBookings(pendingBookings).values())
+
+  const hasNothing = pendingBookings.length === 0 && rescheduledGroups.length === 0
 
   // Dialog content based on action type
   const dialogConfig = pendingAction?.type === 'confirm' 
@@ -360,34 +467,68 @@ export function PendingPayments() {
         variant: 'reject' as const,
       }
 
-  return (
-    <div className="space-y-6">
-      {/* Pending Verification List */}
-      <div>
-        <div className="flex flex-row gap-2 mb-3">
-          <p className="text-md font-semibold text-amber-700 uppercase">
-            Needs Verification ({groupedBookings.length})
-          </p>
-          <p className="text-sm text-amber-600 align-self-center">
-            Customers have submitted payment, please verify via GCash
-          </p>
+  // Empty state — nothing pending at all
+  if (hasNothing) {
+    return (
+      <div className="text-center py-12">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+          <CreditCard className="w-8 h-8 text-gray-400" />
         </div>
-        <div className="space-y-3">
-          {groupedBookings.map((group) => (
-            <BookingGroupCard
-              key={group[0].id}
-              bookings={group}
-              onConfirmClick={handleConfirmClick}
-              onRejectClick={handleRejectClick}
-              isProcessing={isProcessing}
-            />
-          ))}
-        </div>
+        <h3 className="text-lg font-medium text-gray-900 mb-1">All Clear</h3>
+        <p className="text-gray-500">No pending payments or recent reschedules.</p>
       </div>
+    )
+  }
 
-      <p className="text-xs text-gray-400 text-center">
-        Payments auto-refresh every 10 seconds.
-      </p>
+  return (
+    <div className="space-y-8">
+      {/* Pending Verification List */}
+      {groupedBookings.length > 0 && (
+        <div>
+          <div className="flex flex-row gap-2 mb-3">
+            <p className="text-md font-semibold text-amber-700 uppercase">
+              Needs Verification ({groupedBookings.length})
+            </p>
+            <p className="text-sm text-amber-600 align-self-center">
+              Customers have submitted payment, please verify via GCash
+            </p>
+          </div>
+          <div className="space-y-3">
+            {groupedBookings.map((group) => (
+              <BookingGroupCard
+                key={group[0].id}
+                bookings={group}
+                onConfirmClick={handleConfirmClick}
+                onRejectClick={handleRejectClick}
+                isProcessing={isProcessing}
+              />
+            ))}
+          </div>
+
+          <p className="text-xs text-gray-400 text-center mt-3">
+            Payments auto-refresh every 10 seconds.
+          </p>
+        </div>
+      )}
+
+      {/* Rescheduled Bookings */}
+      {rescheduledGroups.length > 0 && (
+        <div>
+          <div className="flex flex-row gap-2 mb-3">
+            <p className="text-md font-semibold text-teal-700 uppercase">
+              Rescheduled ({rescheduledGroups.length})
+            </p>
+            <p className="text-sm text-teal-600 align-self-center">
+              Bookings that have been moved by customers
+            </p>
+          </div>
+          <div className="space-y-3">
+            {rescheduledGroups.map((group) => (
+              <RescheduledBookingCard key={group.groupKey} group={group} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Dialog */}
       {pendingAction && (

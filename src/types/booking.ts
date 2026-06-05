@@ -33,6 +33,10 @@ export interface Booking {
   refund_status?: RefundStatus | null
   // Manual booking (created by admin on behalf of a player)
   is_manual?: boolean | null
+  // Reschedule tracking
+  rescheduled_from_date?: string | null
+  rescheduled_from_time_slot?: string | null
+  rescheduled_at?: string | null
 }
 
 export interface TimeSlot {
@@ -92,6 +96,11 @@ export interface CancelBookingResult {
   error?: string
   cancellationFee?: number
   refundAmount?: number
+}
+
+export interface RescheduleBookingResult {
+  success: boolean
+  error?: string
 }
 
 // Payload for an admin-created (manual) booking

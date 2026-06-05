@@ -616,3 +616,93 @@ export async function sendUserRefundCompletedEmail(data: {
     html,
   })
 }
+
+/**
+ * Send admin notification when a user reschedules their booking
+ * Uses teal/cyan styling for reschedule alerts
+ */
+export async function sendRescheduleNotificationEmail(data: {
+  userName: string
+  userEmail: string
+  userPhone: string
+  shortId?: string
+  oldDate: string
+  oldTimeSlots: string
+  newDate: string
+  newTimeSlots: string
+}): Promise<{ success: boolean; error?: string }> {
+  const formattedOldDate = formatBookingDate(data.oldDate)
+  const formattedNewDate = formatBookingDate(data.newDate)
+  const displayShortId = data.shortId || 'N/A'
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px;">
+      <div style="max-width: 500px; margin: 0 auto; background-color: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+        <!-- Header - Teal for Reschedule -->
+        <div style="background-color: #0d9488; padding: 24px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Booking Rescheduled</h1>
+          <p style="color: #ccfbf1; margin: 8px 0 0 0; font-size: 14px; font-weight: 500;">A customer has moved their booking</p>
+        </div>
+        
+        <!-- Content -->
+        <div style="padding: 24px;">
+          <!-- Customer Info -->
+          <div style="margin-bottom: 20px;">
+            <h3 style="color: #115e59; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Customer</h3>
+            <p style="color: #111827; font-size: 16px; margin: 0; font-weight: 600;">${data.userName}</p>
+            <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">${data.userEmail}</p>
+            <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">${data.userPhone}</p>
+          </div>
+
+          <!-- Booking ID -->
+          <div style="margin-bottom: 20px;">
+            <span style="color: #6b7280; font-size: 14px;">Booking ID:</span>
+            <span style="color: #111827; font-size: 18px; margin-left: 8px; font-weight: 600; font-family: monospace;">${displayShortId}</span>
+          </div>
+          
+          <!-- Old Booking -->
+          <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+            <h4 style="color: #991b1b; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Previous Schedule</h4>
+            <p style="color: #111827; font-size: 15px; margin: 0; font-weight: 500;">${formattedOldDate}</p>
+            <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">${data.oldTimeSlots}</p>
+          </div>
+
+          <!-- Arrow -->
+          <div style="text-align: center; margin: 8px 0; font-size: 20px; color: #9ca3af;">&#8595;</div>
+
+          <!-- New Booking -->
+          <div style="background-color: #f0fdfa; border: 1px solid #99f6e4; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+            <h4 style="color: #115e59; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">New Schedule</h4>
+            <p style="color: #111827; font-size: 15px; margin: 0; font-weight: 500;">${formattedNewDate}</p>
+            <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">${data.newTimeSlots}</p>
+          </div>
+
+          <p style="color: #6b7280; font-size: 13px; text-align: center; margin: 0;">
+            No action required. Payment amount remains unchanged.
+          </p>
+        </div>
+        
+        <!-- Footer -->
+        <div style="background-color: #f9fafb; padding: 16px 24px; text-align: center; border-top: 1px solid #e5e7eb;">
+          <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+            ${APP_NAME} - Admin Alert
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  return sendEmail({
+    to: ADMIN_EMAIL,
+    cc: ADMIN_CC,
+    subject: `[RESCHEDULED] Booking ${displayShortId} - ${data.userName} - ${formattedNewDate}`,
+    html,
+  })
+}
