@@ -1,15 +1,15 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { CheckCircle, XCircle, AlertTriangle, Loader2, User, Calendar, Clock, CreditCard, Copy, Check, Package, RefreshCw, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { usePendingPayments, useConfirmPayment, useRejectPayment } from '@/hooks/usePayment'
-import { useRescheduledBookings } from '@/hooks/useBookings'
+import { usePendingRescheduleRequests, useApproveRescheduleRequest, useRejectRescheduleRequest } from '@/hooks/useBookings'
 import { formatEquipmentSummary } from '@/lib/paymentConfig'
 import { PendingPaymentBooking } from '@/types/payment'
-import { Booking } from '@/types/booking'
+import { RescheduleRequest } from '@/types/booking'
 import { toast } from 'sonner'
 
 // ============================================================================
@@ -263,55 +263,21 @@ function BookingDetailsSummary({ details }: { details: PendingAction['bookingDet
 }
 
 // ============================================================================
-// Rescheduled Booking Types & Helpers
+// RescheduleRequestCard Component (pending requests with approve/reject)
 // ============================================================================
 
-interface RescheduledGroup {
-  groupKey: string
-  bookings: Booking[]
-  name: string
-  shortId: string | null
-  oldDate: string
-  oldTimeSlots: string[]
-  newDate: string
-  newTimeSlots: string[]
-  rescheduledAt: string
-}
-
-function groupRescheduledBookings(bookings: Booking[]): RescheduledGroup[] {
-  const groups = new Map<string, Booking[]>()
-
-  bookings.forEach((b) => {
-    const key = b.booking_group_id || `legacy-${b.id}`
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key)!.push(b)
-  })
-
-  return Array.from(groups.entries()).map(([groupKey, groupBookings]) => {
-    const sorted = [...groupBookings].sort((a, b) => a.time_slot.localeCompare(b.time_slot))
-    const first = sorted[0]
-    return {
-      groupKey,
-      bookings: sorted,
-      name: first.name,
-      shortId: first.short_id || null,
-      oldDate: first.rescheduled_from_date || first.date,
-      oldTimeSlots: sorted.map((b) => b.rescheduled_from_time_slot || b.time_slot),
-      newDate: first.date,
-      newTimeSlots: sorted.map((b) => b.time_slot),
-      rescheduledAt: first.rescheduled_at || first.created_at,
-    }
-  })
-}
-
-// ============================================================================
-// RescheduledBookingCard Component
-// ============================================================================
-
-function RescheduledBookingCard({ group }: { group: RescheduledGroup }) {
-  const rescheduledAt = group.rescheduledAt
-    ? format(parseISO(group.rescheduledAt), 'MMM d, yyyy h:mm a')
-    : ''
+function RescheduleRequestCard({
+  request,
+  onApprove,
+  onReject,
+  isProcessing,
+}: {
+  request: RescheduleRequest
+  onApprove: (id: string) => void
+  onReject: (id: string) => void
+  isProcessing: boolean
+}) {
+  const requestedAt = format(parseISO(request.created_at), 'MMM d, yyyy h:mm a')
 
   return (
     <div className="rounded-xl border p-4 bg-teal-50 border-teal-200">
@@ -319,52 +285,76 @@ function RescheduledBookingCard({ group }: { group: RescheduledGroup }) {
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center gap-2 mb-3 flex-wrap">
-            {group.shortId && (
+            {request.short_id && (
               <span className="px-2 py-1 rounded-md text-sm font-mono font-semibold bg-gray-100 text-gray-800">
-                {group.shortId}
+                {request.short_id}
               </span>
             )}
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
               <RefreshCw className="w-3 h-3" />
-              Rescheduled
+              Reschedule Request
             </span>
-            {rescheduledAt && <span className="text-xs text-gray-500">{rescheduledAt}</span>}
+            <span className="text-xs text-gray-500">{requestedAt}</span>
           </div>
 
           {/* Customer */}
-          <div className="flex items-center gap-2 text-gray-900 font-medium mb-3">
+          <div className="flex items-center gap-2 text-gray-900 font-medium mb-1">
             <User className="w-4 h-4 text-gray-400" />
-            {group.name}
+            {request.customer_name}
           </div>
+          <p className="text-sm text-gray-500 mb-3">{request.customer_email}</p>
 
           {/* Old -> New schedule */}
           <div className="flex items-center gap-3 text-sm">
             <div className="flex-1 bg-red-50 rounded-lg p-3 border border-red-100">
-              <p className="text-xs font-medium text-red-600 uppercase mb-1">From</p>
+              <p className="text-xs font-medium text-red-600 uppercase mb-1">Current</p>
               <div className="flex items-center gap-1.5 text-gray-700">
                 <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                {format(parseISO(group.oldDate), 'MMM d, yyyy')}
+                {format(parseISO(request.original_date), 'MMM d, yyyy')}
               </div>
               <div className="flex items-center gap-1.5 text-gray-600 mt-0.5">
                 <Clock className="w-3.5 h-3.5 text-gray-400" />
-                {group.oldTimeSlots.join(', ')}
+                {(request.original_time_slots as string[]).join(', ')}
               </div>
             </div>
 
             <ArrowRight className="w-4 h-4 text-teal-500 shrink-0" />
 
             <div className="flex-1 bg-teal-50 rounded-lg p-3 border border-teal-200">
-              <p className="text-xs font-medium text-teal-700 uppercase mb-1">To</p>
+              <p className="text-xs font-medium text-teal-700 uppercase mb-1">Requested</p>
               <div className="flex items-center gap-1.5 text-gray-700 font-medium">
                 <Calendar className="w-3.5 h-3.5 text-teal-500" />
-                {format(parseISO(group.newDate), 'MMM d, yyyy')}
+                {format(parseISO(request.new_date), 'MMM d, yyyy')}
               </div>
               <div className="flex items-center gap-1.5 text-gray-600 mt-0.5">
                 <Clock className="w-3.5 h-3.5 text-teal-500" />
-                {group.newTimeSlots.join(', ')}
+                {(request.new_time_slots as string[]).join(', ')}
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col gap-2">
+          <Button
+            size="sm"
+            onClick={() => onApprove(request.id)}
+            disabled={isProcessing}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            <CheckCircle className="w-4 h-4 mr-1" />
+            Approve
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onReject(request.id)}
+            disabled={isProcessing}
+            className="text-red-600 border-red-200 hover:bg-red-50"
+          >
+            <XCircle className="w-4 h-4 mr-1" />
+            Reject
+          </Button>
         </div>
       </div>
     </div>
@@ -377,13 +367,16 @@ function RescheduledBookingCard({ group }: { group: RescheduledGroup }) {
 
 export function PendingPayments() {
   const { data: pendingBookings = [], isLoading } = usePendingPayments()
-  const { data: rescheduledBookings = [], isLoading: rescheduledLoading } = useRescheduledBookings()
+  const { data: rescheduleRequests = [], isLoading: rescheduleLoading } = usePendingRescheduleRequests()
   const confirmPayment = useConfirmPayment()
   const rejectPayment = useRejectPayment()
+  const approveReschedule = useApproveRescheduleRequest()
+  const rejectReschedule = useRejectRescheduleRequest()
   
   // Dialog state
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isRescheduleProcessing, setIsRescheduleProcessing] = useState(false)
 
   // Open confirmation dialog
   const handleConfirmClick = (action: PendingAction) => {
@@ -432,14 +425,41 @@ export function PendingPayments() {
     }
   }
 
-  // Group rescheduled bookings
-  const rescheduledGroups = useMemo(
-    () => groupRescheduledBookings(rescheduledBookings),
-    [rescheduledBookings]
-  )
+  // Reschedule approve/reject handlers
+  const handleApproveReschedule = async (requestId: string) => {
+    setIsRescheduleProcessing(true)
+    try {
+      const result = await approveReschedule.mutateAsync(requestId)
+      if (result.success) {
+        toast.success('Reschedule approved! Customer has been notified.')
+      } else {
+        toast.error(result.error || 'Failed to approve reschedule')
+      }
+    } catch {
+      toast.error('Failed to approve reschedule')
+    } finally {
+      setIsRescheduleProcessing(false)
+    }
+  }
+
+  const handleRejectReschedule = async (requestId: string) => {
+    setIsRescheduleProcessing(true)
+    try {
+      const result = await rejectReschedule.mutateAsync(requestId)
+      if (result.success) {
+        toast.success('Reschedule rejected. Customer has been notified.')
+      } else {
+        toast.error(result.error || 'Failed to reject reschedule')
+      }
+    } catch {
+      toast.error('Failed to reject reschedule')
+    } finally {
+      setIsRescheduleProcessing(false)
+    }
+  }
 
   // Loading state
-  if (isLoading && rescheduledLoading) {
+  if (isLoading && rescheduleLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
@@ -450,7 +470,7 @@ export function PendingPayments() {
   // Group bookings by booking_group_id
   const groupedBookings = Array.from(groupBookings(pendingBookings).values())
 
-  const hasNothing = pendingBookings.length === 0 && rescheduledGroups.length === 0
+  const hasNothing = pendingBookings.length === 0 && rescheduleRequests.length === 0
 
   // Dialog content based on action type
   const dialogConfig = pendingAction?.type === 'confirm' 
@@ -511,20 +531,26 @@ export function PendingPayments() {
         </div>
       )}
 
-      {/* Rescheduled Bookings */}
-      {rescheduledGroups.length > 0 && (
+      {/* Reschedule Requests */}
+      {rescheduleRequests.length > 0 && (
         <div>
           <div className="flex flex-row gap-2 mb-3">
             <p className="text-md font-semibold text-teal-700 uppercase">
-              Rescheduled ({rescheduledGroups.length})
+              Reschedule Requests ({rescheduleRequests.length})
             </p>
             <p className="text-sm text-teal-600 align-self-center">
-              Bookings that have been moved by customers
+              Customers requesting to move their bookings
             </p>
           </div>
           <div className="space-y-3">
-            {rescheduledGroups.map((group) => (
-              <RescheduledBookingCard key={group.groupKey} group={group} />
+            {rescheduleRequests.map((request) => (
+              <RescheduleRequestCard
+                key={request.id}
+                request={request}
+                onApprove={handleApproveReschedule}
+                onReject={handleRejectReschedule}
+                isProcessing={isRescheduleProcessing}
+              />
             ))}
           </div>
         </div>

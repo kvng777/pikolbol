@@ -15,15 +15,38 @@ export function generateTimeSlots(): string[] {
   return slots
 }
 
+export interface SlotAvailabilityOptions {
+  /** Skip ALL time checks — past slots + buffer (admin manual bookings). */
+  ignorePast?: boolean
+  /** Override the 30-min booking buffer. 0 = no buffer. Default: 30. */
+  bufferMinutes?: number
+  /** Additional slots held by pending reschedule requests (shown as "booked"). */
+  heldSlots?: string[]
+}
+
 export function getAvailableSlotsForCourt(
   bookings: Booking[],
   date: string,
   courtNumber: number,
   disabledSlots: DisabledSlot[] = [],
-  // Admin manual bookings bypass the "too soon" buffer (they may log imminent/past slots).
-  // Data integrity is still protected by the DB unique index and booked/disabled checks.
-  ignoreTimeBuffer = false
+  /**
+   * Accepts a boolean (legacy) or an options object (new).
+   * - `true`  → { ignorePast: true, bufferMinutes: 0 }   (admin manual bookings)
+   * - `false` → default behavior                          (normal bookings)
+   * - object  → fine-grained control                      (reschedule, etc.)
+   */
+  optionsOrIgnoreTimeBuffer: boolean | SlotAvailabilityOptions = false
 ): TimeSlot[] {
+  // Normalise legacy boolean into options object
+  const opts: SlotAvailabilityOptions =
+    typeof optionsOrIgnoreTimeBuffer === 'boolean'
+      ? { ignorePast: optionsOrIgnoreTimeBuffer, bufferMinutes: optionsOrIgnoreTimeBuffer ? 0 : BOOKING_BUFFER_MINUTES }
+      : optionsOrIgnoreTimeBuffer
+
+  const ignorePast = opts.ignorePast ?? false
+  const bufferMinutes = opts.bufferMinutes ?? BOOKING_BUFFER_MINUTES
+  const heldSlots = opts.heldSlots ?? []
+
   const allSlots = generateTimeSlots()
   const bookedSlots = bookings
     .filter(b => b.date === date && b.court_number === courtNumber)
@@ -38,20 +61,18 @@ export function getAvailableSlotsForCourt(
   const isToday = date === format(now, 'yyyy-MM-dd')
   
   // Calculate cutoff time (current time + buffer)
-  // Slots starting before this cutoff should be disabled
-  const cutoffMinutes = now.getHours() * 60 + now.getMinutes() + BOOKING_BUFFER_MINUTES
+  const cutoffMinutes = now.getHours() * 60 + now.getMinutes() + bufferMinutes
 
   return allSlots.map(slot => {
-    // Parse the slot start hour (e.g., "06:00-07:00" -> 6 * 60 = 360 minutes)
     const slotStartHour = parseInt(slot.split(':')[0], 10)
     const slotStartMinutes = slotStartHour * 60
 
     // Slot is past/too soon if it's today and starts before the cutoff
-    const isPastOrTooSoon = !ignoreTimeBuffer && isToday && slotStartMinutes < cutoffMinutes
+    const isPastOrTooSoon = !ignorePast && isToday && slotStartMinutes < cutoffMinutes
 
     let reason: TimeSlot['reason']
     if (isPastOrTooSoon) reason = 'past'
-    else if (bookedSlots.includes(slot)) reason = 'booked'
+    else if (bookedSlots.includes(slot) || heldSlots.includes(slot)) reason = 'booked'
     else if (disabledTimeSlots.includes(slot)) reason = 'disabled'
 
     return {

@@ -618,10 +618,11 @@ export async function sendUserRefundCompletedEmail(data: {
 }
 
 /**
- * Send admin notification when a user reschedules their booking
- * Uses teal/cyan styling for reschedule alerts
+ * Send admin notification when a user requests a reschedule.
+ * Includes Approve / Reject buttons linked to the API route.
  */
 export async function sendRescheduleNotificationEmail(data: {
+  requestId: string
   userName: string
   userEmail: string
   userPhone: string
@@ -631,6 +632,15 @@ export async function sendRescheduleNotificationEmail(data: {
   newDate: string
   newTimeSlots: string
 }): Promise<{ success: boolean; error?: string }> {
+  // Lazy-import token generator to avoid circular deps
+  const { generateConfirmToken } = await import('./adminTokens')
+  const token = generateConfirmToken(data.requestId)
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000'
+  const approveUrl = `${baseUrl}/api/admin/reschedule?requestId=${data.requestId}&action=approve&token=${token}`
+  const rejectUrl = `${baseUrl}/api/admin/reschedule?requestId=${data.requestId}&action=reject&token=${token}`
+
   const formattedOldDate = formatBookingDate(data.oldDate)
   const formattedNewDate = formatBookingDate(data.newDate)
   const displayShortId = data.shortId || 'N/A'
@@ -644,15 +654,18 @@ export async function sendRescheduleNotificationEmail(data: {
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px;">
       <div style="max-width: 500px; margin: 0 auto; background-color: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-        <!-- Header - Teal for Reschedule -->
         <div style="background-color: #0d9488; padding: 24px; text-align: center;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Booking Rescheduled</h1>
-          <p style="color: #ccfbf1; margin: 8px 0 0 0; font-size: 14px; font-weight: 500;">A customer has moved their booking</p>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">ACTION REQUIRED</h1>
+          <p style="color: #ccfbf1; margin: 8px 0 0 0; font-size: 14px; font-weight: 500;">Reschedule request awaiting your approval</p>
         </div>
         
-        <!-- Content -->
         <div style="padding: 24px;">
-          <!-- Customer Info -->
+          <div style="background-color: #f0fdfa; border: 2px solid #99f6e4; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; text-align: center;">
+            <p style="color: #115e59; font-size: 14px; font-weight: 600; margin: 0;">
+              A customer wants to reschedule their booking. Please approve or reject.
+            </p>
+          </div>
+
           <div style="margin-bottom: 20px;">
             <h3 style="color: #115e59; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Customer</h3>
             <p style="color: #111827; font-size: 16px; margin: 0; font-weight: 600;">${data.userName}</p>
@@ -660,35 +673,39 @@ export async function sendRescheduleNotificationEmail(data: {
             <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">${data.userPhone}</p>
           </div>
 
-          <!-- Booking ID -->
           <div style="margin-bottom: 20px;">
             <span style="color: #6b7280; font-size: 14px;">Booking ID:</span>
             <span style="color: #111827; font-size: 18px; margin-left: 8px; font-weight: 600; font-family: monospace;">${displayShortId}</span>
           </div>
           
-          <!-- Old Booking -->
           <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
-            <h4 style="color: #991b1b; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Previous Schedule</h4>
+            <h4 style="color: #991b1b; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Current Schedule</h4>
             <p style="color: #111827; font-size: 15px; margin: 0; font-weight: 500;">${formattedOldDate}</p>
             <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">${data.oldTimeSlots}</p>
           </div>
 
-          <!-- Arrow -->
           <div style="text-align: center; margin: 8px 0; font-size: 20px; color: #9ca3af;">&#8595;</div>
 
-          <!-- New Booking -->
-          <div style="background-color: #f0fdfa; border: 1px solid #99f6e4; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-            <h4 style="color: #115e59; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">New Schedule</h4>
+          <div style="background-color: #f0fdfa; border: 1px solid #99f6e4; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+            <h4 style="color: #115e59; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Requested Schedule</h4>
             <p style="color: #111827; font-size: 15px; margin: 0; font-weight: 500;">${formattedNewDate}</p>
             <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0 0;">${data.newTimeSlots}</p>
           </div>
 
-          <p style="color: #6b7280; font-size: 13px; text-align: center; margin: 0;">
-            No action required. Payment amount remains unchanged.
+          <div style="text-align: center; margin-bottom: 16px;">
+            <a href="${approveUrl}" style="display: inline-block; background-color: #10b981; color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 10px; margin-right: 12px;">
+              Approve
+            </a>
+            <a href="${rejectUrl}" style="display: inline-block; background-color: #ef4444; color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 10px;">
+              Reject
+            </a>
+          </div>
+
+          <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+            Payment amount remains unchanged. The new time slots are held until you decide.
           </p>
         </div>
         
-        <!-- Footer -->
         <div style="background-color: #f9fafb; padding: 16px 24px; text-align: center; border-top: 1px solid #e5e7eb;">
           <p style="color: #9ca3af; font-size: 12px; margin: 0;">
             ${APP_NAME} - Admin Alert
@@ -702,7 +719,169 @@ export async function sendRescheduleNotificationEmail(data: {
   return sendEmail({
     to: ADMIN_EMAIL,
     cc: ADMIN_CC,
-    subject: `[RESCHEDULED] Booking ${displayShortId} - ${data.userName} - ${formattedNewDate}`,
+    subject: `[ACTION REQUIRED] Reschedule Request - ${displayShortId} - ${data.userName}`,
+    html,
+  })
+}
+
+/**
+ * Send user notification when their reschedule request is approved
+ */
+export async function sendRescheduleApprovedEmail(data: {
+  recipientEmail: string
+  recipientName: string
+  shortId?: string
+  oldDate: string
+  oldTimeSlots: string
+  newDate: string
+  newTimeSlots: string
+}): Promise<{ success: boolean; error?: string }> {
+  const formattedNewDate = formatBookingDate(data.newDate)
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px;">
+      <div style="max-width: 500px; margin: 0 auto; background-color: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+        <div style="background-color: #10b981; padding: 24px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Reschedule Approved!</h1>
+        </div>
+        
+        <div style="padding: 24px;">
+          <p style="color: #374151; font-size: 16px; margin-bottom: 20px;">
+            Hi ${data.recipientName},
+          </p>
+          
+          <p style="color: #374151; font-size: 16px; margin-bottom: 20px;">
+            Great news! Your reschedule request has been approved. Your booking has been moved to the new schedule.
+          </p>
+          
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #166534; margin: 0 0 16px 0; font-size: 16px;">New Booking Details</h3>
+            
+            ${data.shortId ? `
+            <div style="margin-bottom: 12px;">
+              <span style="color: #6b7280; font-size: 14px;">Booking ID:</span>
+              <p style="color: #166534; font-size: 18px; margin: 4px 0 0 0; font-weight: 600; font-family: monospace;">${data.shortId}</p>
+            </div>
+            ` : ''}
+            
+            <div style="margin-bottom: 12px;">
+              <span style="color: #6b7280; font-size: 14px;">Date:</span>
+              <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${formattedNewDate}</p>
+            </div>
+            
+            <div>
+              <span style="color: #6b7280; font-size: 14px;">Time:</span>
+              <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${data.newTimeSlots}</p>
+            </div>
+          </div>
+          
+          <p style="color: #6b7280; font-size: 14px; margin-bottom: 0;">
+            See you at the court! If you have any questions, feel free to contact us.
+          </p>
+        </div>
+        
+        <div style="background-color: #f9fafb; padding: 16px 24px; text-align: center; border-top: 1px solid #e5e7eb;">
+          <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+            ${APP_NAME} - Your Pickleball Booking Platform
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  return sendEmail({
+    to: data.recipientEmail,
+    subject: `Reschedule Approved${data.shortId ? ` - ${data.shortId}` : ''} - ${formattedNewDate}`,
+    html,
+  })
+}
+
+/**
+ * Send user notification when their reschedule request is rejected
+ */
+export async function sendRescheduleRejectedEmail(data: {
+  recipientEmail: string
+  recipientName: string
+  shortId?: string
+  oldDate: string
+  oldTimeSlots: string
+  newDate: string
+  newTimeSlots: string
+  adminPhone: string
+}): Promise<{ success: boolean; error?: string }> {
+  const formattedOldDate = formatBookingDate(data.oldDate)
+  const contactLine = data.adminPhone
+    ? `For clarification, please contact us at <strong>${data.adminPhone}</strong>.`
+    : 'For clarification, please contact us through the admin.'
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px;">
+      <div style="max-width: 500px; margin: 0 auto; background-color: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+        <div style="background-color: #dc2626; padding: 24px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Reschedule Not Approved</h1>
+        </div>
+        
+        <div style="padding: 24px;">
+          <p style="color: #374151; font-size: 16px; margin-bottom: 20px;">
+            Hi ${data.recipientName},
+          </p>
+          
+          <p style="color: #374151; font-size: 16px; margin-bottom: 20px;">
+            Unfortunately, your reschedule request was not approved. Your original booking remains unchanged.
+          </p>
+          
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #166534; margin: 0 0 16px 0; font-size: 16px;">Your Booking (Unchanged)</h3>
+            
+            ${data.shortId ? `
+            <div style="margin-bottom: 12px;">
+              <span style="color: #6b7280; font-size: 14px;">Booking ID:</span>
+              <p style="color: #166534; font-size: 18px; margin: 4px 0 0 0; font-weight: 600; font-family: monospace;">${data.shortId}</p>
+            </div>
+            ` : ''}
+            
+            <div style="margin-bottom: 12px;">
+              <span style="color: #6b7280; font-size: 14px;">Date:</span>
+              <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${formattedOldDate}</p>
+            </div>
+            
+            <div>
+              <span style="color: #6b7280; font-size: 14px;">Time:</span>
+              <p style="color: #111827; font-size: 16px; margin: 4px 0 0 0; font-weight: 500;">${data.oldTimeSlots}</p>
+            </div>
+          </div>
+          
+          <p style="color: #374151; font-size: 14px; margin-bottom: 0;">
+            ${contactLine}
+          </p>
+        </div>
+        
+        <div style="background-color: #f9fafb; padding: 16px 24px; text-align: center; border-top: 1px solid #e5e7eb;">
+          <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+            ${APP_NAME} - Your Pickleball Booking Platform
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  return sendEmail({
+    to: data.recipientEmail,
+    subject: `Reschedule Not Approved${data.shortId ? ` - ${data.shortId}` : ''}`,
     html,
   })
 }

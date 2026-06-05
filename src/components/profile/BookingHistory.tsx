@@ -310,11 +310,12 @@ interface BookingGroupCardProps {
   group: BookingGroup
   onCancelClick: (group: BookingGroup) => void
   onRescheduleClick: (group: BookingGroup) => void
+  hasPendingReschedule: boolean
 }
 
-function BookingGroupCard({ group, onCancelClick, onRescheduleClick }: BookingGroupCardProps) {
+function BookingGroupCard({ group, onCancelClick, onRescheduleClick, hasPendingReschedule }: BookingGroupCardProps) {
   const cancelCheck = canCancelBookingGroup(group)
-  const canReschedule = canRescheduleBookingGroup(group)
+  const canReschedule = canRescheduleBookingGroup(group) && !hasPendingReschedule
   const wasRescheduled = !!group.bookings[0]?.rescheduled_at
   const equipmentSummary = formatEquipmentSummary(
     group.bookings[0]?.paddles_count,
@@ -359,8 +360,16 @@ function BookingGroupCard({ group, onCancelClick, onRescheduleClick }: BookingGr
               </span>
             )}
 
-            {/* Rescheduled badge */}
-            {wasRescheduled && (
+            {/* Reschedule pending badge */}
+            {hasPendingReschedule && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                <RefreshCw className="w-3 h-3" />
+                Reschedule Pending
+              </span>
+            )}
+
+            {/* Rescheduled badge (completed) */}
+            {!hasPendingReschedule && wasRescheduled && (
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
                 <RefreshCw className="w-3 h-3" />
                 Rescheduled
@@ -461,11 +470,13 @@ interface BookingHistoryProps {
   isLoading: boolean
   onCancelBooking: (bookingGroupId: string | null, legacyBookingId: string) => Promise<void>
   isCancelling: boolean
-  onRescheduleBooking: (bookingGroupId: string | null, legacyBookingId: string, newDate: string, newTimeSlots: string[]) => Promise<void>
+  onRescheduleBooking: (bookingGroupId: string | null, legacyBookingId: string, newDate: string, newTimeSlots: string[]) => Promise<boolean>
   isRescheduling: boolean
+  /** Set of booking_group_ids (or legacy keys) with a pending reschedule request */
+  pendingRescheduleGroupIds: Set<string>
 }
 
-export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancelling, onRescheduleBooking, isRescheduling }: BookingHistoryProps) {
+export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancelling, onRescheduleBooking, isRescheduling, pendingRescheduleGroupIds }: BookingHistoryProps) {
   const [cancellingGroup, setCancellingGroup] = useState<BookingGroup | null>(null)
   const [reschedulingGroup, setReschedulingGroup] = useState<BookingGroup | null>(null)
 
@@ -503,15 +514,16 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
     setReschedulingGroup(group)
   }
 
-  const handleConfirmReschedule = async (newDate: string, newTimeSlots: string[]) => {
-    if (!reschedulingGroup) return
-    await onRescheduleBooking(
+  const handleConfirmReschedule = async (newDate: string, newTimeSlots: string[]): Promise<boolean> => {
+    if (!reschedulingGroup) return false
+    const success = await onRescheduleBooking(
       reschedulingGroup.bookingGroupId,
       reschedulingGroup.bookings[0].id,
       newDate,
       newTimeSlots
     )
-    setReschedulingGroup(null)
+    // Don't close modal here — the modal shows its own success state
+    return success
   }
 
   if (isLoading) {
@@ -564,6 +576,7 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
           group={group}
           onCancelClick={handleCancelClick}
           onRescheduleClick={handleRescheduleClick}
+          hasPendingReschedule={pendingRescheduleGroupIds.has(group.groupKey)}
         />
       ))}
     </div>

@@ -101,6 +101,27 @@ export interface CancelBookingResult {
 export interface RescheduleBookingResult {
   success: boolean
   error?: string
+  requestId?: string
+}
+
+export type RescheduleRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+
+export interface RescheduleRequest {
+  id: string
+  booking_group_id: string | null
+  legacy_booking_id: string | null
+  user_id: string
+  short_id: string | null
+  customer_name: string
+  customer_email: string
+  customer_phone: string
+  original_date: string
+  original_time_slots: string[]
+  new_date: string
+  new_time_slots: string[]
+  status: RescheduleRequestStatus
+  created_at: string
+  resolved_at: string | null
 }
 
 // Payload for an admin-created (manual) booking

@@ -18,7 +18,7 @@ import { FinanceTab } from '@/components/admin/FinanceTab'
 import { NoticeSettings } from '@/components/admin/NoticeSettings'
 import { usePendingPayments } from '@/hooks/usePayment'
 import { usePendingRefunds } from '@/hooks/useRefunds'
-import { useRescheduledBookings } from '@/hooks/useBookings'
+import { usePendingRescheduleRequests } from '@/hooks/useBookings'
 import { useProfile } from '@/hooks/useProfile'
 
 export default function AdminPage() {
@@ -38,19 +38,10 @@ export default function AdminPage() {
     return keys.size
   }, [pendingQuery.data])
 
-  const rescheduledQuery = useRescheduledBookings()
-  const rescheduledCount = useMemo(() => {
-    const bookings = rescheduledQuery.data
-    if (!bookings || bookings.length === 0) return 0
-    const keys = new Set<string>()
-    bookings.forEach((b) => {
-      const key = b.booking_group_id || `legacy-${b.id}`
-      keys.add(key)
-    })
-    return keys.size
-  }, [rescheduledQuery.data])
+  const { data: pendingRescheduleRequests = [] } = usePendingRescheduleRequests()
+  const rescheduleRequestCount = pendingRescheduleRequests.length
 
-  const pendingTabCount = pendingCount + rescheduledCount
+  const pendingTabCount = pendingCount + rescheduleRequestCount
 
   const refundsQuery = usePendingRefunds()
   const refundsCount = useMemo(() => {
