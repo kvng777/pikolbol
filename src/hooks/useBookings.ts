@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Booking, DisabledSlot, ClosedDate, AdminBookingPayload } from '@/types/booking'
+import { Booking, DisabledSlot, ClosedDate, AdminBookingPayload, RescheduleRequest } from '@/types/booking'
 import { 
   getBookingsByDateAction,
   getActiveBookingsByDateAction,
@@ -18,8 +18,11 @@ import {
   cancelBookingGroupAction,
   createAdminBookingAction,
   updateAdminBookingAction,
-  rescheduleBookingGroupAction,
-  getRescheduledBookingsAction,
+  createRescheduleRequestAction,
+  approveRescheduleRequestAction,
+  rejectRescheduleRequestAction,
+  getPendingRescheduleRequestsAction,
+  getHeldRescheduleSlotsByDateAction,
 } from '@/actions/bookings'
 
 const CACHE_TIME = 5 * 60 * 1000 // 5 minutes
@@ -261,10 +264,10 @@ export function useCancelBookingGroup() {
 }
 
 /**
- * Hook to reschedule a booking group (user action).
- * Free, no price adjustment, same slot count, unlimited reschedules.
+ * Hook to create a reschedule request (user action).
+ * Does NOT move the booking — admin must approve or reject.
  */
-export function useRescheduleBookingGroup() {
+export function useCreateRescheduleRequest() {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -280,25 +283,71 @@ export function useRescheduleBookingGroup() {
       userId: string
       newDate: string
       newTimeSlots: string[]
-    }) => rescheduleBookingGroupAction(bookingGroupId, legacyBookingId, userId, newDate, newTimeSlots),
+    }) => createRescheduleRequestAction(bookingGroupId, legacyBookingId, userId, newDate, newTimeSlots),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userBookings'] })
-      queryClient.invalidateQueries({ queryKey: ['allBookings'] })
-      queryClient.invalidateQueries({ queryKey: ['bookings'] })
-      queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
-      queryClient.invalidateQueries({ queryKey: ['rescheduledBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['pendingRescheduleRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['heldRescheduleSlots'] })
     },
   })
 }
 
 /**
- * Hook to fetch all rescheduled bookings (for admin view)
+ * Hook to approve a pending reschedule request (admin action).
  */
-export function useRescheduledBookings() {
-  return useQuery<Booking[]>({
-    queryKey: ['rescheduledBookings'],
-    queryFn: getRescheduledBookingsAction,
-    staleTime: CACHE_TIME,
-    gcTime: CACHE_TIME,
+export function useApproveRescheduleRequest() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (requestId: string) => approveRescheduleRequestAction(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pendingRescheduleRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['allBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
+      queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['userBookings'] })
+      queryClient.invalidateQueries({ queryKey: ['heldRescheduleSlots'] })
+    },
+  })
+}
+
+/**
+ * Hook to reject a pending reschedule request (admin action).
+ */
+export function useRejectRescheduleRequest() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (requestId: string) => rejectRescheduleRequestAction(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pendingRescheduleRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['heldRescheduleSlots'] })
+    },
+  })
+}
+
+/**
+ * Hook to fetch pending reschedule requests (for admin view).
+ */
+export function usePendingRescheduleRequests() {
+  return useQuery<RescheduleRequest[]>({
+    queryKey: ['pendingRescheduleRequests'],
+    queryFn: getPendingRescheduleRequestsAction,
+    staleTime: 30 * 1000,
+    gcTime: 30 * 1000,
+    refetchInterval: 10000,
+  })
+}
+
+/**
+ * Hook to fetch time slots held by pending reschedule requests for a given date.
+ */
+export function useHeldRescheduleSlotsByDate(date: string) {
+  return useQuery<string[]>({
+    queryKey: ['heldRescheduleSlots', date],
+    queryFn: () => getHeldRescheduleSlotsByDateAction(date),
+    enabled: !!date,
+    staleTime: 30 * 1000,
+    gcTime: 30 * 1000,
   })
 }

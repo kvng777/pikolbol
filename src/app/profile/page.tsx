@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { User, CalendarDays, Loader2, ArrowLeft } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useProfile, useUpsertProfile } from '@/hooks/useProfile'
-import { useUserBookings, useCancelBookingGroup, useRescheduleBookingGroup } from '@/hooks/useBookings'
+import { useUserBookings, useCancelBookingGroup, useCreateRescheduleRequest, usePendingRescheduleRequests } from '@/hooks/useBookings'
 import { ProfileForm } from '@/components/profile/ProfileForm'
 import { BookingHistory } from '@/components/profile/BookingHistory'
 import NavBar from '@/components/NavBar'
@@ -19,7 +19,20 @@ export default function ProfilePage() {
   const { data: bookings = [], isLoading: bookingsLoading } = useUserBookings(user?.id)
   const upsertProfile = useUpsertProfile()
   const cancelBookingGroup = useCancelBookingGroup()
-  const rescheduleBookingGroup = useRescheduleBookingGroup()
+  const createRescheduleRequest = useCreateRescheduleRequest()
+  const { data: pendingRescheduleRequests = [] } = usePendingRescheduleRequests()
+
+  // Build set of group IDs with pending reschedule requests (for the current user)
+  const pendingRescheduleGroupIds = useMemo(() => {
+    const ids = new Set<string>()
+    pendingRescheduleRequests
+      .filter((r) => r.user_id === user?.id)
+      .forEach((r) => {
+        const key = r.booking_group_id || (r.legacy_booking_id ? `legacy-${r.legacy_booking_id}` : '')
+        if (key) ids.add(key)
+      })
+    return ids
+  }, [pendingRescheduleRequests, user?.id])
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -67,11 +80,11 @@ export default function ProfilePage() {
     legacyBookingId: string,
     newDate: string,
     newTimeSlots: string[]
-  ) => {
-    if (!user?.id) return
+  ): Promise<boolean> => {
+    if (!user?.id) return false
 
     try {
-      const result = await rescheduleBookingGroup.mutateAsync({
+      const result = await createRescheduleRequest.mutateAsync({
         bookingGroupId,
         legacyBookingId,
         userId: user.id,
@@ -79,13 +92,15 @@ export default function ProfilePage() {
         newTimeSlots,
       })
       if (result.success) {
-        toast.success('Booking rescheduled successfully')
+        return true
       } else {
-        toast.error(result.error || 'Failed to reschedule booking')
+        toast.error(result.error || 'Failed to submit reschedule request')
+        return false
       }
     } catch (error) {
-      toast.error('Failed to reschedule booking')
-      console.error('Reschedule booking error:', error)
+      toast.error('Failed to submit reschedule request')
+      console.error('Reschedule request error:', error)
+      return false
     }
   }
 
@@ -158,7 +173,8 @@ export default function ProfilePage() {
               onCancelBooking={handleCancelBooking}
               isCancelling={cancelBookingGroup.isPending}
               onRescheduleBooking={handleRescheduleBooking}
-              isRescheduling={rescheduleBookingGroup.isPending}
+              isRescheduling={createRescheduleRequest.isPending}
+              pendingRescheduleGroupIds={pendingRescheduleGroupIds}
             />
           </div>
         </div>

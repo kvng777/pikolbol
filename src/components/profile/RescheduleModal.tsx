@@ -4,10 +4,10 @@ import { useState, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { CalendarPicker } from '@/components/booking/CalendarPicker'
 import { TimeSlotPicker } from '@/components/booking/TimeSlotPicker'
-import { useActiveBookingsByDate, useDisabledSlotsByDate, useClosedDates } from '@/hooks/useBookings'
+import { useActiveBookingsByDate, useDisabledSlotsByDate, useClosedDates, useHeldRescheduleSlotsByDate } from '@/hooks/useBookings'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { Booking } from '@/types/booking'
-import { X, Loader2, ArrowRight, Calendar, Clock } from 'lucide-react'
+import { X, Loader2, ArrowRight, Calendar, Clock, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 // ============================================================================
@@ -24,7 +24,7 @@ interface RescheduleGroup {
 
 interface RescheduleModalProps {
   group: RescheduleGroup
-  onConfirm: (newDate: string, newTimeSlots: string[]) => void
+  onConfirm: (newDate: string, newTimeSlots: string[]) => Promise<boolean>
   onClose: () => void
   isSubmitting: boolean
 }
@@ -40,36 +40,40 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
   const dateStr = format(selectedDate, 'yyyy-MM-dd')
 
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
+  const [submitted, setSubmitted] = useState(false)
 
   // Data for slot availability
   const { data: activeBookings = [], isLoading: bookingsLoading } = useActiveBookingsByDate(dateStr)
   const { data: disabledSlots = [], isLoading: slotsLoading } = useDisabledSlotsByDate(dateStr)
   const { data: closedDates = [] } = useClosedDates()
+  const { data: heldSlots = [], isLoading: heldLoading } = useHeldRescheduleSlotsByDate(dateStr)
 
-  // Generate available slots — ignoreTimeBuffer=true per user requirement
-  // If rescheduling to the same date, exclude own group's bookings so those slots appear available
+  // Exclude own group's bookings so those slots appear available on the same date
   const filteredBookings = useMemo(() => {
     const groupId = group.bookingGroupId
     if (!groupId) return activeBookings
     return activeBookings.filter((b) => b.booking_group_id !== groupId)
   }, [activeBookings, group.bookingGroupId])
 
+  // Past slots disabled, no 30-min buffer, held reschedule slots shown as booked
   const availableSlots = useMemo(
-    () => getAvailableSlotsForCourt(filteredBookings, dateStr, 1, disabledSlots, true),
-    [filteredBookings, dateStr, disabledSlots]
+    () => getAvailableSlotsForCourt(filteredBookings, dateStr, 1, disabledSlots, {
+      ignorePast: false,
+      bufferMinutes: 0,
+      heldSlots,
+    }),
+    [filteredBookings, dateStr, disabledSlots, heldSlots]
   )
 
-  const isLoadingSlots = bookingsLoading || slotsLoading
+  const isLoadingSlots = bookingsLoading || slotsLoading || heldLoading
 
-  // Enforce exact slot count: prevent selecting more than required
+  // Enforce exact slot count
   const handleSelectSlots = (slots: string[]) => {
     if (slots.length <= requiredSlotCount) {
       setSelectedSlots(slots)
     }
-    // If user tries to add one more when already at max, ignore
   }
 
-  // Reset slots when date changes
   const handleDateChange = (date: Date) => {
     setSelectedDate(date)
     setSelectedSlots([])
@@ -77,12 +81,40 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
 
   const canConfirm = selectedSlots.length === requiredSlotCount && !isSubmitting
 
-  // Check if the selection is the same as current booking
   const isSameAsOriginal =
     dateStr === group.date &&
     selectedSlots.length === group.timeSlots.length &&
     [...selectedSlots].sort().join(',') === [...group.timeSlots].sort().join(',')
 
+  const handleSubmit = async () => {
+    const success = await onConfirm(dateStr, [...selectedSlots].sort())
+    if (success) {
+      setSubmitted(true)
+    }
+  }
+
+  // ── Success state ──────────────────────────────────────────────────────
+  if (submitted) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative z-10 w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-teal-100 mb-4">
+            <CheckCircle className="w-8 h-8 text-teal-600" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">Request Submitted!</h3>
+          <p className="text-gray-600 mb-6">
+            Your reschedule request has been sent to the admin for review. You&apos;ll receive a confirmation email once it&apos;s approved.
+          </p>
+          <Button onClick={onClose} className="bg-teal-600 hover:bg-teal-700 text-white px-8">
+            Got It
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Main form ──────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -146,15 +178,13 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
           {/* Summary when ready */}
           {canConfirm && !isSameAsOriginal && (
             <div className="bg-teal-50 border border-teal-200 rounded-xl p-4">
-              <p className="text-xs font-medium text-teal-700 uppercase tracking-wide mb-3">New Schedule</p>
+              <p className="text-xs font-medium text-teal-700 uppercase tracking-wide mb-3">Requested Schedule</p>
               <div className="flex items-center gap-3 text-sm">
-                {/* Old */}
                 <div className="flex-1 text-gray-500">
                   <p className="font-medium">{format(parseISO(group.date), 'MMM d, yyyy')}</p>
                   <p>{group.timeSlots.join(', ')}</p>
                 </div>
                 <ArrowRight className="w-4 h-4 text-teal-500 shrink-0" />
-                {/* New */}
                 <div className="flex-1 text-teal-800 font-medium">
                   <p>{format(selectedDate, 'MMM d, yyyy')}</p>
                   <p>{[...selectedSlots].sort().join(', ')}</p>
@@ -181,17 +211,17 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
             Cancel
           </Button>
           <Button
-            onClick={() => onConfirm(dateStr, [...selectedSlots].sort())}
+            onClick={handleSubmit}
             disabled={!canConfirm || isSameAsOriginal || isSubmitting}
             className="flex-1 bg-teal-600 hover:bg-teal-700 text-white"
           >
             {isSubmitting ? (
               <span className="flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Rescheduling...
+                Submitting...
               </span>
             ) : (
-              'Confirm Reschedule'
+              'Submit Request'
             )}
           </Button>
         </div>

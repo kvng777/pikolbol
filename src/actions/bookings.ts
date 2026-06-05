@@ -23,8 +23,11 @@ import {
   markRefundCompleted,
   createAdminBooking,
   updateAdminBooking,
-  rescheduleBookingGroup,
-  getRescheduledBookings,
+  createRescheduleRequest,
+  approveRescheduleRequest,
+  rejectRescheduleRequest,
+  getPendingRescheduleRequests,
+  getHeldRescheduleSlotsByDate,
 } from '@/lib/bookingService'
 import {
   BookingFormData,
@@ -34,6 +37,7 @@ import {
   ClosedDate,
   CancelBookingResult,
   RescheduleBookingResult,
+  RescheduleRequest,
   AdminBookingPayload,
 } from '@/types/booking'
 import { revalidatePath } from 'next/cache'
@@ -285,10 +289,10 @@ export async function markRefundCompletedAction(
 }
 
 /**
- * Reschedule a booking group to a new date/time slots.
- * Free, no price adjustment, same slot count, unlimited reschedules.
+ * Create a reschedule request (user action).
+ * Does NOT move the booking — admin must approve or reject.
  */
-export async function rescheduleBookingGroupAction(
+export async function createRescheduleRequestAction(
   bookingGroupId: string | null,
   legacyBookingId: string | null,
   userId: string,
@@ -300,7 +304,7 @@ export async function rescheduleBookingGroupAction(
     return { success: false, error: 'The court is closed on that date. Please select another date.' }
   }
 
-  const result = await rescheduleBookingGroup(bookingGroupId, legacyBookingId, userId, newDate, newTimeSlots)
+  const result = await createRescheduleRequest(bookingGroupId, legacyBookingId, userId, newDate, newTimeSlots)
 
   if (result.success) {
     revalidatePath('/')
@@ -312,8 +316,49 @@ export async function rescheduleBookingGroupAction(
 }
 
 /**
- * Get all rescheduled bookings (for admin view)
+ * Approve a pending reschedule request (admin action).
  */
-export async function getRescheduledBookingsAction(): Promise<Booking[]> {
-  return getRescheduledBookings()
+export async function approveRescheduleRequestAction(
+  requestId: string
+): Promise<{ success: boolean; error?: string }> {
+  const result = await approveRescheduleRequest(requestId)
+
+  if (result.success) {
+    revalidatePath('/')
+    revalidatePath('/admin')
+    revalidatePath('/profile')
+  }
+
+  return result
+}
+
+/**
+ * Reject a pending reschedule request (admin action).
+ */
+export async function rejectRescheduleRequestAction(
+  requestId: string
+): Promise<{ success: boolean; error?: string }> {
+  const result = await rejectRescheduleRequest(requestId)
+
+  if (result.success) {
+    revalidatePath('/')
+    revalidatePath('/admin')
+    revalidatePath('/profile')
+  }
+
+  return result
+}
+
+/**
+ * Get pending reschedule requests (for admin view).
+ */
+export async function getPendingRescheduleRequestsAction(): Promise<RescheduleRequest[]> {
+  return getPendingRescheduleRequests()
+}
+
+/**
+ * Get time slots held by pending reschedule requests for a given date.
+ */
+export async function getHeldRescheduleSlotsByDateAction(date: string): Promise<string[]> {
+  return getHeldRescheduleSlotsByDate(date)
 }
