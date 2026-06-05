@@ -23,6 +23,8 @@ import {
   markRefundCompleted,
   createAdminBooking,
   updateAdminBooking,
+  rescheduleBookingGroup,
+  getRescheduledBookings,
 } from '@/lib/bookingService'
 import {
   BookingFormData,
@@ -31,6 +33,7 @@ import {
   DisabledSlot,
   ClosedDate,
   CancelBookingResult,
+  RescheduleBookingResult,
   AdminBookingPayload,
 } from '@/types/booking'
 import { revalidatePath } from 'next/cache'
@@ -279,4 +282,38 @@ export async function markRefundCompletedAction(
   }
 
   return result
+}
+
+/**
+ * Reschedule a booking group to a new date/time slots.
+ * Free, no price adjustment, same slot count, unlimited reschedules.
+ */
+export async function rescheduleBookingGroupAction(
+  bookingGroupId: string | null,
+  legacyBookingId: string | null,
+  userId: string,
+  newDate: string,
+  newTimeSlots: string[]
+): Promise<RescheduleBookingResult> {
+  const isClosed = await isDateClosed(newDate)
+  if (isClosed) {
+    return { success: false, error: 'The court is closed on that date. Please select another date.' }
+  }
+
+  const result = await rescheduleBookingGroup(bookingGroupId, legacyBookingId, userId, newDate, newTimeSlots)
+
+  if (result.success) {
+    revalidatePath('/')
+    revalidatePath('/admin')
+    revalidatePath('/profile')
+  }
+
+  return result
+}
+
+/**
+ * Get all rescheduled bookings (for admin view)
+ */
+export async function getRescheduledBookingsAction(): Promise<Booking[]> {
+  return getRescheduledBookings()
 }

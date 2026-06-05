@@ -6,6 +6,7 @@ import {
   DisabledSlot,
   ClosedDate,
   CancelBookingResult,
+  RescheduleBookingResult,
   AdminBookingPayload,
 } from '@/types/booking'
 import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from './constants'
@@ -15,7 +16,7 @@ import {
   calculatePaymentAmount,
 } from './paymentConfig'
 import { generateUniqueShortId, generateBookingGroupId } from './bookingIdGenerator'
-import { sendAdminRefundAlertEmail, sendUserRefundCompletedEmail } from './emailService'
+import { sendAdminRefundAlertEmail, sendUserRefundCompletedEmail, sendRescheduleNotificationEmail } from './emailService'
 
 // Re-export constants for backwards compatibility with server-side code
 export { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT }
@@ -348,6 +349,177 @@ export async function deleteBooking(id: string): Promise<{ success: boolean; err
   }
 
   return { success: true }
+}
+
+// ============================================================================
+// Reschedule
+// ============================================================================
+
+/**
+ * Reschedule a booking group to a new date and time slots.
+ * Rules:
+ *   - Free (no fee), no price adjustment (original payment stays).
+ *   - Same number of slots required.
+ *   - Unlimited reschedules (as long as confirmed + future).
+ *   - Uses replace-group strategy (delete old rows, insert new ones).
+ */
+export async function rescheduleBookingGroup(
+  bookingGroupId: string | null,
+  legacyBookingId: string | null,
+  userId: string,
+  newDate: string,
+  newTimeSlots: string[]
+): Promise<RescheduleBookingResult> {
+  // 1. Fetch existing bookings
+  let bookings: Booking[] = []
+  if (bookingGroupId) {
+    bookings = await getBookingsByGroupId(bookingGroupId)
+  } else if (legacyBookingId) {
+    const booking = await getBookingById(legacyBookingId)
+    if (booking) bookings = [booking]
+  }
+
+  if (bookings.length === 0) {
+    return { success: false, error: 'Booking not found' }
+  }
+
+  // 2. Verify ownership
+  if (!bookings.every((b) => b.user_id === userId)) {
+    return { success: false, error: 'You can only reschedule your own bookings' }
+  }
+
+  // 3. Must be confirmed
+  if (bookings[0].payment_status !== 'confirmed') {
+    return { success: false, error: 'Only confirmed bookings can be rescheduled' }
+  }
+
+  // 4. Must be in the future
+  const hoursUntil = calculateHoursUntilBooking(bookings)
+  if (hoursUntil < 0) {
+    return { success: false, error: 'Cannot reschedule past bookings' }
+  }
+
+  // 5. Same slot count
+  if (newTimeSlots.length !== bookings.length) {
+    return {
+      success: false,
+      error: `Please select exactly ${bookings.length} time slot${bookings.length > 1 ? 's' : ''}`,
+    }
+  }
+
+  // 6. Check new slots are available (exclude own group if rescheduling to same date)
+  const activeOnNewDate = await getActiveBookingsByDate(newDate)
+  const effectiveGroupId = bookingGroupId || bookings[0].booking_group_id
+  const conflict = activeOnNewDate.find(
+    (b) =>
+      b.court_number === 1 &&
+      b.booking_group_id !== effectiveGroupId &&
+      b.id !== (legacyBookingId ?? '') &&
+      newTimeSlots.includes(b.time_slot)
+  )
+  if (conflict) {
+    return { success: false, error: `Time slot ${conflict.time_slot} is already booked.` }
+  }
+
+  // Also check disabled slots on the new date
+  const disabledOnNewDate = await getDisabledSlotsByDate(newDate)
+  const disabledConflict = disabledOnNewDate.find((s) => newTimeSlots.includes(s.time_slot))
+  if (disabledConflict) {
+    return { success: false, error: `Time slot ${disabledConflict.time_slot} is disabled by admin.` }
+  }
+
+  // 7. Preserve original values
+  const first = bookings[0]
+  const shortId = first.short_id || null
+  const groupId = effectiveGroupId || generateBookingGroupId()
+  const oldDate = first.date
+  const oldTimeSlots = bookings.map((b) => b.time_slot).sort()
+
+  // 8. Delete old rows
+  const bookingIds = bookings.map((b) => b.id)
+  const { error: deleteError } = await supabase
+    .from('bookings')
+    .delete()
+    .in('id', bookingIds)
+
+  if (deleteError) {
+    return { success: false, error: deleteError.message || 'Failed to reschedule booking' }
+  }
+
+  // 9. Insert new rows (preserving all original fields + reschedule metadata)
+  const nowIso = new Date().toISOString()
+  const sortedNewSlots = [...newTimeSlots].sort()
+
+  const rows = sortedNewSlots.map((ts, i) => ({
+    name: first.name,
+    phone: first.phone,
+    email: first.email,
+    date: newDate,
+    time_slot: ts,
+    court_number: first.court_number,
+    players: first.players,
+    paddles_count: first.paddles_count ?? 0,
+    needs_balls: first.needs_balls ?? false,
+    user_id: first.user_id,
+    short_id: shortId,
+    booking_group_id: groupId,
+    payment_status: 'confirmed' as const,
+    payment_amount: first.payment_amount,
+    payment_confirmed_at: first.payment_confirmed_at,
+    gcash_reference: first.gcash_reference,
+    is_manual: first.is_manual ?? false,
+    // Reschedule metadata: store what each row was before
+    rescheduled_from_date: oldDate,
+    rescheduled_from_time_slot: oldTimeSlots[i] ?? oldTimeSlots[0],
+    rescheduled_at: nowIso,
+  }))
+
+  const { error: insertError } = await supabase.from('bookings').insert(rows).select()
+
+  if (insertError) {
+    if (insertError.code === '23505') {
+      return { success: false, error: 'One or more selected time slots are already booked.' }
+    }
+    return { success: false, error: insertError.message || 'Failed to reschedule booking' }
+  }
+
+  // 10. Send admin notification email
+  try {
+    await sendRescheduleNotificationEmail({
+      userName: first.name,
+      userEmail: first.email,
+      userPhone: first.phone,
+      shortId: shortId || undefined,
+      oldDate,
+      oldTimeSlots: oldTimeSlots.join(', '),
+      newDate,
+      newTimeSlots: sortedNewSlots.join(', '),
+    })
+  } catch (emailError) {
+    console.error('Failed to send reschedule notification email:', emailError)
+  }
+
+  return { success: true }
+}
+
+/**
+ * Get all bookings that have been rescheduled (rescheduled_at IS NOT NULL).
+ * Returns all-time, sorted by rescheduled_at DESC (newest first).
+ * Used for the admin "Pending" tab reschedule section.
+ */
+export async function getRescheduledBookings(): Promise<Booking[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .not('rescheduled_at', 'is', null)
+    .order('rescheduled_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching rescheduled bookings:', error)
+    return []
+  }
+
+  return data || []
 }
 
 export async function getDisabledSlotsByDate(date: string): Promise<DisabledSlot[]> {

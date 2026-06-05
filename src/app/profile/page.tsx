@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { User, CalendarDays, Loader2, ArrowLeft } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useProfile, useUpsertProfile } from '@/hooks/useProfile'
-import { useUserBookings, useCancelBookingGroup } from '@/hooks/useBookings'
+import { useUserBookings, useCancelBookingGroup, useRescheduleBookingGroup } from '@/hooks/useBookings'
 import { ProfileForm } from '@/components/profile/ProfileForm'
 import { BookingHistory } from '@/components/profile/BookingHistory'
 import NavBar from '@/components/NavBar'
@@ -19,6 +19,7 @@ export default function ProfilePage() {
   const { data: bookings = [], isLoading: bookingsLoading } = useUserBookings(user?.id)
   const upsertProfile = useUpsertProfile()
   const cancelBookingGroup = useCancelBookingGroup()
+  const rescheduleBookingGroup = useRescheduleBookingGroup()
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -58,6 +59,33 @@ export default function ProfilePage() {
     } catch (error) {
       toast.error('Failed to cancel booking')
       console.error('Cancel booking error:', error)
+    }
+  }
+
+  const handleRescheduleBooking = async (
+    bookingGroupId: string | null,
+    legacyBookingId: string,
+    newDate: string,
+    newTimeSlots: string[]
+  ) => {
+    if (!user?.id) return
+
+    try {
+      const result = await rescheduleBookingGroup.mutateAsync({
+        bookingGroupId,
+        legacyBookingId,
+        userId: user.id,
+        newDate,
+        newTimeSlots,
+      })
+      if (result.success) {
+        toast.success('Booking rescheduled successfully')
+      } else {
+        toast.error(result.error || 'Failed to reschedule booking')
+      }
+    } catch (error) {
+      toast.error('Failed to reschedule booking')
+      console.error('Reschedule booking error:', error)
     }
   }
 
@@ -129,6 +157,8 @@ export default function ProfilePage() {
               isLoading={bookingsLoading}
               onCancelBooking={handleCancelBooking}
               isCancelling={cancelBookingGroup.isPending}
+              onRescheduleBooking={handleRescheduleBooking}
+              isRescheduling={rescheduleBookingGroup.isPending}
             />
           </div>
         </div>

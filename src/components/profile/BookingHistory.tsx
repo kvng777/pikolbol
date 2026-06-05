@@ -4,10 +4,11 @@ import { useState, useMemo } from 'react'
 import { format, parseISO, isAfter, addHours } from 'date-fns'
 import { Booking } from '@/types/booking'
 import { PaymentStatus } from '@/types/payment'
-import { Calendar, Clock, AlertTriangle, Loader2, CreditCard, Package } from 'lucide-react'
+import { Calendar, Clock, AlertTriangle, Loader2, CreditCard, Package, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatEquipmentSummary } from '@/lib/paymentConfig'
 import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from '@/lib/constants'
+import { RescheduleModal } from './RescheduleModal'
 
 // ============================================================================
 // Types
@@ -196,6 +197,15 @@ function canCancelBookingGroup(group: BookingGroup): { canCancel: boolean; reaso
   return { canCancel: true }
 }
 
+function canRescheduleBookingGroup(group: BookingGroup): boolean {
+  const firstBooking = group.bookings[0]
+  // Only confirmed, future bookings can be rescheduled
+  if (firstBooking.payment_status !== 'confirmed') return false
+  if (group.status === 'past') return false
+  if (group.hoursUntilBooking < 0) return false
+  return true
+}
+
 // ============================================================================
 // CancelConfirmModal Component
 // ============================================================================
@@ -299,10 +309,13 @@ function CancelConfirmModal({ group, onConfirm, onCancel, isLoading }: CancelCon
 interface BookingGroupCardProps {
   group: BookingGroup
   onCancelClick: (group: BookingGroup) => void
+  onRescheduleClick: (group: BookingGroup) => void
 }
 
-function BookingGroupCard({ group, onCancelClick }: BookingGroupCardProps) {
+function BookingGroupCard({ group, onCancelClick, onRescheduleClick }: BookingGroupCardProps) {
   const cancelCheck = canCancelBookingGroup(group)
+  const canReschedule = canRescheduleBookingGroup(group)
+  const wasRescheduled = !!group.bookings[0]?.rescheduled_at
   const equipmentSummary = formatEquipmentSummary(
     group.bookings[0]?.paddles_count,
     group.bookings[0]?.needs_balls
@@ -343,6 +356,14 @@ function BookingGroupCard({ group, onCancelClick }: BookingGroupCardProps) {
             {group.status === 'past' && (
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
                 Completed
+              </span>
+            )}
+
+            {/* Rescheduled badge */}
+            {wasRescheduled && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                <RefreshCw className="w-3 h-3" />
+                Rescheduled
               </span>
             )}
 
@@ -398,9 +419,9 @@ function BookingGroupCard({ group, onCancelClick }: BookingGroupCardProps) {
           )}
         </div>
 
-        {/* Cancel button (only for non-past bookings that can be cancelled) */}
+        {/* Action buttons (only for non-past, non-cancelled bookings) */}
         {group.status !== 'past' && group.paymentStatus !== 'cancelled' && (
-          <div className="ml-4">
+          <div className="ml-4 flex flex-col gap-2">
             {cancelCheck.canCancel ? (
               <button
                 onClick={() => onCancelClick(group)}
@@ -413,6 +434,17 @@ function BookingGroupCard({ group, onCancelClick }: BookingGroupCardProps) {
                 {cancelCheck.reason}
               </div>
             ) : null}
+
+            {/* Reschedule button — below cancel, only for confirmed future bookings */}
+            {canReschedule && (
+              <button
+                onClick={() => onRescheduleClick(group)}
+                className="px-3 py-1.5 text-sm font-medium text-teal-600 hover:text-teal-700 hover:bg-teal-50 border border-teal-200 rounded-lg transition-colors flex items-center gap-1.5 justify-center"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Reschedule
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -429,10 +461,13 @@ interface BookingHistoryProps {
   isLoading: boolean
   onCancelBooking: (bookingGroupId: string | null, legacyBookingId: string) => Promise<void>
   isCancelling: boolean
+  onRescheduleBooking: (bookingGroupId: string | null, legacyBookingId: string, newDate: string, newTimeSlots: string[]) => Promise<void>
+  isRescheduling: boolean
 }
 
-export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancelling }: BookingHistoryProps) {
+export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancelling, onRescheduleBooking, isRescheduling }: BookingHistoryProps) {
   const [cancellingGroup, setCancellingGroup] = useState<BookingGroup | null>(null)
+  const [reschedulingGroup, setReschedulingGroup] = useState<BookingGroup | null>(null)
 
   // Group and sort bookings
   const groupedBookings = useMemo(() => {
@@ -464,6 +499,21 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
     setCancellingGroup(null)
   }
 
+  const handleRescheduleClick = (group: BookingGroup) => {
+    setReschedulingGroup(group)
+  }
+
+  const handleConfirmReschedule = async (newDate: string, newTimeSlots: string[]) => {
+    if (!reschedulingGroup) return
+    await onRescheduleBooking(
+      reschedulingGroup.bookingGroupId,
+      reschedulingGroup.bookings[0].id,
+      newDate,
+      newTimeSlots
+    )
+    setReschedulingGroup(null)
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -493,11 +543,27 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
         />
       )}
 
+      {reschedulingGroup && (
+        <RescheduleModal
+          group={{
+            bookingGroupId: reschedulingGroup.bookingGroupId,
+            bookings: reschedulingGroup.bookings,
+            date: reschedulingGroup.date,
+            timeSlots: reschedulingGroup.timeSlots,
+            shortId: reschedulingGroup.shortId,
+          }}
+          onConfirm={handleConfirmReschedule}
+          onClose={() => setReschedulingGroup(null)}
+          isSubmitting={isRescheduling}
+        />
+      )}
+
       {groupedBookings.map((group) => (
         <BookingGroupCard
           key={group.groupKey}
           group={group}
           onCancelClick={handleCancelClick}
+          onRescheduleClick={handleRescheduleClick}
         />
       ))}
     </div>
