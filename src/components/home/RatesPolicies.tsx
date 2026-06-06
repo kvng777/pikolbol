@@ -19,7 +19,7 @@ export default function RatesPolicies() {
                   <div className="flex flex-row justify-between w-full items-center">
                     <div>
                       <h3 className="text-lg font-semibold">Daytime Rate</h3>
-                      <p className="text-white/80 text-sm">(7:00 AM - 6:00 PM)</p>
+                      <p className="text-white/80 text-sm">(5:00 AM - 6:00 PM)</p>
                     </div>
                     <div className="mt-2">
                       <span className="text-sm">Php</span>

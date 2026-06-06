@@ -635,9 +635,8 @@ export async function sendRescheduleNotificationEmail(data: {
   // Lazy-import token generator to avoid circular deps
   const { generateConfirmToken } = await import('./adminTokens')
   const token = generateConfirmToken(data.requestId)
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000'
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
   const approveUrl = `${baseUrl}/api/admin/reschedule?requestId=${data.requestId}&action=approve&token=${token}`
   const rejectUrl = `${baseUrl}/api/admin/reschedule?requestId=${data.requestId}&action=reject&token=${token}`
 
