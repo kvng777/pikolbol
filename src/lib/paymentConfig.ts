@@ -6,6 +6,7 @@
 // Pricing
 export const DAYTIME_PRICE_PER_SLOT = 200  // PHP per 1-hour slot (7:00 AM - 5:59 PM)
 export const EVENING_PRICE_PER_SLOT = 250  // PHP per 1-hour slot (6:00 PM onwards)
+export const EARLY_MORNING_END_HOUR = 6    // Slots before 6:00 AM use evening/premium rate (P250)
 export const EVENING_START_HOUR = 18       // 6:00 PM (18:00) - slots starting at this hour or later are evening rate
 export const EXTRA_PLAYER_CHARGE = 50      // PHP per player beyond 4
 export const BASE_PLAYERS_INCLUDED = 4     // Players included in base price
@@ -77,18 +78,22 @@ export function getSlotStartHour(timeSlot: string): number {
 }
 
 /**
- * Check if a time slot is during evening hours (6:00 PM onwards)
+ * Check if a time slot uses the premium rate.
+ * Premium = early morning (before 6 AM) or evening (6 PM onwards).
  */
-export function isEveningSlot(timeSlot: string): boolean {
+export function isPremiumSlot(timeSlot: string): boolean {
   const hour = getSlotStartHour(timeSlot)
-  return hour >= EVENING_START_HOUR
+  return hour < EARLY_MORNING_END_HOUR || hour >= EVENING_START_HOUR
 }
+
+/** @deprecated Use isPremiumSlot instead */
+export const isEveningSlot = isPremiumSlot
 
 /**
  * Get the price for a single time slot
  */
 export function getPriceForSlot(timeSlot: string): number {
-  return isEveningSlot(timeSlot) ? EVENING_PRICE_PER_SLOT : DAYTIME_PRICE_PER_SLOT
+  return isPremiumSlot(timeSlot) ? EVENING_PRICE_PER_SLOT : DAYTIME_PRICE_PER_SLOT
 }
 
 /**
