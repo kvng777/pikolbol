@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { format, parseISO, isAfter, addHours } from 'date-fns'
 import { Booking } from '@/types/booking'
 import { PaymentStatus } from '@/types/payment'
-import { Calendar, Clock, AlertTriangle, Loader2, CreditCard, Package, RefreshCw } from 'lucide-react'
+import { Calendar, Clock, AlertTriangle, Loader2, CreditCard, Package, RefreshCw, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatEquipmentSummary } from '@/lib/paymentConfig'
 import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from '@/lib/constants'
@@ -303,6 +303,51 @@ function CancelConfirmModal({ group, onConfirm, onCancel, isLoading }: CancelCon
 }
 
 // ============================================================================
+// ReschedulePolicyModal Component
+// ============================================================================
+
+interface ReschedulePolicyModalProps {
+  onAcknowledge: () => void
+  onCancel: () => void
+}
+
+function ReschedulePolicyModal({ onAcknowledge, onCancel }: ReschedulePolicyModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative z-10 w-full max-w-md bg-white rounded-2xl shadow-2xl p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-full bg-teal-100">
+            <Info className="w-6 h-6 text-teal-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Rescheduling Policy</h3>
+        </div>
+
+        <p className="text-gray-600 mb-6 leading-relaxed">
+          Rescheduling of court bookings is only allowed in cases of rain, severe weather conditions, or force majeure events beyond the control of the player or the management. No rescheduling will be permitted for personal reasons or no-shows.
+        </p>
+
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            className="flex-1"
+          >
+            Go Back
+          </Button>
+          <Button
+            onClick={onAcknowledge}
+            className="flex-1 bg-teal-600 hover:bg-teal-700 text-white"
+          >
+            I Acknowledge
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
 // BookingGroupCard Component
 // ============================================================================
 
@@ -478,6 +523,7 @@ interface BookingHistoryProps {
 
 export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancelling, onRescheduleBooking, isRescheduling, pendingRescheduleGroupIds }: BookingHistoryProps) {
   const [cancellingGroup, setCancellingGroup] = useState<BookingGroup | null>(null)
+  const [policyGroup, setPolicyGroup] = useState<BookingGroup | null>(null)
   const [reschedulingGroup, setReschedulingGroup] = useState<BookingGroup | null>(null)
 
   // Group and sort bookings
@@ -511,7 +557,13 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
   }
 
   const handleRescheduleClick = (group: BookingGroup) => {
-    setReschedulingGroup(group)
+    setPolicyGroup(group)
+  }
+
+  const handlePolicyAcknowledge = () => {
+    if (!policyGroup) return
+    setReschedulingGroup(policyGroup)
+    setPolicyGroup(null)
   }
 
   const handleConfirmReschedule = async (newDate: string, newTimeSlots: string[]): Promise<boolean> => {
@@ -552,6 +604,13 @@ export function BookingHistory({ bookings, isLoading, onCancelBooking, isCancell
           onConfirm={handleConfirmCancel}
           onCancel={() => setCancellingGroup(null)}
           isLoading={isCancelling}
+        />
+      )}
+
+      {policyGroup && (
+        <ReschedulePolicyModal
+          onAcknowledge={handlePolicyAcknowledge}
+          onCancel={() => setPolicyGroup(null)}
         />
       )}
 
