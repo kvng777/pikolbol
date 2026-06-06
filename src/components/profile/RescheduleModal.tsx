@@ -48,12 +48,13 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
   const { data: closedDates = [] } = useClosedDates()
   const { data: heldSlots = [], isLoading: heldLoading } = useHeldRescheduleSlotsByDate(dateStr)
 
-  // Exclude own group's bookings so those slots appear available on the same date
+  // On the same date as the original booking, keep own group's slots as "booked"
+  // so the user can't re-select the same time. On a different date, exclude them.
   const filteredBookings = useMemo(() => {
     const groupId = group.bookingGroupId
-    if (!groupId) return activeBookings
+    if (!groupId || dateStr === group.date) return activeBookings
     return activeBookings.filter((b) => b.booking_group_id !== groupId)
-  }, [activeBookings, group.bookingGroupId])
+  }, [activeBookings, group.bookingGroupId, dateStr, group.date])
 
   // Past slots disabled, no 30-min buffer, held reschedule slots shown as booked
   const availableSlots = useMemo(
@@ -67,10 +68,16 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
 
   const isLoadingSlots = bookingsLoading || slotsLoading || heldLoading
 
-  // Enforce exact slot count
+  // Free-flow slot selection: auto-replace oldest when at max count
   const handleSelectSlots = (slots: string[]) => {
     if (slots.length <= requiredSlotCount) {
       setSelectedSlots(slots)
+    } else {
+      // At max — the newly clicked slot is the one not in current selection; replace oldest
+      const newSlot = slots.find((s) => !selectedSlots.includes(s))
+      if (newSlot) {
+        setSelectedSlots([...selectedSlots.slice(1), newSlot])
+      }
     }
   }
 
