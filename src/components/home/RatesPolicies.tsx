@@ -11,8 +11,8 @@ export default function RatesPolicies() {
           <div className="flex flex-col space-y-4 h-full">
             {/* Daytime Rate Card */}
             <div className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
-              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white flex-1">
-                <div className="flex gap-4 items-center">
+              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white flex-1 flex items-center">
+                <div className="flex gap-4 items-center w-full">
                   <div className="p-3 bg-white/20 rounded-xl flex items-center justify-center shrink-0 w-16 h-16">
                     <Sun className="w-10 h-10 animate-spin" style={{ animationDuration: '6s' }} />
                   </div>
@@ -31,8 +31,8 @@ export default function RatesPolicies() {
 
             {/* Evening / Early Morning Rate Card */}
             <div className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
-              <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white flex-1">
-                <div className="flex gap-4 items-center">
+              <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white flex-1 flex items-center">
+                <div className="flex gap-4 items-center w-full">
                   <div className="p-3 bg-white/20 rounded-xl flex items-center justify-center shrink-0 w-16 h-16">
                     <Moon className="w-10 h-10 animate-pulse" style={{ animationDuration: '3s' }} />
                   </div>
