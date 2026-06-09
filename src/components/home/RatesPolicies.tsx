@@ -1,4 +1,4 @@
-import { Sun, Moon, CalendarX2, UserX, Package, Clock } from 'lucide-react'
+import { Sun, Moon, CalendarX2, UserX, Package, Clock, RefreshCw } from 'lucide-react'
 
 export default function RatesPolicies() {
   return (
@@ -90,6 +90,17 @@ export default function RatesPolicies() {
                   <span>Cancellation within 24 hours</span>
                 </li>
               </ul>
+            </div>
+
+            {/* Rescheduling Policy Card */}
+            <div className="rounded-xl border-2 border-emerald-500 bg-white p-5 shadow-sm flex-1 flex flex-col items-center text-center justify-center">
+              <div className="p-3 bg-emerald-50 rounded-full mb-3 flex items-center justify-center h-14 w-14">
+                <RefreshCw className="w-8 h-8 text-emerald-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-3">Rescheduling Policy</h3>
+              <p className="text-gray-600 text-sm leading-relaxed">
+                Rescheduling is only allowed in cases of rain, severe weather, or force majeure events. No rescheduling for personal reasons or no-shows.
+              </p>
             </div>
 
             {/* Bottom Row - Two Cards */}
