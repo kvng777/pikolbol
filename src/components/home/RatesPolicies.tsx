@@ -10,8 +10,8 @@ export default function RatesPolicies() {
           {/* Left Column - Rates + Equipment */}
           <div className="flex flex-col space-y-4 h-full">
             {/* Daytime Rate Card */}
-            <div className="rounded-2xl overflow-hidden shadow-lg flex flex-col">
-              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white">
+            <div className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
+              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white flex-1">
                 <div className="flex gap-4 items-center">
                   <div className="p-3 bg-white/20 rounded-xl flex items-center justify-center shrink-0 w-16 h-16">
                     <Sun className="w-10 h-10 animate-spin" style={{ animationDuration: '6s' }} />
@@ -30,8 +30,8 @@ export default function RatesPolicies() {
             </div>
 
             {/* Evening / Early Morning Rate Card */}
-            <div className="rounded-2xl overflow-hidden shadow-lg flex flex-col">
-              <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white">
+            <div className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
+              <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white flex-1">
                 <div className="flex gap-4 items-center">
                   <div className="p-3 bg-white/20 rounded-xl flex items-center justify-center shrink-0 w-16 h-16">
                     <Moon className="w-10 h-10 animate-pulse" style={{ animationDuration: '3s' }} />
@@ -50,7 +50,7 @@ export default function RatesPolicies() {
             </div>
 
             {/* Equipment Rental Card */}
-            <div className="rounded-xl border-2 border-emerald-500 bg-white p-5 shadow-sm flex-1">
+            <div className="rounded-xl border-2 border-emerald-500 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2.5 bg-emerald-50 rounded-full flex items-center justify-center h-11 w-11 shrink-0">
                   <Package className="w-6 h-6 text-emerald-600" />
