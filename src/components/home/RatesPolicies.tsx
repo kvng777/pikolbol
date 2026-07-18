@@ -1,4 +1,4 @@
-import { Sun, Moon, CalendarX2, UserX, Package, Clock, RefreshCw } from 'lucide-react'
+import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw } from 'lucide-react'
 
 export default function RatesPolicies() {
   return (
@@ -43,6 +43,26 @@ export default function RatesPolicies() {
                   <div className="text-right shrink-0">
                     <span className="text-sm">Php</span>
                     <span className="text-4xl font-bold ml-1">250</span>
+                    <span className="text-lg">/hr</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Late Night Rate Card */}
+            <div className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
+              <div className="bg-gradient-to-br from-emerald-700 to-teal-900 p-5 text-white flex-1 flex items-center">
+                <div className="flex gap-4 items-center w-full">
+                  <div className="p-3 bg-white/20 rounded-xl flex items-center justify-center shrink-0 w-16 h-16">
+                    <Stars className="w-10 h-10 animate-pulse" style={{ animationDuration: '3s' }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-semibold">Late Night Rate</h3>
+                    <p className="text-white/80 text-sm">(10 PM - 12 AM)</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-sm">Php</span>
+                    <span className="text-4xl font-bold ml-1">300</span>
                     <span className="text-lg">/hr</span>
                   </div>
                 </div>

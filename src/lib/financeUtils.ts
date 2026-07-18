@@ -1,6 +1,6 @@
 import { Booking } from '@/types/booking'
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, parseISO, isWithinInterval, getDay } from 'date-fns'
-import { EVENING_START_HOUR } from './paymentConfig'
+import { EVENING_START_HOUR, LATE_NIGHT_START_HOUR } from './paymentConfig'
 
 // ============================================================================
 // Types
@@ -20,8 +20,10 @@ export interface MonthlyRevenue {
 export interface TimeBreakdown {
   daytimeRevenue: number
   eveningRevenue: number
+  lateNightRevenue: number
   daytimeBookings: number
   eveningBookings: number
+  lateNightBookings: number
 }
 
 export interface BookingStatistics {
@@ -194,43 +196,48 @@ function parseSlotHour(timeSlot: string): number {
 }
 
 /**
- * Check if a time slot is evening (6 PM onwards)
+ * Check if a time slot is evening (6 PM - 10 PM). Excludes late-night.
  */
 export function isEveningSlot(timeSlot: string): boolean {
   const hour = parseSlotHour(timeSlot)
-  return hour >= EVENING_START_HOUR
+  return hour >= EVENING_START_HOUR && hour < LATE_NIGHT_START_HOUR
 }
 
 /**
- * Calculate revenue breakdown by time of day
+ * Check if a time slot is late-night (10 PM - 12 AM).
+ */
+export function isLateNightSlot(timeSlot: string): boolean {
+  return parseSlotHour(timeSlot) >= LATE_NIGHT_START_HOUR
+}
+
+/**
+ * Calculate revenue breakdown by time of day. A booking group is classified
+ * by its latest tier: any late-night slot → latenight; else any evening slot → evening; else daytime.
  */
 export function calculateTimeBreakdown(bookings: Booking[]): TimeBreakdown {
   const confirmed = getConfirmedBookings(bookings)
-  
+
   let daytimeRevenue = 0
   let eveningRevenue = 0
+  let lateNightRevenue = 0
   let daytimeBookings = 0
   let eveningBookings = 0
-  
-  // Group by booking_group_id to get unique bookings
+  let lateNightBookings = 0
+
   const groups = new Map<string, Booking[]>()
   for (const booking of confirmed) {
     const key = booking.booking_group_id || booking.id
-    if (!groups.has(key)) {
-      groups.set(key, [])
-    }
+    if (!groups.has(key)) groups.set(key, [])
     groups.get(key)!.push(booking)
   }
-  
-  // For each group, check if any slot is evening
+
   for (const [, groupBookings] of groups) {
-    const firstBooking = groupBookings[0]
-    const amount = firstBooking.payment_amount || 0
-    
-    // Check if any slot in the group is evening
-    const hasEveningSlot = groupBookings.some(b => isEveningSlot(b.time_slot))
-    
-    if (hasEveningSlot) {
+    const amount = groupBookings[0].payment_amount || 0
+
+    if (groupBookings.some(b => isLateNightSlot(b.time_slot))) {
+      lateNightRevenue += amount
+      lateNightBookings++
+    } else if (groupBookings.some(b => isEveningSlot(b.time_slot))) {
       eveningRevenue += amount
       eveningBookings++
     } else {
@@ -238,12 +245,14 @@ export function calculateTimeBreakdown(bookings: Booking[]): TimeBreakdown {
       daytimeBookings++
     }
   }
-  
+
   return {
     daytimeRevenue,
     eveningRevenue,
+    lateNightRevenue,
     daytimeBookings,
     eveningBookings,
+    lateNightBookings,
   }
 }
 

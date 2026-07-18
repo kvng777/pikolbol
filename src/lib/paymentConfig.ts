@@ -4,12 +4,14 @@
  */
 
 // Pricing
-export const DAYTIME_PRICE_PER_SLOT = 200  // PHP per 1-hour slot (7:00 AM - 5:59 PM)
-export const EVENING_PRICE_PER_SLOT = 250  // PHP per 1-hour slot (6:00 PM onwards)
-export const EARLY_MORNING_END_HOUR = 6    // Slots before 6:00 AM use evening/premium rate (P250)
-export const EVENING_START_HOUR = 18       // 6:00 PM (18:00) - slots starting at this hour or later are evening rate
-export const EXTRA_PLAYER_CHARGE = 50      // PHP per player beyond 4
-export const BASE_PLAYERS_INCLUDED = 4     // Players included in base price
+export const DAYTIME_PRICE_PER_SLOT = 200      // PHP per 1-hour slot (6:00 AM - 5:59 PM)
+export const EVENING_PRICE_PER_SLOT = 250      // PHP per 1-hour slot (off-peak: 5-6 AM & 6-10 PM)
+export const LATE_NIGHT_PRICE_PER_SLOT = 300   // PHP per 1-hour slot (10 PM - 12 AM)
+export const EARLY_MORNING_END_HOUR = 6        // Slots before 6:00 AM use off-peak rate (P250)
+export const EVENING_START_HOUR = 18           // 6:00 PM - off-peak begins
+export const LATE_NIGHT_START_HOUR = 22        // 10:00 PM - late-night rate begins (P300)
+export const EXTRA_PLAYER_CHARGE = 50          // PHP per player beyond 4
+export const BASE_PLAYERS_INCLUDED = 4         // Players included in base price
 
 // Equipment rental (paddles & balls)
 export const PADDLE_PRICE = 50             // PHP per paddle, per booking
@@ -77,13 +79,26 @@ export function getSlotStartHour(timeSlot: string): number {
   return 12
 }
 
+export type RateTier = 'daytime' | 'offpeak' | 'latenight'
+
 /**
- * Check if a time slot uses the premium rate.
- * Premium = early morning (before 6 AM) or evening (6 PM onwards).
+ * Classify a slot into its rate tier.
+ * - latenight: 10 PM - 12 AM        (P300)
+ * - offpeak:   5-6 AM & 6-10 PM     (P250)
+ * - daytime:   6 AM - 6 PM          (P200)
+ */
+export function getSlotRateTier(timeSlot: string): RateTier {
+  const hour = getSlotStartHour(timeSlot)
+  if (hour >= LATE_NIGHT_START_HOUR) return 'latenight'
+  if (hour < EARLY_MORNING_END_HOUR || hour >= EVENING_START_HOUR) return 'offpeak'
+  return 'daytime'
+}
+
+/**
+ * Check if a time slot uses a premium (non-daytime) rate.
  */
 export function isPremiumSlot(timeSlot: string): boolean {
-  const hour = getSlotStartHour(timeSlot)
-  return hour < EARLY_MORNING_END_HOUR || hour >= EVENING_START_HOUR
+  return getSlotRateTier(timeSlot) !== 'daytime'
 }
 
 /** @deprecated Use isPremiumSlot instead */
@@ -93,7 +108,10 @@ export const isEveningSlot = isPremiumSlot
  * Get the price for a single time slot
  */
 export function getPriceForSlot(timeSlot: string): number {
-  return isPremiumSlot(timeSlot) ? EVENING_PRICE_PER_SLOT : DAYTIME_PRICE_PER_SLOT
+  const tier = getSlotRateTier(timeSlot)
+  if (tier === 'latenight') return LATE_NIGHT_PRICE_PER_SLOT
+  if (tier === 'offpeak') return EVENING_PRICE_PER_SLOT
+  return DAYTIME_PRICE_PER_SLOT
 }
 
 /**
