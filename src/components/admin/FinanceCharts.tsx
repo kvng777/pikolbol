@@ -85,17 +85,23 @@ export function FinanceCharts({ monthlyRevenue, timeBreakdown, isLoading }: Fina
 
   // Time breakdown doughnut chart
   const timeBreakdownData = useMemo(() => ({
-    labels: ['Daytime (7AM-6PM)', 'Evening (6PM+)'],
+    labels: ['Daytime (6AM-6PM)', 'Evening (6PM-10PM)', 'Late Night (10PM-12AM)'],
     datasets: [
       {
-        data: [timeBreakdown.daytimeRevenue, timeBreakdown.eveningRevenue],
+        data: [
+          timeBreakdown.daytimeRevenue,
+          timeBreakdown.eveningRevenue,
+          timeBreakdown.lateNightRevenue,
+        ],
         backgroundColor: [
           'rgba(59, 130, 246, 0.8)',
           'rgba(139, 92, 246, 0.8)',
+          'rgba(15, 23, 42, 0.85)',
         ],
         borderColor: [
           'rgb(59, 130, 246)',
           'rgb(139, 92, 246)',
+          'rgb(15, 23, 42)',
         ],
         borderWidth: 2,
       },
@@ -205,7 +211,7 @@ export function FinanceCharts({ monthlyRevenue, timeBreakdown, isLoading }: Fina
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue by Time of Day</h3>
         <div className="h-64">
-          {timeBreakdown.daytimeRevenue > 0 || timeBreakdown.eveningRevenue > 0 ? (
+          {timeBreakdown.daytimeRevenue > 0 || timeBreakdown.eveningRevenue > 0 || timeBreakdown.lateNightRevenue > 0 ? (
             <Doughnut data={timeBreakdownData} options={doughnutOptions} />
           ) : (
             <div className="flex items-center justify-center h-full text-gray-400">
@@ -214,7 +220,7 @@ export function FinanceCharts({ monthlyRevenue, timeBreakdown, isLoading }: Fina
           )}
         </div>
         {/* Stats below chart */}
-        <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
+        <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100">
           <div className="text-center">
             <p className="text-sm text-gray-500">Daytime</p>
             <p className="text-lg font-semibold text-blue-600">{timeBreakdown.daytimeBookings} bookings</p>
@@ -222,6 +228,10 @@ export function FinanceCharts({ monthlyRevenue, timeBreakdown, isLoading }: Fina
           <div className="text-center">
             <p className="text-sm text-gray-500">Evening</p>
             <p className="text-lg font-semibold text-purple-600">{timeBreakdown.eveningBookings} bookings</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-500">Late Night</p>
+            <p className="text-lg font-semibold text-slate-800">{timeBreakdown.lateNightBookings} bookings</p>
           </div>
         </div>
       </div>

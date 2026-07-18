@@ -1,15 +1,16 @@
 import { format } from 'date-fns'
 import { Booking, TimeSlot, DisabledSlot } from '@/types/booking'
 
-const OPERATING_HOURS = { start: 5, end: 22 }
+const OPERATING_HOURS = { start: 5, end: 24 }
 const SLOT_DURATION = 1
 const BOOKING_BUFFER_MINUTES = 30 // Slots must start at least this many minutes from now
 
 export function generateTimeSlots(): string[] {
   const slots: string[] = []
   for (let hour = OPERATING_HOURS.start; hour < OPERATING_HOURS.end; hour++) {
+    const endHour = (hour + SLOT_DURATION) % 24
     const start = hour.toString().padStart(2, '0') + ':00'
-    const end = (hour + SLOT_DURATION).toString().padStart(2, '0') + ':00'
+    const end = endHour.toString().padStart(2, '0') + ':00'
     slots.push(`${start}-${end}`)
   }
   return slots
