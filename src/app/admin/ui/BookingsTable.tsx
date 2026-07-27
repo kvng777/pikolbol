@@ -33,6 +33,7 @@ export interface BookingGroup {
   gcash_reference?: string | null
   paddles_count?: number | null
   needs_balls?: boolean | null
+  training_balls?: boolean | null
   is_manual?: boolean | null
 }
 
@@ -187,7 +188,7 @@ export default function BookingsTable({ table, onEditBooking }: BookingsTablePro
                   {/* Equipment */}
                   <TableCell className="text-gray-700 text-sm max-w-[160px]">
                     {(() => {
-                      const summary = formatEquipmentSummary(group.paddles_count, group.needs_balls)
+                      const summary = formatEquipmentSummary(group.paddles_count, group.needs_balls, group.training_balls)
                       return summary
                         ? <span className="capitalize">{summary}</span>
                         : <span className="text-gray-400">—</span>

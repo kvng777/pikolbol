@@ -30,6 +30,7 @@ export function BookingForm({
 }: BookingFormProps) {
   const [paddles, setPaddles] = useState(0)
   const [needsBalls, setNeedsBalls] = useState(false)
+  const [trainingBalls, setTrainingBalls] = useState(false)
 
   // Paddles & balls are free during the promo; charged for play dates from June 1, 2026
   const equipmentChargeable = isEquipmentChargeable(selectedDate)
@@ -37,7 +38,7 @@ export function BookingForm({
   const totalCost = calculatePaymentAmount(
     selectedSlots.length > 0 ? selectedSlots : ['12:00'],
     2,
-    { date: selectedDate, paddles, needsBalls }
+    { date: selectedDate, paddles, needsBalls, trainingBalls }
   )
   const formattedTotal = `Php${totalCost.toLocaleString()}`
 
@@ -53,6 +54,7 @@ export function BookingForm({
       players: 2,
       paddles,
       needsBalls,
+      trainingBalls,
     })
   }
 
@@ -72,8 +74,10 @@ export function BookingForm({
       <EquipmentSelector
         paddles={paddles}
         needsBalls={needsBalls}
+        trainingBalls={trainingBalls}
         onPaddlesChange={setPaddles}
         onNeedsBallsChange={setNeedsBalls}
+        onTrainingBallsChange={setTrainingBalls}
         chargeable={equipmentChargeable}
       />
 

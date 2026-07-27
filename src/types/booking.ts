@@ -15,6 +15,7 @@ export interface Booking {
   // Equipment rental
   paddles_count?: number | null
   needs_balls?: boolean | null
+  training_balls?: boolean | null
   user_id?: string | null
   // Booking identification
   short_id?: string | null          // Human-readable ID (e.g., 'A1B2')
@@ -88,6 +89,7 @@ export interface BulkBookingPayload {
   players?: number
   paddles?: number
   needsBalls?: boolean
+  trainingBalls?: boolean
   user_id?: string
 }
 
@@ -131,6 +133,7 @@ export interface AdminBookingPayload {
   timeSlots: string[]
   paddles?: number
   needsBalls?: boolean
+  trainingBalls?: boolean
 }
 
 // Payload for editing an existing manual booking (identified by its group)

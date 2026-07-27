@@ -10,6 +10,7 @@ import { FinanceSummaryCards } from './FinanceSummaryCards'
 import { FinanceRevenueTable } from './FinanceRevenueTable'
 import { FinanceCharts } from './FinanceCharts'
 import { FinanceStatistics } from './FinanceStatistics'
+import { FinanceEquipment } from './FinanceEquipment'
 
 const PERIOD_OPTIONS: { value: PeriodType; label: string }[] = [
   { value: 'thisMonth', label: 'This Month' },
@@ -31,6 +32,7 @@ export function FinanceTab() {
     timeBreakdown,
     monthlyRevenue,
     statistics,
+    equipment,
     allTimeMonthlyRevenue,
   } = useFinanceData()
 
@@ -127,6 +129,9 @@ export function FinanceTab() {
 
       {/* Statistics */}
       <FinanceStatistics statistics={statistics} isLoading={isLoading} />
+
+      {/* Equipment Rentals */}
+      <FinanceEquipment equipment={equipment} isLoading={isLoading} />
 
       {/* Revenue Table */}
       <FinanceRevenueTable

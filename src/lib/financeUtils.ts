@@ -1,6 +1,13 @@
 import { Booking } from '@/types/booking'
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, parseISO, isWithinInterval, getDay } from 'date-fns'
-import { EVENING_START_HOUR, LATE_NIGHT_START_HOUR } from './paymentConfig'
+import {
+  EVENING_START_HOUR,
+  LATE_NIGHT_START_HOUR,
+  PADDLE_PRICE,
+  BALL_SET_PRICE,
+  TRAINING_BALLS_PRICE,
+  isEquipmentChargeable,
+} from './paymentConfig'
 
 // ============================================================================
 // Types
@@ -35,6 +42,25 @@ export interface BookingStatistics {
   peakHours: { slot: string; count: number }[]
   busiestDay: { day: string; count: number; revenue: number }
   utilizationRate: number
+}
+
+export interface EquipmentBreakdown {
+  /** Total paddles rented across all confirmed bookings in the period. */
+  paddlesRented: number
+  /** Number of bookings (groups) that included a set of 4 balls. */
+  ballSetRentals: number
+  /** Number of bookings (groups) that included training balls (50) w/ basket. */
+  trainingBallsRentals: number
+  /** Total confirmed bookings (groups) that had any equipment attached. */
+  bookingsWithEquipment: number
+  /** Revenue attributable to paddles (post-promo bookings only). */
+  paddleRevenue: number
+  /** Revenue attributable to ball-set rentals (post-promo bookings only). */
+  ballSetRevenue: number
+  /** Revenue attributable to training-balls rentals (post-promo bookings only). */
+  trainingBallsRevenue: number
+  /** Sum of the three revenue lines above. */
+  totalEquipmentRevenue: number
 }
 
 export type PeriodType = 'thisMonth' | 'lastMonth' | 'thisYear' | 'allTime' | 'custom'
@@ -504,6 +530,58 @@ export function exportToCSV(data: MonthlyRevenue[], filename: string = 'finance-
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+/**
+ * Aggregate equipment rentals + revenue over confirmed bookings, deduplicated
+ * by booking_group_id so a multi-slot order counts once. Revenue applies only
+ * to play dates on/after the promo end (see isEquipmentChargeable).
+ */
+export function calculateEquipmentBreakdown(bookings: Booking[]): EquipmentBreakdown {
+  const confirmed = getConfirmedBookings(bookings)
+  const seen = new Set<string>()
+
+  let paddlesRented = 0
+  let ballSetRentals = 0
+  let trainingBallsRentals = 0
+  let bookingsWithEquipment = 0
+  let paddleRevenue = 0
+  let ballSetRevenue = 0
+  let trainingBallsRevenue = 0
+
+  for (const b of confirmed) {
+    const key = b.booking_group_id || `legacy-${b.id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const paddles = b.paddles_count ?? 0
+    const hasBalls = !!b.needs_balls
+    const hasTraining = !!b.training_balls
+    const hasAny = paddles > 0 || hasBalls || hasTraining
+    if (!hasAny) continue
+
+    bookingsWithEquipment += 1
+    paddlesRented += paddles
+    if (hasBalls) ballSetRentals += 1
+    if (hasTraining) trainingBallsRentals += 1
+
+    if (isEquipmentChargeable(b.date)) {
+      paddleRevenue += paddles * PADDLE_PRICE
+      if (hasBalls) ballSetRevenue += BALL_SET_PRICE
+      if (hasTraining) trainingBallsRevenue += TRAINING_BALLS_PRICE
+    }
+  }
+
+  return {
+    paddlesRented,
+    ballSetRentals,
+    trainingBallsRentals,
+    bookingsWithEquipment,
+    paddleRevenue,
+    ballSetRevenue,
+    trainingBallsRevenue,
+    totalEquipmentRevenue: paddleRevenue + ballSetRevenue + trainingBallsRevenue,
+  }
 }
 
 /**

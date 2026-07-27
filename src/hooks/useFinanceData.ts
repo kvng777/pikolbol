@@ -8,6 +8,7 @@ import {
   MonthlyRevenue,
   TimeBreakdown,
   BookingStatistics,
+  EquipmentBreakdown,
   getDateRangeForPeriod,
   filterBookingsByDateRange,
   calculateGrossRevenue,
@@ -17,6 +18,7 @@ import {
   calculateTimeBreakdown,
   calculateMonthlyRevenue,
   calculateBookingStatistics,
+  calculateEquipmentBreakdown,
 } from '@/lib/financeUtils'
 
 export interface FinanceSummary {
@@ -90,6 +92,11 @@ export function useFinanceData() {
     return calculateBookingStatistics(filteredBookings, dateRange)
   }, [filteredBookings, dateRange])
 
+  // Equipment rental breakdown
+  const equipment: EquipmentBreakdown = useMemo(() => {
+    return calculateEquipmentBreakdown(filteredBookings)
+  }, [filteredBookings])
+
   // All-time monthly revenue for charts
   const allTimeMonthlyRevenue: MonthlyRevenue[] = useMemo(() => {
     return calculateMonthlyRevenue(allBookings)
@@ -112,6 +119,7 @@ export function useFinanceData() {
     timeBreakdown,
     monthlyRevenue,
     statistics,
+    equipment,
     allTimeMonthlyRevenue,
   }
 }

@@ -31,6 +31,7 @@ export async function submitPaymentAction(
     players: number
     paddles?: number
     needsBalls?: boolean
+    trainingBalls?: boolean
     user_id?: string
     gcashReference?: string
   }
@@ -51,6 +52,7 @@ export async function submitPaymentAction(
     players: payload.players,
     paddles: payload.paddles,
     needs_balls: payload.needsBalls,
+    training_balls: payload.trainingBalls,
     user_id: payload.user_id,
     gcash_reference: payload.gcashReference,
   })
@@ -78,6 +80,7 @@ export async function submitPaymentAction(
         shortId: booking.short_id || undefined,
         paddles: booking.paddles_count,
         needsBalls: booking.needs_balls,
+        trainingBalls: booking.training_balls,
         reference: payload.gcashReference,
         confirmUrl,
       })

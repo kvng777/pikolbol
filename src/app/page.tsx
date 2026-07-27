@@ -62,6 +62,7 @@ export default function Home() {
       players: data.players || 2,
       paddles: data.paddles ?? 0,
       needsBalls: data.needsBalls ?? false,
+      trainingBalls: data.trainingBalls ?? false,
       user_id: user?.id,
     }
 
@@ -169,6 +170,7 @@ export default function Home() {
         date: pendingBookingData.date,
         paddles: pendingBookingData.paddles,
         needsBalls: pendingBookingData.needsBalls,
+        trainingBalls: pendingBookingData.trainingBalls,
       })
     : 0
 

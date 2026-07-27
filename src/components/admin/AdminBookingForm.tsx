@@ -22,6 +22,7 @@ export interface AdminBookingInitialValues {
   timeSlots: string[]
   paddles: number
   needsBalls: boolean
+  trainingBalls: boolean
 }
 
 interface AdminBookingFormProps {
@@ -42,6 +43,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
   const [selectedSlots, setSelectedSlots] = useState<string[]>(initialValues?.timeSlots ?? [])
   const [paddles, setPaddles] = useState(initialValues?.paddles ?? 0)
   const [needsBalls, setNeedsBalls] = useState(initialValues?.needsBalls ?? false)
+  const [trainingBalls, setTrainingBalls] = useState(initialValues?.trainingBalls ?? false)
 
   const createBooking = useCreateAdminBooking()
   const updateBooking = useUpdateAdminBooking()
@@ -68,9 +70,9 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
   const total = useMemo(
     () =>
       selectedSlots.length > 0
-        ? calculatePaymentAmount(selectedSlots, 2, { date, paddles, needsBalls })
+        ? calculatePaymentAmount(selectedSlots, 2, { date, paddles, needsBalls, trainingBalls })
         : 0,
-    [selectedSlots, date, paddles, needsBalls]
+    [selectedSlots, date, paddles, needsBalls, trainingBalls]
   )
 
   const toggleSlot = (slot: string) => {
@@ -98,7 +100,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
       return
     }
 
-    const payload = { name: name.trim(), date, timeSlots: selectedSlots, paddles, needsBalls }
+    const payload = { name: name.trim(), date, timeSlots: selectedSlots, paddles, needsBalls, trainingBalls }
 
     try {
       const result = initialValues
@@ -198,8 +200,10 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
           <EquipmentSelector
             paddles={paddles}
             needsBalls={needsBalls}
+            trainingBalls={trainingBalls}
             onPaddlesChange={setPaddles}
             onNeedsBallsChange={setNeedsBalls}
+            onTrainingBallsChange={setTrainingBalls}
             chargeable={equipmentChargeable}
           />
 

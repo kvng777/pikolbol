@@ -272,12 +272,13 @@ export async function sendAdminPaymentAlertEmail(data: {
   amount: number
   reference?: string
   shortId?: string  // Human-readable booking ID (e.g., 'A1B2')
-  paddles?: number | null      // Paddles rented for this booking
-  needsBalls?: boolean | null  // Whether a set of balls was rented
+  paddles?: number | null         // Paddles rented for this booking
+  needsBalls?: boolean | null     // Whether a set of balls was rented
+  trainingBalls?: boolean | null  // Whether training balls (50) w/ basket were rented
   confirmUrl?: string  // Signed URL to confirm payment directly from email
 }): Promise<{ success: boolean; error?: string }> {
   const formattedDate = formatBookingDate(data.bookingDate)
-  const equipmentSummary = formatEquipmentSummary(data.paddles, data.needsBalls)
+  const equipmentSummary = formatEquipmentSummary(data.paddles, data.needsBalls, data.trainingBalls)
 
   const html = `
     <!DOCTYPE html>
