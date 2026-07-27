@@ -37,6 +37,7 @@ export interface GroupedBooking {
   gcash_reference?: string | null
   paddles_count?: number | null
   needs_balls?: boolean | null
+  training_balls?: boolean | null
   is_manual?: boolean | null
 }
 
@@ -118,6 +119,7 @@ export function useAdminPage() {
           gcash_reference: booking.gcash_reference || null,
           paddles_count: booking.paddles_count ?? 0,
           needs_balls: booking.needs_balls ?? false,
+          training_balls: booking.training_balls ?? false,
           is_manual: booking.is_manual ?? false,
         })
       }

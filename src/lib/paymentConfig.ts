@@ -16,6 +16,7 @@ export const BASE_PLAYERS_INCLUDED = 4         // Players included in base price
 // Equipment rental (paddles & balls)
 export const PADDLE_PRICE = 50             // PHP per paddle, per booking
 export const BALL_SET_PRICE = 25           // PHP per booking for a set of 4 balls
+export const TRAINING_BALLS_PRICE = 100    // PHP per booking for training balls (50) w/ movable basket
 export const MAX_PADDLES = 8               // UI cap for paddle quantity selector
 
 // Free use of paddles & balls promo ends on this date (PH date, inclusive).
@@ -118,9 +119,10 @@ export function getPriceForSlot(timeSlot: string): number {
  * Equipment rental selection for a booking.
  */
 export interface EquipmentSelection {
-  date?: string        // Play date ('YYYY-MM-DD'). Charge applies on/after EQUIPMENT_CHARGE_START_DATE
-  paddles?: number     // Number of paddles to rent
-  needsBalls?: boolean // Whether a set of balls is needed
+  date?: string           // Play date ('YYYY-MM-DD'). Charge applies on/after EQUIPMENT_CHARGE_START_DATE
+  paddles?: number        // Number of paddles to rent
+  needsBalls?: boolean    // Whether a set of balls is needed
+  trainingBalls?: boolean // Whether training balls (50) w/ movable basket are needed
 }
 
 /**
@@ -140,7 +142,8 @@ export function isEquipmentChargeable(date?: string): boolean {
  */
 export function formatEquipmentSummary(
   paddles?: number | null,
-  needsBalls?: boolean | null
+  needsBalls?: boolean | null,
+  trainingBalls?: boolean | null
 ): string | null {
   const items: string[] = []
   const paddleCount = paddles ?? 0
@@ -150,6 +153,9 @@ export function formatEquipmentSummary(
   }
   if (needsBalls) {
     items.push(items.length === 0 ? 'Balls (set of 4)' : 'balls (set of 4)')
+  }
+  if (trainingBalls) {
+    items.push(items.length === 0 ? 'Training balls (50)' : 'training balls (50)')
   }
 
   return items.length > 0 ? items.join(', ') : null
@@ -164,8 +170,9 @@ export function calculateEquipmentCharge(equipment?: EquipmentSelection): number
 
   const paddles = Math.max(0, equipment.paddles ?? 0)
   const ballsCharge = equipment.needsBalls ? BALL_SET_PRICE : 0
+  const trainingBallsCharge = equipment.trainingBalls ? TRAINING_BALLS_PRICE : 0
 
-  return paddles * PADDLE_PRICE + ballsCharge
+  return paddles * PADDLE_PRICE + ballsCharge + trainingBallsCharge
 }
 
 /**

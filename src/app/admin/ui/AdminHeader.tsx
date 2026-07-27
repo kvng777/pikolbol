@@ -4,22 +4,22 @@ import { Button } from '@/components/ui/button'
 import { LogOut, UserStar } from 'lucide-react'
 import type { TableUI } from '@/app/admin/hooks/useAdminTable'
 
-export default function AdminHeader({ table }: { table: TableUI }) {
+interface AdminHeaderProps {
+  table: TableUI
+  displayName?: string
+}
+
+export default function AdminHeader({ table }: AdminHeaderProps) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
           <UserStar size={38} />
-          Your admin dashboard
+          Admin dashboard
         </h1>
-        <p className="text-gray-500 mt-1">Manage all court bookings</p>
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm">
-          <span className="text-gray-500">Total:</span>
-          <span className="text-gray-900 font-semibold ml-2">{table.groupedBookings.length} bookings</span>
-        </div>
         <Button variant="outline" size="sm" onClick={table.handleSignOut} className="text-gray-600">
           <LogOut className="w-4 h-4 mr-2" />
           Sign Out

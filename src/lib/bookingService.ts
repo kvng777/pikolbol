@@ -193,11 +193,13 @@ export async function createAdminBooking(
 
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
   const needsBalls = payload.needsBalls ?? false
+  const trainingBalls = payload.trainingBalls ?? false
 
   const amount = calculatePaymentAmount(payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
     date: payload.date,
     paddles: paddlesCount,
     needsBalls,
+    trainingBalls,
   })
 
   const shortId = await generateUniqueShortId()
@@ -214,6 +216,7 @@ export async function createAdminBooking(
     players: MANUAL_DEFAULT_PLAYERS,
     paddles_count: paddlesCount,
     needs_balls: needsBalls,
+    training_balls: trainingBalls,
     user_id: null,
     short_id: shortId,
     booking_group_id: bookingGroupId,
@@ -279,10 +282,12 @@ export async function updateAdminBooking(
 
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
   const needsBalls = payload.needsBalls ?? false
+  const trainingBalls = payload.trainingBalls ?? false
   const amount = calculatePaymentAmount(payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
     date: payload.date,
     paddles: paddlesCount,
     needsBalls,
+    trainingBalls,
   })
 
   // Replace the group's rows
@@ -306,6 +311,7 @@ export async function updateAdminBooking(
     players: MANUAL_DEFAULT_PLAYERS,
     paddles_count: paddlesCount,
     needs_balls: needsBalls,
+    training_balls: trainingBalls,
     user_id: null,
     short_id: shortId,
     booking_group_id: bookingGroupId,

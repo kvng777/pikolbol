@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Calendar, Clock, Plus, Ban, Lock, CreditCard, Settings, Banknote, DollarSign, Megaphone, UserCog } from 'lucide-react'
 import AdminHeader from './ui/AdminHeader'
+import TodaySummary from './ui/TodaySummary'
 import AdminControls from './ui/AdminControls'
 import BookingsTable, { type BookingGroup } from './ui/BookingsTable'
 import { AdminBookingForm, type AdminBookingInitialValues } from '@/components/admin/AdminBookingForm'
@@ -75,6 +76,7 @@ export default function AdminPage() {
       timeSlots: group.timeSlots,
       paddles: group.paddles_count ?? 0,
       needsBalls: group.needs_balls ?? false,
+      trainingBalls: group.training_balls ?? false,
     })
     setBookingModalOpen(true)
   }
@@ -109,11 +111,9 @@ export default function AdminPage() {
       <NavBar />
       <div className="relative z-10 min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
-          <div className='pb-2 text-2xl'>
-            Hi! {displayName}
-          </div>
+          <AdminHeader table={table} displayName={displayName} />
 
-          <AdminHeader table={table} />
+          <TodaySummary closedDates={table.closedDates} />
 
           <div className="flex flex-wrap gap-2 mb-6">
             <Button

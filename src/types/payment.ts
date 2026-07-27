@@ -69,6 +69,7 @@ export interface PendingPaymentBooking {
   // Equipment rental
   paddles_count?: number | null
   needs_balls?: boolean | null
+  training_balls?: boolean | null
 }
 
 // Email notification types

@@ -22,6 +22,7 @@ export interface BookingData {
   players: number
   paddles: number
   needsBalls: boolean
+  trainingBalls: boolean
   user_id?: string
 }
 
@@ -73,6 +74,7 @@ export function PaymentScreen({
         players: bookingData.players,
         paddles: bookingData.paddles,
         needsBalls: bookingData.needsBalls,
+        trainingBalls: bookingData.trainingBalls,
         user_id: bookingData.user_id,
         gcashReference: gcashReference.trim(),
       })
@@ -100,7 +102,7 @@ export function PaymentScreen({
 
   // Equipment rental summary (charge only applies from June 1, 2026)
   const equipmentChargeable = isEquipmentChargeable(bookingData.date)
-  const equipmentSummary = formatEquipmentSummary(bookingData.paddles, bookingData.needsBalls)
+  const equipmentSummary = formatEquipmentSummary(bookingData.paddles, bookingData.needsBalls, bookingData.trainingBalls)
 
   // Show "Awaiting Verification" after payment is submitted
   if (submittedBookings) {

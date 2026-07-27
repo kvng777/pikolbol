@@ -99,6 +99,13 @@ export default function RatesPolicies() {
                     Balls, set of 4 <span className="text-gray-500">(per booking)</span>
                   </span>
                 </div>
+                <div className="flex items-center gap-3 rounded-lg bg-emerald-50/60 px-4 py-3">
+                  <span className="text-xl font-bold text-emerald-600 shrink-0">Php100</span>
+                  <span className="text-gray-500">—</span>
+                  <span className="text-sm text-gray-700">
+                    Training balls, set of 50 <span className="text-gray-500">(per booking, w/ movable basket)</span>
+                  </span>
+                </div>
               </div>
             </div>
           </div>
