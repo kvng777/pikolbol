@@ -22,8 +22,9 @@ export function FinanceRevenueTable({ data, isLoading }: FinanceRevenueTableProp
       cancellationFees: acc.cancellationFees + row.cancellationFees,
       netRevenue: acc.netRevenue + row.netRevenue,
       bookingsCount: acc.bookingsCount + row.bookingsCount,
+      cancelledCount: acc.cancelledCount + row.cancelledCount,
     }),
-    { grossRevenue: 0, refunds: 0, cancellationFees: 0, netRevenue: 0, bookingsCount: 0 }
+    { grossRevenue: 0, refunds: 0, cancellationFees: 0, netRevenue: 0, bookingsCount: 0, cancelledCount: 0 }
   )
 
   if (isLoading) {
@@ -64,6 +65,7 @@ export function FinanceRevenueTable({ data, isLoading }: FinanceRevenueTableProp
             <tr className="bg-gray-50 text-left">
               <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Month</th>
               <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Bookings</th>
+              <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Cancelled</th>
               <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Gross</th>
               <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Refunds</th>
               <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Fees Retained</th>
@@ -75,6 +77,7 @@ export function FinanceRevenueTable({ data, isLoading }: FinanceRevenueTableProp
               <tr key={`${row.year}-${row.monthNumber}`} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.month}</td>
                 <td className="px-4 py-3 text-sm text-gray-600 text-right">{row.bookingsCount}</td>
+                <td className="px-4 py-3 text-sm text-orange-600 text-right">{row.cancelledCount > 0 ? row.cancelledCount : '-'}</td>
                 <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">{formatCurrency(row.grossRevenue)}</td>
                 <td className="px-4 py-3 text-sm text-orange-600 text-right">{row.refunds > 0 ? `-${formatCurrency(row.refunds)}` : '-'}</td>
                 <td className="px-4 py-3 text-sm text-emerald-600 text-right">{row.cancellationFees > 0 ? formatCurrency(row.cancellationFees) : '-'}</td>
@@ -86,6 +89,7 @@ export function FinanceRevenueTable({ data, isLoading }: FinanceRevenueTableProp
             <tr className="bg-gray-50 font-semibold">
               <td className="px-4 py-3 text-sm text-gray-900">Total</td>
               <td className="px-4 py-3 text-sm text-gray-900 text-right">{totals.bookingsCount}</td>
+              <td className="px-4 py-3 text-sm text-orange-600 text-right">{totals.cancelledCount > 0 ? totals.cancelledCount : '-'}</td>
               <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatCurrency(totals.grossRevenue)}</td>
               <td className="px-4 py-3 text-sm text-orange-600 text-right">{totals.refunds > 0 ? `-${formatCurrency(totals.refunds)}` : '-'}</td>
               <td className="px-4 py-3 text-sm text-emerald-600 text-right">{totals.cancellationFees > 0 ? formatCurrency(totals.cancellationFees) : '-'}</td>

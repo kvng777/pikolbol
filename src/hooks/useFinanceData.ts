@@ -8,6 +8,7 @@ import {
   MonthlyRevenue,
   TimeBreakdown,
   BookingStatistics,
+  DailyRevenue,
   EquipmentBreakdown,
   getDateRangeForPeriod,
   filterBookingsByDateRange,
@@ -18,6 +19,7 @@ import {
   calculateTimeBreakdown,
   calculateMonthlyRevenue,
   calculateBookingStatistics,
+  calculateDailyRevenue,
   calculateEquipmentBreakdown,
 } from '@/lib/financeUtils'
 
@@ -35,7 +37,7 @@ export function useFinanceData() {
   const { data: allBookings = [], isLoading, refetch } = useAllBookings()
   
   // Period selection state
-  const [period, setPeriod] = useState<PeriodType>('thisMonth')
+  const [period, setPeriod] = useState<PeriodType>('allTime')
   const [customRange, setCustomRange] = useState<DateRange>({
     start: new Date(),
     end: new Date(),
@@ -97,6 +99,20 @@ export function useFinanceData() {
     return calculateEquipmentBreakdown(filteredBookings)
   }, [filteredBookings])
 
+  // Daily revenue (clamped to actual data span when the period is 'allTime',
+  // otherwise the 2020→2100 dummy range from getDateRangeForPeriod would produce
+  // an absurd number of days).
+  const effectiveDailyRange = useMemo(() => {
+    if (period !== 'allTime') return dateRange
+    if (allBookings.length === 0) return dateRange
+    const dates = allBookings.map(b => b.date).sort()
+    return { start: new Date(dates[0] + 'T00:00:00'), end: new Date() }
+  }, [period, dateRange, allBookings])
+
+  const dailyRevenue: DailyRevenue[] = useMemo(() => {
+    return calculateDailyRevenue(filteredBookings, effectiveDailyRange)
+  }, [filteredBookings, effectiveDailyRange])
+
   // All-time monthly revenue for charts
   const allTimeMonthlyRevenue: MonthlyRevenue[] = useMemo(() => {
     return calculateMonthlyRevenue(allBookings)
@@ -120,6 +136,7 @@ export function useFinanceData() {
     monthlyRevenue,
     statistics,
     equipment,
+    dailyRevenue,
     allTimeMonthlyRevenue,
   }
 }

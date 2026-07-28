@@ -60,7 +60,7 @@ export function FinanceStatistics({ statistics, isLoading }: FinanceStatisticsPr
         <StatCard
           title="Total Bookings"
           value={statistics.totalBookings.toString()}
-          subtitle="Confirmed bookings"
+          subtitle="Confirmed + cancelled"
           icon={<Calendar className="w-5 h-5 text-emerald-600" />}
           iconBg="bg-emerald-100"
         />
