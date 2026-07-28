@@ -46,12 +46,22 @@ export function FinanceCharts({ monthlyRevenue, timeBreakdown, isLoading }: Fina
     labels: sortedMonthly.map(m => m.month),
     datasets: [
       {
-        label: 'Net Revenue',
-        data: sortedMonthly.map(m => m.netRevenue),
+        label: 'Confirmed Revenue',
+        data: sortedMonthly.map(m => m.grossRevenue),
         backgroundColor: 'rgba(16, 185, 129, 0.8)',
         borderColor: 'rgb(16, 185, 129)',
         borderWidth: 1,
         borderRadius: 6,
+        stack: 'net',
+      },
+      {
+        label: 'Fees Retained',
+        data: sortedMonthly.map(m => m.cancellationFees),
+        backgroundColor: 'rgba(245, 158, 11, 0.8)',
+        borderColor: 'rgb(245, 158, 11)',
+        borderWidth: 1,
+        borderRadius: 6,
+        stack: 'net',
       },
       {
         label: 'Refunds',
@@ -60,6 +70,7 @@ export function FinanceCharts({ monthlyRevenue, timeBreakdown, isLoading }: Fina
         borderColor: 'rgb(251, 146, 60)',
         borderWidth: 1,
         borderRadius: 6,
+        stack: 'refunds',
       },
     ],
   }), [sortedMonthly])
@@ -128,7 +139,11 @@ export function FinanceCharts({ monthlyRevenue, timeBreakdown, isLoading }: Fina
       },
     },
     scales: {
+      x: {
+        stacked: true,
+      },
       y: {
+        stacked: true,
         beginAtZero: true,
         ticks: {
           callback: function(value: any) {

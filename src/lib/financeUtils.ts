@@ -1,5 +1,5 @@
 import { Booking } from '@/types/booking'
-import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, parseISO, isWithinInterval, getDay } from 'date-fns'
+import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, parseISO, isWithinInterval, getDay, eachDayOfInterval, startOfWeek } from 'date-fns'
 import {
   EVENING_START_HOUR,
   LATE_NIGHT_START_HOUR,
@@ -21,7 +21,10 @@ export interface MonthlyRevenue {
   refunds: number
   cancellationFees: number
   netRevenue: number
+  /** Confirmed + cancelled groups in the month (i.e. every group that contributes to Net). */
   bookingsCount: number
+  /** Cancelled groups only, shown as a separate column in the revenue table. */
+  cancelledCount: number
 }
 
 export interface TimeBreakdown {
@@ -42,6 +45,15 @@ export interface BookingStatistics {
   peakHours: { slot: string; count: number }[]
   busiestDay: { day: string; count: number; revenue: number }
   utilizationRate: number
+}
+
+export interface DailyRevenue {
+  date: string          // 'YYYY-MM-DD'
+  label: string         // 'Mon 27' for chart X-axis
+  grossRevenue: number  // confirmed
+  cancellationFees: number
+  netRevenue: number
+  bookingsCount: number // confirmed + cancelled groups on that day
 }
 
 export interface EquipmentBreakdown {
@@ -242,6 +254,7 @@ export function isLateNightSlot(timeSlot: string): boolean {
  */
 export function calculateTimeBreakdown(bookings: Booking[]): TimeBreakdown {
   const confirmed = getConfirmedBookings(bookings)
+  const cancelled = getCancelledBookings(bookings)
 
   let daytimeRevenue = 0
   let eveningRevenue = 0
@@ -250,26 +263,40 @@ export function calculateTimeBreakdown(bookings: Booking[]): TimeBreakdown {
   let eveningBookings = 0
   let lateNightBookings = 0
 
-  const groups = new Map<string, Booking[]>()
-  for (const booking of confirmed) {
-    const key = booking.booking_group_id || booking.id
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key)!.push(booking)
+  const groupBy = (list: Booking[]) => {
+    const groups = new Map<string, Booking[]>()
+    for (const b of list) {
+      const key = b.booking_group_id || b.id
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(b)
+    }
+    return groups
   }
 
-  for (const [, groupBookings] of groups) {
-    const amount = groupBookings[0].payment_amount || 0
+  const classify = (rows: Booking[]) => {
+    if (rows.some(b => isLateNightSlot(b.time_slot))) return 'latenight'
+    if (rows.some(b => isEveningSlot(b.time_slot))) return 'evening'
+    return 'daytime'
+  }
 
-    if (groupBookings.some(b => isLateNightSlot(b.time_slot))) {
-      lateNightRevenue += amount
-      lateNightBookings++
-    } else if (groupBookings.some(b => isEveningSlot(b.time_slot))) {
-      eveningRevenue += amount
-      eveningBookings++
-    } else {
-      daytimeRevenue += amount
-      daytimeBookings++
-    }
+  // Confirmed groups → full payment_amount + increment booking count
+  for (const [, groupBookings] of groupBy(confirmed)) {
+    const amount = groupBookings[0].payment_amount || 0
+    const tier = classify(groupBookings)
+    if (tier === 'latenight') { lateNightRevenue += amount; lateNightBookings++ }
+    else if (tier === 'evening') { eveningRevenue += amount; eveningBookings++ }
+    else { daytimeRevenue += amount; daytimeBookings++ }
+  }
+
+  // Cancelled groups → retained cancellation_fee only; DO NOT increment booking count
+  // (those counters mean "played bookings"). Ensures the doughnut totals reconcile with Net Revenue.
+  for (const [, groupBookings] of groupBy(cancelled)) {
+    const fee = groupBookings[0].cancellation_fee || 0
+    if (fee <= 0) continue
+    const tier = classify(groupBookings)
+    if (tier === 'latenight') lateNightRevenue += fee
+    else if (tier === 'evening') eveningRevenue += fee
+    else daytimeRevenue += fee
   }
 
   return {
@@ -308,15 +335,16 @@ export function calculateMonthlyRevenue(bookings: Booking[]): MonthlyRevenue[] {
   
   for (const [monthKey, monthBookings] of monthlyMap) {
     const date = parseISO(monthKey + '-01')
-    
-    // Count unique confirmed bookings
+
+    // Count unique groups: confirmed + cancelled (i.e. every group that shows up in Net)
     const confirmedGroups = new Set<string>()
+    const cancelledGroups = new Set<string>()
     for (const b of monthBookings) {
-      if (b.payment_status === 'confirmed') {
-        confirmedGroups.add(b.booking_group_id || b.id)
-      }
+      const key = b.booking_group_id || b.id
+      if (b.payment_status === 'confirmed') confirmedGroups.add(key)
+      else if (b.payment_status === 'cancelled') cancelledGroups.add(key)
     }
-    
+
     monthly.push({
       month: format(date, 'MMM yyyy'),
       year: date.getFullYear(),
@@ -325,7 +353,8 @@ export function calculateMonthlyRevenue(bookings: Booking[]): MonthlyRevenue[] {
       refunds: calculateTotalRefunds(monthBookings),
       cancellationFees: calculateCancellationFees(monthBookings),
       netRevenue: calculateNetRevenue(monthBookings),
-      bookingsCount: confirmedGroups.size,
+      bookingsCount: confirmedGroups.size + cancelledGroups.size,
+      cancelledCount: cancelledGroups.size,
     })
   }
   
@@ -366,23 +395,38 @@ export function getPopularTimeSlots(bookings: Booking[], limit: number = 5): { s
  */
 export function getBusiestDay(bookings: Booking[]): { day: string; count: number; revenue: number } {
   const confirmed = getConfirmedBookings(bookings)
+  const cancelled = getCancelledBookings(bookings)
   const dayStats = new Map<number, { count: number; revenue: number; seen: Set<string> }>()
-  
+
   // Initialize all days
   for (let i = 0; i < 7; i++) {
     dayStats.set(i, { count: 0, revenue: 0, seen: new Set() })
   }
-  
+
   for (const booking of confirmed) {
     const date = parseISO(booking.date)
     const dayOfWeek = getDay(date)
     const stats = dayStats.get(dayOfWeek)!
     const key = booking.booking_group_id || booking.id
-    
+
     if (!stats.seen.has(key)) {
       stats.seen.add(key)
       stats.count++
       stats.revenue += booking.payment_amount || 0
+    }
+  }
+
+  // Cancelled groups contribute their retained cancellation_fee to the same day.
+  for (const booking of cancelled) {
+    const date = parseISO(booking.date)
+    const dayOfWeek = getDay(date)
+    const stats = dayStats.get(dayOfWeek)!
+    const key = booking.booking_group_id || booking.id
+
+    if (!stats.seen.has(key)) {
+      stats.seen.add(key)
+      stats.count++
+      stats.revenue += booking.cancellation_fee || 0
     }
   }
   
@@ -456,18 +500,19 @@ export function calculateBookingStatistics(bookings: Booking[], dateRange: DateR
     cancelledGroups.add(key)
   }
   
-  const totalBookings = confirmedGroups.size
+  const confirmedCount = confirmedGroups.size
   const cancelledBookings = cancelledGroups.size
-  const totalAll = totalBookings + cancelledBookings
-  
-  const grossRevenue = calculateGrossRevenue(bookings)
-  
+  // totalBookings represents every group that contributes to Net Revenue
+  const totalBookings = confirmedCount + cancelledBookings
+
+  const netRevenue = calculateNetRevenue(bookings)
+
   return {
     totalBookings,
     cancelledBookings,
-    cancellationRate: totalAll > 0 ? (cancelledBookings / totalAll) * 100 : 0,
-    averageBookingValue: totalBookings > 0 ? grossRevenue / totalBookings : 0,
-    averagePlayersPerBooking: totalBookings > 0 ? totalPlayers / totalBookings : 0,
+    cancellationRate: totalBookings > 0 ? (cancelledBookings / totalBookings) * 100 : 0,
+    averageBookingValue: totalBookings > 0 ? netRevenue / totalBookings : 0,
+    averagePlayersPerBooking: confirmedCount > 0 ? totalPlayers / confirmedCount : 0,
     peakHours: getPopularTimeSlots(bookings, 3),
     busiestDay: getBusiestDay(bookings),
     utilizationRate: calculateUtilizationRate(bookings, dateRange),
@@ -482,17 +527,18 @@ export function calculateBookingStatistics(bookings: Booking[], dateRange: DateR
  * Export monthly revenue data to CSV
  */
 export function exportToCSV(data: MonthlyRevenue[], filename: string = 'finance-report'): void {
-  const headers = ['Month', 'Gross Revenue', 'Refunds', 'Cancellation Fees', 'Net Revenue', 'Bookings']
-  
+  const headers = ['Month', 'Bookings', 'Cancelled', 'Gross Revenue', 'Refunds', 'Cancellation Fees', 'Net Revenue']
+
   const rows = data.map(row => [
     row.month,
+    row.bookingsCount,
+    row.cancelledCount,
     row.grossRevenue,
     row.refunds,
     row.cancellationFees,
     row.netRevenue,
-    row.bookingsCount,
   ])
-  
+
   // Add totals row
   const totals = data.reduce(
     (acc, row) => ({
@@ -501,17 +547,19 @@ export function exportToCSV(data: MonthlyRevenue[], filename: string = 'finance-
       cancellationFees: acc.cancellationFees + row.cancellationFees,
       netRevenue: acc.netRevenue + row.netRevenue,
       bookingsCount: acc.bookingsCount + row.bookingsCount,
+      cancelledCount: acc.cancelledCount + row.cancelledCount,
     }),
-    { grossRevenue: 0, refunds: 0, cancellationFees: 0, netRevenue: 0, bookingsCount: 0 }
+    { grossRevenue: 0, refunds: 0, cancellationFees: 0, netRevenue: 0, bookingsCount: 0, cancelledCount: 0 }
   )
-  
+
   rows.push([
     'TOTAL',
+    totals.bookingsCount,
+    totals.cancelledCount,
     totals.grossRevenue,
     totals.refunds,
     totals.cancellationFees,
     totals.netRevenue,
-    totals.bookingsCount,
   ])
   
   // Build CSV content
@@ -530,6 +578,82 @@ export function exportToCSV(data: MonthlyRevenue[], filename: string = 'finance-
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+/**
+ * Bucket revenue by play date across the given range. Days without activity
+ * still appear as zero rows so the chart X-axis is dense.
+ * Follows the same dedup-by-group_id rule as calculateGrossRevenue /
+ * calculateCancellationFees, so per-day net reconciles with the monthly view.
+ */
+export function calculateDailyRevenue(bookings: Booking[], range: DateRange): DailyRevenue[] {
+  if (range.end < range.start) return []
+
+  // Group bookings by ISO date
+  const byDate = new Map<string, Booking[]>()
+  for (const b of bookings) {
+    if (!byDate.has(b.date)) byDate.set(b.date, [])
+    byDate.get(b.date)!.push(b)
+  }
+
+  const days = eachDayOfInterval({ start: range.start, end: range.end })
+  const result: DailyRevenue[] = []
+
+  for (const day of days) {
+    const key = format(day, 'yyyy-MM-dd')
+    const rows = byDate.get(key) || []
+
+    const gross = calculateGrossRevenue(rows)
+    const fees = calculateCancellationFees(rows)
+
+    // Count unique groups for confirmed + cancelled
+    const groups = new Set<string>()
+    for (const b of rows) {
+      if (b.payment_status === 'confirmed' || b.payment_status === 'cancelled') {
+        groups.add(b.booking_group_id || b.id)
+      }
+    }
+
+    result.push({
+      date: key,
+      label: format(day, 'EEE d'),
+      grossRevenue: gross,
+      cancellationFees: fees,
+      netRevenue: gross + fees,
+      bookingsCount: groups.size,
+    })
+  }
+
+  return result
+}
+
+/**
+ * Weekly rollup of `DailyRevenue` (Monday-week). Used when the daily series
+ * would render as an unreadable comb (typically > ~90 days).
+ */
+export function rollupDailyToWeekly(daily: DailyRevenue[]): DailyRevenue[] {
+  const byWeek = new Map<string, DailyRevenue>()
+  for (const d of daily) {
+    const monday = startOfWeek(parseISO(d.date), { weekStartsOn: 1 })
+    const key = format(monday, 'yyyy-MM-dd')
+    const existing = byWeek.get(key)
+    if (existing) {
+      existing.grossRevenue += d.grossRevenue
+      existing.cancellationFees += d.cancellationFees
+      existing.netRevenue += d.netRevenue
+      existing.bookingsCount += d.bookingsCount
+    } else {
+      byWeek.set(key, {
+        date: key,
+        label: `Wk of ${format(monday, 'MMM d')}`,
+        grossRevenue: d.grossRevenue,
+        cancellationFees: d.cancellationFees,
+        netRevenue: d.netRevenue,
+        bookingsCount: d.bookingsCount,
+      })
+    }
+  }
+  return [...byWeek.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
 /**
