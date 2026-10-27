@@ -9,6 +9,7 @@ npm run dev      # Start dev server (port 3000)
 npm run build    # Build production bundle
 npm start        # Start production server
 npm run lint     # Run ESLint
+npm test         # Run unit tests (vitest, src/lib/agent)
 ```
 
 ## Tech Stack
@@ -20,6 +21,7 @@ npm run lint     # Run ESLint
 - **Forms:** React Hook Form + Zod validation
 - **Email:** Resend API
 - **Notifications:** Sonner toasts
+- **AI Assistant:** Vercel AI SDK v7 (ai, @ai-sdk/anthropic, @ai-sdk/react) + Claude Sonnet 5.5
 
 ## Architecture
 
@@ -59,9 +61,9 @@ Key query key patterns:
 
 **State machine:** idle → payment → pending → confirmed
 
-**Payment statuses:** `pending | awaiting_confirmation | confirmed | rejected | expired | cancelled`
+**Payment statuses:** `pending | confirmed | rejected | cancelled`
 
-**Slots:** 1-hour slots, 6:00 AM–10:00 PM (18 slots/day), single court (`court_number = 1`)
+**Slots:** 1-hour slots, 5:00 AM–12:00 AM (19 slots/day), single court (`court_number = 1`)
 
 **Bulk bookings:** Multiple consecutive slots share a `booking_group_id`; each slot is a separate row.
 
@@ -71,9 +73,11 @@ Key query key patterns:
 
 ### Pricing (from `lib/paymentConfig.ts`)
 
-- Daytime (7 AM–5:59 PM): 200 PHP/slot
-- Evening (6 PM+): 250 PHP/slot
+- Daytime (6 AM–5:59 PM): 200 PHP/slot
+- Off-peak (5–6 AM, 6–10 PM): 250 PHP/slot
+- Late-night (10 PM–12 AM): 300 PHP/slot
 - Extra players beyond 4: +50 PHP/player
+- Equipment: paddles 50, ball set 25, training balls 100 PHP per booking (charged for play dates from 2026-06-01)
 
 ### Auth & Roles
 
@@ -105,6 +109,21 @@ Schema changes must be applied via Supabase dashboard or SQL editor using files 
 | `src/app/admin/page.tsx` | Admin dashboard |
 | `src/lib/emailService.ts` | Email templates via Resend |
 | `src/components/AuthProvider.tsx` | Auth context and session management |
+
+### Admin AI Assistant
+
+- Floating drawer on `/admin` (`components/admin/agent/AgentDrawer.tsx`), read-only. Renders only after the admin check; chat code is lazy-loaded on first open.
+- `POST /api/admin/agent`: streaming chat (Vercel AI SDK `streamText`, `claude-sonnet-5-5`). Client sends `{ id, text, regenerate? }`; the server builds the user message (server-generated id) and replays history from `agent_messages`. Retry (`regenerate`) reuses the stored question and replaces the failed answer (`planTurn` in `lib/agent/history.ts`).
+- `GET /api/admin/agent/history?id=`: restore a thread.
+- Auth: both routes need `Authorization: Bearer <supabase access_token>`; `lib/agent/auth.ts` verifies the token + `profiles.role = 'admin'` (401/403 otherwise).
+- Persistence: replies are saved on stream end even if the tab closes (`consumeSseStream`). After Stop the server still saves the full answer, so the next turn's context may include text the admin didn't see (acceptable for read-only Q&A).
+- Token budget: last 20 messages are replayed; tool outputs older than the last 2 assistant turns are replaced with a stub.
+- Markdown images are blocked in rendered replies (prompt-injection exfiltration guard).
+- Thread id is stored per admin in localStorage (`pikol-agent-thread-id:<userId>`).
+- Tools (`lib/agent/tools.ts`): `listBookings`, `getRevenueSummary`, `getSlotAvailability`, `getActionQueue`. All read-only and reuse `financeUtils` so numbers match the Finance tab. Emails and phone numbers are never sent to the model.
+- Tables: `agent_threads`, `agent_messages` (`sql/admin-agent-migration.sql`), RLS on with no policies (service role only).
+- Env: `ANTHROPIC_API_KEY` (server only).
+- To add a tool: add it to `agentTools`, add a `case 'tool-<name>'` + label in `AgentMessage.tsx`, and mention it in the prompt only if it needs usage rules.
 
 ### Image Storage
 
