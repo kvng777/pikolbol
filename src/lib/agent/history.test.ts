@@ -114,6 +114,26 @@ describe('planTurn', () => {
     expect(plan.messages.at(-1)?.id).toBe('new-id')
   })
 
+  it('appends when the matching user message is not at the end of history', () => {
+    const h: AgentUIMessage[] = [
+      { id: 'a', role: 'user', parts: [{ type: 'text', text: 'Q' }] },
+      msg(1, 'assistant'),
+      { id: 'c', role: 'user', parts: [{ type: 'text', text: 'other' }] },
+      msg(3, 'assistant'),
+    ]
+    const plan = planTurn(h, 'Q', true, newId)
+    expect(plan.deleteFromSeq).toBeNull()
+    expect(plan.startSeq).toBe(4)
+    expect(plan.messages.at(-1)?.id).toBe('new-id')
+  })
+
+  it('appends when stored messages after the last user message are not just an assistant reply', () => {
+    const h: AgentUIMessage[] = [msg(0, 'user'), msg(1, 'assistant'), msg(2, 'assistant')]
+    const plan = planTurn(h, 't0', true, newId)
+    expect(plan.deleteFromSeq).toBeNull()
+    expect(plan.startSeq).toBe(3)
+  })
+
   it('appends when regenerating with no stored user message', () => {
     const plan = planTurn([], 'hi', true, newId)
     expect(plan.deleteFromSeq).toBeNull()

@@ -56,6 +56,7 @@ Key query key patterns:
 - `['activeBookings', date]` — pending/confirmed only (drives slot availability)
 - `['allBookings']` — admin view
 - `['disabledSlots', date]`, `['closedDates']` — admin slot controls
+- `['agentHistory', threadId]` — admin assistant chat history (gcTime 0)
 
 ### Booking System
 

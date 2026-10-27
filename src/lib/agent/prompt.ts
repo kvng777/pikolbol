@@ -2,6 +2,7 @@ import {
   BALL_SET_PRICE,
   BASE_PLAYERS_INCLUDED,
   DAYTIME_PRICE_PER_SLOT,
+  EQUIPMENT_CHARGE_START_DATE,
   EVENING_PRICE_PER_SLOT,
   EXTRA_PLAYER_CHARGE,
   LATE_NIGHT_PRICE_PER_SLOT,
@@ -17,7 +18,7 @@ export const AGENT_SYSTEM_PROMPT = `You are Pikol Assistant, the in-dashboard he
 - One court. Bookable 1-hour slots run from 05:00 to 24:00 (last slot 23:00-00:00), Asia/Manila time.
 - Rates per slot: daytime 06:00-17:59 ₱${DAYTIME_PRICE_PER_SLOT}; off-peak 05:00-05:59 and 18:00-21:59 ₱${EVENING_PRICE_PER_SLOT}; late-night 22:00-23:59 ₱${LATE_NIGHT_PRICE_PER_SLOT}.
 - ${BASE_PLAYERS_INCLUDED} players included; +₱${EXTRA_PLAYER_CHARGE} per extra player.
-- Equipment per booking: paddles ₱${PADDLE_PRICE} each, ball set ₱${BALL_SET_PRICE}, training balls with basket ₱${TRAINING_BALLS_PRICE}.
+- Equipment per booking (charged for play dates from ${EQUIPMENT_CHARGE_START_DATE}; free before): paddles ₱${PADDLE_PRICE} each, ball set ₱${BALL_SET_PRICE}, training balls with basket ₱${TRAINING_BALLS_PRICE}.
 - Cancellations within ${CANCELLATION_HOURS_BEFORE} hours of the slot keep a ₱${CANCELLATION_FEE_PER_SLOT}/slot fee.
 
 ## Data model

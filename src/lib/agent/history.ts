@@ -19,10 +19,13 @@ export async function ensureThread(threadId: string, adminUserId: string): Promi
   const owner = await getThreadOwner(threadId)
   if (owner && owner !== adminUserId) return 'forbidden'
   if (!owner) {
+    // Upsert + ignoreDuplicates avoids a first-message race: a concurrent creator wins silently, then we re-check ownership.
     const { error } = await supabase
       .from('agent_threads')
-      .insert({ id: threadId, admin_user_id: adminUserId })
+      .upsert({ id: threadId, admin_user_id: adminUserId }, { onConflict: 'id', ignoreDuplicates: true })
     if (error) throw new Error(`Failed to create thread: ${error.message}`)
+    const finalOwner = await getThreadOwner(threadId)
+    if (finalOwner !== adminUserId) return 'forbidden'
   }
   return 'ok'
 }
@@ -91,7 +94,11 @@ export function planTurn(
 ): TurnPlan {
   if (regenerate) {
     const lastUser = history.findLastIndex(m => m.role === 'user')
-    if (lastUser !== -1 && textOf(history[lastUser]) === text) {
+    const atEnd =
+      lastUser !== -1 &&
+      lastUser >= history.length - 2 &&
+      history.slice(lastUser + 1).every(m => m.role === 'assistant')
+    if (atEnd && textOf(history[lastUser]) === text) {
       const kept = history.slice(0, lastUser + 1)
       return { messages: kept, deleteFromSeq: lastUser + 1, startSeq: kept.length }
     }

@@ -6,7 +6,7 @@ export async function GET(req: Request) {
   if (auth instanceof Response) return auth
 
   const threadId = new URL(req.url).searchParams.get('id')
-  if (!threadId) return new Response('Missing id', { status: 400 })
+  if (!threadId || threadId.length > 100) return new Response('Missing or invalid id', { status: 400 })
 
   const owner = await getThreadOwner(threadId)
   if (owner === null) return Response.json({ messages: [] }) // new thread, nothing yet
