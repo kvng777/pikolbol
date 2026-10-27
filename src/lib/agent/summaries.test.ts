@@ -81,12 +81,13 @@ describe('summarizeRevenue', () => {
 })
 
 describe('summarizeAvailability', () => {
+  const FUTURE = new Date('2026-10-01T00:00:00Z')
   const disabled: DisabledSlot[] = [
     { id: 'd1', date: '2026-10-20', time_slot: '07:00-08:00', created_at: '' },
   ]
 
   it('splits slots into available / booked / disabled', () => {
-    const result = summarizeAvailability('2026-10-20', [booking()], disabled, [])
+    const result = summarizeAvailability('2026-10-20', [booking()], disabled, [], FUTURE)
     expect(result.closed).toBeNull()
     expect(result.booked).toEqual(['06:00-07:00'])
     expect(result.disabled).toEqual(['07:00-08:00'])
@@ -99,6 +100,19 @@ describe('summarizeAvailability', () => {
     const closed: ClosedDate[] = [
       { id: 'c1', start_date: '2026-10-19', end_date: '2026-10-21', reason: 'Resurfacing', created_at: '' },
     ]
-    expect(summarizeAvailability('2026-10-20', [], [], closed).closed).toEqual({ reason: 'Resurfacing' })
+    const result = summarizeAvailability('2026-10-20', [], [], closed, FUTURE)
+    expect(result.closed).toEqual({ reason: 'Resurfacing' })
+    expect(result.available).toEqual([])
+  })
+
+  it('excludes past and in-progress slots today (Manila time)', () => {
+    const now = new Date('2026-10-20T12:30:00Z') // 20:30 Manila
+    const result = summarizeAvailability('2026-10-20', [], [], [], now)
+    expect(result.available).toEqual(['21:00-22:00', '22:00-23:00', '23:00-00:00'])
+  })
+
+  it('returns no availability for past dates', () => {
+    const now = new Date('2026-10-20T12:30:00Z')
+    expect(summarizeAvailability('2026-10-19', [], [], [], now).available).toEqual([])
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { manilaNow, validateDateRange, MAX_RANGE_DAYS } from './dates'
+import { manilaNow, validateDateRange, isRealDate, MAX_RANGE_DAYS } from './dates'
 
 describe('manilaNow', () => {
   it('converts UTC to Asia/Manila (UTC+8), crossing midnight', () => {
@@ -34,5 +34,23 @@ describe('validateDateRange', () => {
 
   it(`rejects ranges longer than ${MAX_RANGE_DAYS} days`, () => {
     expect(validateDateRange('2024-01-01', '2026-01-01').ok).toBe(false)
+  })
+})
+
+describe('isRealDate', () => {
+  it('rejects impossible dates and accepts leap day', () => {
+    expect(isRealDate('2026-02-30')).toBe(false)
+    expect(isRealDate('2028-02-29')).toBe(true)
+  })
+})
+
+describe('validateDateRange extras', () => {
+  it('rejects impossible dates', () => {
+    expect(validateDateRange('2026-02-30', '2026-03-01').ok).toBe(false)
+  })
+  it('enforces the 366-day boundary', () => {
+    expect(validateDateRange('2025-01-01', '2025-12-31').ok).toBe(true)
+    expect(validateDateRange('2024-01-01', '2024-12-31').ok).toBe(true)
+    expect(validateDateRange('2024-01-01', '2025-01-01').ok).toBe(false)
   })
 })

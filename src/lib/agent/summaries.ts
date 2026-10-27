@@ -11,6 +11,7 @@ import {
   getPopularTimeSlots,
 } from '@/lib/financeUtils'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
+import { manilaNow } from './dates'
 
 /** Max booking groups returned to the model per call (token budget). */
 export const MAX_GROUPS = 100
@@ -98,14 +99,19 @@ export function summarizeAvailability(
   date: string,
   activeBookings: Booking[],
   disabledSlots: DisabledSlot[],
-  closedDates: ClosedDate[]
+  closedDates: ClosedDate[],
+  now: Date = new Date()
 ) {
   const closed = closedDates.find(c => c.start_date <= date && date <= c.end_date)
   const slots = getAvailableSlotsForCourt(activeBookings, date, 1, disabledSlots, { ignorePast: true })
+  const { date: today, time } = manilaNow(now)
+  const nowHour = Number(time.slice(0, 2))
+  const isPast = (slot: string) =>
+    date < today || (date === today && Number(slot.slice(0, 2)) <= nowHour)
   return {
     date,
     closed: closed ? { reason: closed.reason } : null,
-    available: slots.filter(s => s.available).map(s => s.time),
+    available: closed ? [] : slots.filter(s => s.available && !isPast(s.time)).map(s => s.time),
     booked: slots.filter(s => s.reason === 'booked').map(s => s.time),
     disabled: slots.filter(s => s.reason === 'disabled').map(s => s.time),
   }

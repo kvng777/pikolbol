@@ -35,12 +35,19 @@ function toUtcDay(date: string): number {
   return Date.UTC(y, m - 1, d) / 86_400_000
 }
 
+export function isRealDate(s: string): boolean {
+  if (!DATE_RE.test(s)) return false
+  const [y, m, d] = s.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+}
+
 export function validateDateRange(
   startDate: string,
   endDate: string
 ): { ok: true } | { ok: false; error: string } {
-  if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate)) {
-    return { ok: false, error: 'Dates must be in YYYY-MM-DD format.' }
+  if (!isRealDate(startDate) || !isRealDate(endDate)) {
+    return { ok: false, error: 'Dates must be real dates in YYYY-MM-DD format.' }
   }
   if (startDate > endDate) {
     return { ok: false, error: 'startDate must be on or before endDate.' }

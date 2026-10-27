@@ -9,7 +9,8 @@ import { getProfileByUserId } from '@/lib/profileService'
  */
 export async function requireAdmin(req: Request): Promise<{ userId: string } | Response> {
   const header = req.headers.get('authorization') ?? ''
-  const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : ''
+  const match = header.match(/^Bearer\s+(.+)$/i)
+  const token = match?.[1].trim() ?? ''
   if (!token) return new Response('Unauthorized', { status: 401 })
 
   const { data, error } = await supabase.auth.getUser(token)

@@ -47,4 +47,10 @@ describe('requireAdmin', () => {
     expect(await requireAdmin(req('Bearer ok'))).toEqual({ userId: 'admin-1' })
     expect(getUser).toHaveBeenCalledWith('ok')
   })
+
+  it('accepts a lowercase bearer scheme', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'admin-1' } }, error: null })
+    getProfileByUserId.mockResolvedValue({ role: 'admin' })
+    expect(await requireAdmin(req('bearer ok'))).toEqual({ userId: 'admin-1' })
+  })
 })
