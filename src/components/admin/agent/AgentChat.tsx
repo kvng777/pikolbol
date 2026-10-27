@@ -16,14 +16,20 @@ const SUGGESTIONS = [
   'What were our busiest time slots last month?',
 ]
 
+// Auto-scroll only while the user is near the bottom, so reading older messages isn't interrupted.
+const STICK_TO_BOTTOM_PX = 80
+
 interface AgentChatProps {
   threadId: string
   initialMessages: AgentUIMessage[]
+  isOpen: boolean
 }
 
-export function AgentChat({ threadId, initialMessages }: AgentChatProps) {
+export function AgentChat({ threadId, initialMessages, isOpen }: AgentChatProps) {
   const [input, setInput] = useState('')
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const nearBottomRef = useRef(true)
 
   const { messages, sendMessage, status, stop, error, clearError, regenerate } = useChat<AgentUIMessage>({
     id: threadId,
@@ -32,30 +38,52 @@ export function AgentChat({ threadId, initialMessages }: AgentChatProps) {
       api: '/api/admin/agent',
       headers: async () => ({ Authorization: `Bearer ${await getAccessToken()}` }),
       // Server replays history from the DB and builds the user message itself, so send only the new text.
-      prepareSendMessagesRequest: ({ id, messages }) => {
+      // On retry the server reuses its stored copy of the question instead of saving it twice.
+      prepareSendMessagesRequest: ({ id, messages, trigger }) => {
         const last = messages[messages.length - 1]
         const text = last.parts.map(p => (p.type === 'text' ? p.text : '')).join('\n')
-        return { body: { id, text } }
+        return { body: { id, text, regenerate: trigger === 'regenerate-message' } }
       },
     }),
   })
 
   const busy = status === 'submitted' || status === 'streaming'
 
+  const scrollToBottom = () => {
+    const el = listRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (nearBottomRef.current) scrollToBottom()
+  }, [messages, status])
+
+  useEffect(() => {
+    if (!isOpen) return
+    nearBottomRef.current = true
+    scrollToBottom()
+    inputRef.current?.focus()
+  }, [isOpen])
 
   const submit = (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || busy) return
+    nearBottomRef.current = true
     void sendMessage({ text: trimmed })
     setInput('')
   }
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div
+        ref={listRef}
+        onScroll={e => {
+          const el = e.currentTarget
+          nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_TO_BOTTOM_PX
+        }}
+        aria-live="polite"
+        className="flex-1 space-y-3 overflow-y-auto p-4"
+      >
         {messages.length === 0 && (
           <div className="space-y-2">
             <p className="text-sm text-gray-500">Ask about bookings, revenue, availability or pending work.</p>
@@ -91,7 +119,6 @@ export function AgentChat({ threadId, initialMessages }: AgentChatProps) {
             </button>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
       <form
@@ -102,7 +129,9 @@ export function AgentChat({ threadId, initialMessages }: AgentChatProps) {
         className="flex items-end gap-2 border-t border-gray-100 p-3"
       >
         <textarea
+          ref={inputRef}
           value={input}
+          aria-label="Message Pikol Assistant"
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter' && !e.shiftKey) {

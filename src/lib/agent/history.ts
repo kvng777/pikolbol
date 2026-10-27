@@ -58,6 +58,48 @@ export async function saveThreadMessages(
   await supabase.from('agent_threads').update({ updated_at: new Date().toISOString() }).eq('id', threadId)
 }
 
+/** Removes messages at or after `fromSeq` (used to drop a failed/partial reply before regenerating it). */
+export async function deleteMessagesFromSeq(threadId: string, fromSeq: number): Promise<void> {
+  const { error } = await supabase.from('agent_messages').delete().eq('thread_id', threadId).gte('seq', fromSeq)
+  if (error) throw new Error(`Failed to delete messages: ${error.message}`)
+}
+
+export interface TurnPlan {
+  /** Full thread to send to the model (history + this turn's user message). */
+  messages: AgentUIMessage[]
+  /** If set, stored messages with seq >= this must be deleted before streaming. */
+  deleteFromSeq: number | null
+  /** Seq from which onEnd should save (number of messages kept in storage). */
+  startSeq: number
+}
+
+function textOf(message: AgentUIMessage): string {
+  return message.parts.map(p => (p.type === 'text' ? p.text : '')).join('\n')
+}
+
+/**
+ * Decides which messages this turn sends and stores. On a retry (regenerate) whose text matches the
+ * last stored user message, that message is reused and everything after it is dropped, so the
+ * question isn't duplicated. Otherwise a new server-built user message is appended.
+ * Seq equals array position because saveThreadMessages always writes seq = index.
+ */
+export function planTurn(
+  history: AgentUIMessage[],
+  text: string,
+  regenerate: boolean,
+  newId: () => string
+): TurnPlan {
+  if (regenerate) {
+    const lastUser = history.findLastIndex(m => m.role === 'user')
+    if (lastUser !== -1 && textOf(history[lastUser]) === text) {
+      const kept = history.slice(0, lastUser + 1)
+      return { messages: kept, deleteFromSeq: lastUser + 1, startSeq: kept.length }
+    }
+  }
+  const userMessage: AgentUIMessage = { id: newId(), role: 'user', parts: [{ type: 'text', text }] }
+  return { messages: [...history, userMessage], deleteFromSeq: null, startSeq: history.length }
+}
+
 /** Keep the last `limit` messages, dropping leading assistant turns so the model sees a user turn first. */
 export function trimForModel(messages: AgentUIMessage[], limit: number = MODEL_HISTORY_LIMIT): AgentUIMessage[] {
   const recent = messages.slice(-limit)

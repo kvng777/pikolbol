@@ -14,8 +14,10 @@ import { agentTools } from '@/lib/agent/tools'
 import { AGENT_SYSTEM_PROMPT, buildContextNote } from '@/lib/agent/prompt'
 import {
   compactOldToolOutputs,
+  deleteMessagesFromSeq,
   ensureThread,
   loadThreadMessages,
+  planTurn,
   saveThreadMessages,
   trimForModel,
 } from '@/lib/agent/history'
@@ -32,6 +34,8 @@ const generateId = createIdGenerator({ prefix: 'msg', size: 16 })
 const bodySchema = z.object({
   id: z.string().min(1).max(100),
   text: z.string().trim().min(1).max(4000),
+  // True when the client retries the last question; the stored user message is reused instead of duplicated.
+  regenerate: z.boolean().optional(),
 })
 
 export async function POST(req: Request) {
@@ -40,16 +44,16 @@ export async function POST(req: Request) {
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return new Response('Bad request', { status: 400 })
-  const { id: threadId, text } = parsed.data
+  const { id: threadId, text, regenerate } = parsed.data
 
   if ((await ensureThread(threadId, auth.userId)) === 'forbidden') {
     return new Response('Forbidden', { status: 403 })
   }
 
   const history = await loadThreadMessages(threadId)
-  // Built server-side (server id, text-only part): no client-controlled ids, files or provider metadata.
-  const userMessage: AgentUIMessage = { id: generateId(), role: 'user', parts: [{ type: 'text', text }] }
-  const messages = [...history, userMessage]
+  // New user messages are built server-side (server id, text-only part): no client-controlled ids, files or provider metadata.
+  const { messages, deleteFromSeq, startSeq } = planTurn(history, text, regenerate ?? false, generateId)
+  if (deleteFromSeq !== null) await deleteMessagesFromSeq(threadId, deleteFromSeq)
 
   const result = streamText({
     model: anthropic(AGENT_MODEL),
@@ -87,7 +91,7 @@ export async function POST(req: Request) {
       },
       onEnd: async ({ messages: updated }) => {
         try {
-          await saveThreadMessages(threadId, updated, history.length)
+          await saveThreadMessages(threadId, updated, startSeq)
         } catch (error) {
           console.error('Failed to save agent thread:', error)
         }

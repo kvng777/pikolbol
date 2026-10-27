@@ -13,6 +13,7 @@ const TOOL_LABELS: Record<string, string> = {
 }
 
 // react-markdown escapes raw HTML by default (no rehype-raw), so model output can't inject markup.
+// Images are also disallowed below.
 const markdownComponents: Components = {
   p: props => <p className="mb-2 last:mb-0" {...props} />,
   ul: props => <ul className="mb-2 list-disc pl-5" {...props} />,
@@ -67,7 +68,14 @@ export function AgentMessage({ message }: { message: AgentUIMessage }) {
               return isUser ? (
                 <p key={key} className="whitespace-pre-wrap">{part.text}</p>
               ) : (
-                <Markdown key={key} remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                <Markdown
+                  key={key}
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents}
+                  // No auto-loading image URLs: injected booking data could otherwise exfiltrate via <img src>.
+                  disallowedElements={['img']}
+                  unwrapDisallowed
+                >
                   {part.text}
                 </Markdown>
               )
