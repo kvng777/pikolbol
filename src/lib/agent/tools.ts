@@ -10,7 +10,7 @@ import {
 } from '@/lib/bookingService'
 import { getPendingPayments } from '@/lib/paymentService'
 import { isRealDate, validateDateRange } from './dates'
-import { groupBookings, summarizeAvailability, summarizeBookingList, summarizeRevenue } from './summaries'
+import { MAX_GROUPS, summarizeAvailability, summarizeBookingList, summarizeRevenue } from './summaries'
 
 const isoDate = z
   .string()
@@ -75,7 +75,8 @@ export const agentTools = {
   getActionQueue: tool({
     description:
       'Everything waiting on an admin right now: payments to verify, refunds to process, ' +
-      'and reschedule requests to approve or reject.',
+      'and reschedule requests to approve or reject. Each list returns at most 100 entries; ' +
+      'compare totals (totalGroups, rescheduleTotal) and say so if anything was cut off.',
     inputSchema: z.object({}),
     execute: async () => {
       const [payments, refunds, reschedules] = await Promise.all([
@@ -84,9 +85,10 @@ export const agentTools = {
         getPendingRescheduleRequests(),
       ])
       return {
-        pendingPayments: groupBookings(payments),
-        pendingRefunds: groupBookings(refunds),
-        rescheduleRequests: reschedules.map(r => ({
+        pendingPayments: summarizeBookingList(payments),
+        pendingRefunds: summarizeBookingList(refunds),
+        rescheduleTotal: reschedules.length,
+        rescheduleRequests: reschedules.slice(0, MAX_GROUPS).map(r => ({
           shortId: r.short_id,
           customerName: r.customer_name,
           from: { date: r.original_date, timeSlots: r.original_time_slots },
