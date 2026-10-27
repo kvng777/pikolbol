@@ -67,6 +67,60 @@ export async function deleteMessagesFromSeq(threadId: string, fromSeq: number): 
   if (error) throw new Error(`Failed to delete messages: ${error.message}`)
 }
 
+const UNTITLED = 'Untitled chat'
+
+/** Title for a thread from its first user message's parts: text joined, whitespace collapsed, truncated with '…'. */
+export function threadTitle(parts: unknown, maxLen = 80): string {
+  if (!Array.isArray(parts)) return UNTITLED
+  const text = parts
+    .map(p =>
+      p && typeof p === 'object' && (p as { type?: unknown }).type === 'text' && typeof (p as { text?: unknown }).text === 'string'
+        ? (p as { text: string }).text
+        : ''
+    )
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return UNTITLED
+  return text.length > maxLen ? `${text.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…` : text
+}
+
+export interface ThreadSummary {
+  id: string
+  title: string
+  updatedAt: string
+}
+
+/**
+ * An admin's own threads, most recently updated first, titled by their first user message (seq 0).
+ * Threads with no stored messages (e.g. a first request that failed) are left out.
+ */
+export async function listThreads(adminUserId: string, limit = 50): Promise<ThreadSummary[]> {
+  const { data: threads, error } = await supabase
+    .from('agent_threads')
+    .select('id, updated_at')
+    .eq('admin_user_id', adminUserId)
+    .order('updated_at', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(`Failed to list threads: ${error.message}`)
+  if (!threads || threads.length === 0) return []
+
+  const ids = threads.map(t => t.id as string)
+  const { data: firsts, error: msgError } = await supabase
+    .from('agent_messages')
+    .select('thread_id, parts')
+    .in('thread_id', ids)
+    .eq('seq', 0)
+  if (msgError) throw new Error(`Failed to load thread titles: ${msgError.message}`)
+
+  const firstParts = new Map<string, unknown>((firsts ?? []).map(m => [m.thread_id as string, m.parts]))
+  return threads.flatMap(t =>
+    firstParts.has(t.id)
+      ? [{ id: t.id as string, title: threadTitle(firstParts.get(t.id)), updatedAt: t.updated_at as string }]
+      : []
+  )
+}
+
 export interface TurnPlan {
   /** Full thread to send to the model (history + this turn's user message). */
   messages: AgentUIMessage[]

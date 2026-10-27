@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockSupabase = vi.hoisted(() => ({ from: vi.fn() }))
 vi.mock('@/lib/supabase-server', () => ({ supabase: mockSupabase }))
 
-import { compactOldToolOutputs, deleteMessagesFromSeq, planTurn, trimForModel } from './history'
+import { compactOldToolOutputs, deleteMessagesFromSeq, listThreads, planTurn, threadTitle, trimForModel } from './history'
 import type { AgentUIMessage } from './types'
 
 function msg(i: number, role: 'user' | 'assistant'): AgentUIMessage {
@@ -163,5 +163,119 @@ describe('deleteMessagesFromSeq', () => {
   it('throws when the delete fails', async () => {
     gte.mockResolvedValue({ error: { message: 'boom' } })
     await expect(deleteMessagesFromSeq('thread-1', 3)).rejects.toThrow('boom')
+  })
+})
+
+describe('threadTitle', () => {
+  it('joins text parts and collapses whitespace', () => {
+    expect(
+      threadTitle([
+        { type: 'text', text: '  How many   bookings\n' },
+        { type: 'step-start' },
+        { type: 'text', text: 'today?' },
+      ])
+    ).toBe('How many bookings today?')
+  })
+
+  it('truncates long titles with an ellipsis', () => {
+    const title = threadTitle([{ type: 'text', text: 'a'.repeat(200) }], 10)
+    expect(title).toBe(`${'a'.repeat(9)}…`)
+    expect(title).toHaveLength(10)
+  })
+
+  it('does not truncate a title exactly at the limit', () => {
+    expect(threadTitle([{ type: 'text', text: 'abcde' }], 5)).toBe('abcde')
+  })
+
+  it('falls back to Untitled chat when there is no text', () => {
+    expect(threadTitle([])).toBe('Untitled chat')
+    expect(threadTitle([{ type: 'text', text: '   ' }])).toBe('Untitled chat')
+    expect(threadTitle([{ type: 'tool-x', output: 1 }])).toBe('Untitled chat')
+    expect(threadTitle(null)).toBe('Untitled chat')
+    expect(threadTitle('garbage')).toBe('Untitled chat')
+    expect(threadTitle([null, 3, { type: 'text', text: 42 }])).toBe('Untitled chat')
+  })
+})
+
+describe('listThreads', () => {
+  type Result = { data: unknown; error: { message: string } | null }
+
+  function setup(threads: Result, messages: Result) {
+    const calls = {
+      threadsEq: vi.fn(),
+      order: vi.fn(),
+      limit: vi.fn(),
+      messagesIn: vi.fn(),
+      messagesEq: vi.fn(),
+    }
+    const threadsChain = {
+      select: () => threadsChain,
+      eq: (...a: unknown[]) => (calls.threadsEq(...a), threadsChain),
+      order: (...a: unknown[]) => (calls.order(...a), threadsChain),
+      limit: (...a: unknown[]) => (calls.limit(...a), Promise.resolve(threads)),
+    }
+    const messagesChain = {
+      select: () => messagesChain,
+      in: (...a: unknown[]) => (calls.messagesIn(...a), messagesChain),
+      eq: (...a: unknown[]) => (calls.messagesEq(...a), Promise.resolve(messages)),
+    }
+    mockSupabase.from.mockImplementation((table: string) =>
+      table === 'agent_threads' ? threadsChain : messagesChain
+    )
+    return calls
+  }
+
+  beforeEach(() => mockSupabase.from.mockReset())
+
+  it('filters by admin, keeps updated_at order, and skips empty threads', async () => {
+    const calls = setup(
+      {
+        data: [
+          { id: 't3', updated_at: '2026-10-27T10:00:00Z' },
+          { id: 't2', updated_at: '2026-10-26T10:00:00Z' },
+          { id: 't1', updated_at: '2026-10-25T10:00:00Z' },
+        ],
+        error: null,
+      },
+      {
+        // Returned out of order on purpose; t2 has no first message.
+        data: [
+          { thread_id: 't1', parts: [{ type: 'text', text: 'First' }] },
+          { thread_id: 't3', parts: [{ type: 'text', text: 'Third' }] },
+        ],
+        error: null,
+      }
+    )
+
+    const out = await listThreads('admin-1', 10)
+
+    expect(calls.threadsEq).toHaveBeenCalledWith('admin_user_id', 'admin-1')
+    expect(calls.order).toHaveBeenCalledWith('updated_at', { ascending: false })
+    expect(calls.limit).toHaveBeenCalledWith(10)
+    expect(calls.messagesIn).toHaveBeenCalledWith('thread_id', ['t3', 't2', 't1'])
+    expect(calls.messagesEq).toHaveBeenCalledWith('seq', 0)
+    expect(out).toEqual([
+      { id: 't3', title: 'Third', updatedAt: '2026-10-27T10:00:00Z' },
+      { id: 't1', title: 'First', updatedAt: '2026-10-25T10:00:00Z' },
+    ])
+  })
+
+  it('returns [] without querying messages when the admin has no threads', async () => {
+    const calls = setup({ data: [], error: null }, { data: [], error: null })
+    expect(await listThreads('admin-1')).toEqual([])
+    expect(calls.messagesIn).not.toHaveBeenCalled()
+  })
+
+  it('throws on a threads query error', async () => {
+    setup({ data: null, error: { message: 'boom' } }, { data: [], error: null })
+    await expect(listThreads('admin-1')).rejects.toThrow('boom')
+  })
+
+  it('throws on a messages query error', async () => {
+    setup(
+      { data: [{ id: 't1', updated_at: '2026-10-25T10:00:00Z' }], error: null },
+      { data: null, error: { message: 'kaput' } }
+    )
+    await expect(listThreads('admin-1')).rejects.toThrow('kaput')
   })
 })
