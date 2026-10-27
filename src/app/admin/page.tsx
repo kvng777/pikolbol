@@ -17,6 +17,7 @@ import { PendingRefunds } from '@/components/admin/PendingRefunds'
 import { PaymentSettings } from '@/components/admin/PaymentSettings'
 import { FinanceTab } from '@/components/admin/FinanceTab'
 import { NoticeSettings } from '@/components/admin/NoticeSettings'
+import { AgentDrawer } from '@/components/admin/agent/AgentDrawer'
 import { usePendingPayments } from '@/hooks/usePayment'
 import { usePendingRefunds } from '@/hooks/useRefunds'
 import { usePendingRescheduleRequests } from '@/hooks/useBookings'
@@ -387,6 +388,8 @@ export default function AdminPage() {
           initialValues={editingBooking}
         />
       )}
+
+      <AgentDrawer />
     </div>
   )
 }
