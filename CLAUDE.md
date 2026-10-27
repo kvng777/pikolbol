@@ -117,7 +117,8 @@ Schema changes must be applied via Supabase dashboard or SQL editor using files 
 - Floating drawer on `/admin` (`components/admin/agent/AgentDrawer.tsx`), read-only. Renders only after the admin check; chat code is lazy-loaded on first open.
 - `POST /api/admin/agent`: streaming chat (Vercel AI SDK `streamText`, `claude-sonnet-5-5`). Client sends `{ id, text, regenerate? }`; the server builds the user message (server-generated id) and replays history from `agent_messages`. Retry (`regenerate`) reuses the stored question and replaces the failed answer (`planTurn` in `lib/agent/history.ts`).
 - `GET /api/admin/agent/history?id=`: restore a thread.
-- Auth: both routes need `Authorization: Bearer <supabase access_token>`; `lib/agent/auth.ts` verifies the token + `profiles.role = 'admin'` (401/403 otherwise).
+- `GET /api/admin/agent/threads`: the signed-in admin's own previous chats (up to 50, newest `updated_at` first), titled from each thread's first user message (`listThreads` / `threadTitle` in `lib/agent/history.ts`). Threads with no saved messages are skipped. Shown in the drawer's "Previous chats" view (History button, `AgentThreadList.tsx`; query key `['agentThreads']`, fetched only while that view is open and invalidated after every answer). Admins never see each other's chats, and there is no delete.
+- Auth: all agent routes need `Authorization: Bearer <supabase access_token>`; `lib/agent/auth.ts` verifies the token + `profiles.role = 'admin'` (401/403 otherwise).
 - Persistence: replies are saved on stream end even if the tab closes (`consumeSseStream`). After Stop the server still saves the full answer, so the next turn's context may include text the admin didn't see (acceptable for read-only Q&A).
 - Token budget: last 20 messages are replayed; tool outputs older than the last 2 assistant turns are replaced with a stub.
 - Markdown images are blocked in rendered replies (prompt-injection exfiltration guard).
