@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useChat } from '@ai-sdk/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { DefaultChatTransport } from 'ai'
 import { Send, Square, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getAccessToken } from '@/hooks/useAgentThread'
 import type { AgentUIMessage } from '@/lib/agent/types'
 import { AgentMessage } from './AgentMessage'
+import { formatResetDate } from './AgentUsageBar'
 
 const SUGGESTIONS = [
   'How much did we earn this month?',
@@ -19,13 +21,21 @@ const SUGGESTIONS = [
 // Auto-scroll only while the user is near the bottom, so reading older messages isn't interrupted.
 const STICK_TO_BOTTOM_PX = 80
 
+// A 402 from the chat route: the transport puts the response body (`{"error":"budget_exceeded",...}`) in error.message.
+const isBudgetError = (error: Error | undefined) => !!error?.message.includes('budget_exceeded')
+
 interface AgentChatProps {
   threadId: string
   initialMessages: AgentUIMessage[]
   isOpen: boolean
+  /** Monthly AI budget reached: input is disabled until it resets. */
+  budgetExceeded: boolean
+  /** YYYY-MM-DD the budget resets (1st of next month, Manila). */
+  budgetResetsOn?: string
 }
 
-export function AgentChat({ threadId, initialMessages, isOpen }: AgentChatProps) {
+export function AgentChat({ threadId, initialMessages, isOpen, budgetExceeded, budgetResetsOn }: AgentChatProps) {
+  const queryClient = useQueryClient()
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -45,9 +55,19 @@ export function AgentChat({ threadId, initialMessages, isOpen }: AgentChatProps)
         return { body: { id, text, regenerate: trigger === 'regenerate-message' } }
       },
     }),
+    // Refresh the budget meter after every answer (and when the server says the budget is used up).
+    onFinish: () => void queryClient.invalidateQueries({ queryKey: ['agentUsage'] }),
+    onError: err => {
+      if (isBudgetError(err)) void queryClient.invalidateQueries({ queryKey: ['agentUsage'] })
+    },
   })
 
   const busy = status === 'submitted' || status === 'streaming'
+  const budgetError = isBudgetError(error)
+  const blocked = budgetExceeded || budgetError
+  const budgetNotice = `This month's AI budget has been reached. The assistant will be available again on ${
+    budgetResetsOn ? formatResetDate(budgetResetsOn) : 'the 1st of next month'
+  }.`
 
   const scrollToBottom = () => {
     const el = listRef.current
@@ -67,7 +87,7 @@ export function AgentChat({ threadId, initialMessages, isOpen }: AgentChatProps)
 
   const submit = (text: string) => {
     const trimmed = text.trim()
-    if (!trimmed || busy) return
+    if (!trimmed || busy || blocked) return
     nearBottomRef.current = true
     void sendMessage({ text: trimmed })
     setInput('')
@@ -84,7 +104,7 @@ export function AgentChat({ threadId, initialMessages, isOpen }: AgentChatProps)
         aria-live="polite"
         className="flex-1 space-y-3 overflow-y-auto p-4"
       >
-        {messages.length === 0 && (
+        {messages.length === 0 && !blocked && (
           <div className="space-y-2">
             <p className="text-sm text-gray-500">Ask about bookings, revenue, availability or pending work.</p>
             {SUGGESTIONS.map(s => (
@@ -105,7 +125,11 @@ export function AgentChat({ threadId, initialMessages, isOpen }: AgentChatProps)
 
         {status === 'submitted' && <p className="text-xs text-gray-400">Thinking…</p>}
 
-        {error && (
+        {blocked && (
+          <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{budgetNotice}</div>
+        )}
+
+        {error && !budgetError && (
           <div className="flex items-center justify-between rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
             <span>Something went wrong.</span>
             <button
@@ -141,8 +165,9 @@ export function AgentChat({ threadId, initialMessages, isOpen }: AgentChatProps)
           }}
           rows={1}
           maxLength={4000}
-          placeholder="Ask Pikol Assistant…"
-          className="max-h-32 flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+          disabled={blocked}
+          placeholder={blocked ? 'Monthly AI budget reached' : 'Ask Pikol Assistant…'}
+          className="max-h-32 flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50"
         />
         {busy ? (
           <Button type="button" size="icon" variant="outline" onClick={() => void stop()} aria-label="Stop">
@@ -153,7 +178,7 @@ export function AgentChat({ threadId, initialMessages, isOpen }: AgentChatProps)
             type="submit"
             size="icon"
             className="bg-emerald-500 hover:bg-emerald-600"
-            disabled={!input.trim()}
+            disabled={!input.trim() || blocked}
             aria-label="Send"
           >
             <Send className="h-4 w-4" />

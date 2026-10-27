@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic'
 import { Sparkles, X, SquarePen, Loader2 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { HttpError, useAgentThread } from '@/hooks/useAgentThread'
+import { useAgentUsage } from '@/hooks/useAgentUsage'
+import { AgentUsageBar } from './AgentUsageBar'
 
 function Spinner() {
   return (
@@ -32,6 +34,7 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
   const [everOpened, setEverOpened] = useState(false)
   const launcherRef = useRef<HTMLButtonElement>(null)
   const { threadId, newThread, history } = useAgentThread({ userId, enabled: everOpened })
+  const usage = useAgentUsage({ enabled: everOpened })
 
   const openPanel = () => {
     setEverOpened(true)
@@ -90,6 +93,8 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
             </div>
           </div>
 
+          <AgentUsageBar usage={usage.data} isLoading={usage.isLoading} />
+
           <div className="min-h-0 flex-1">
             {history.isLoading && <Spinner />}
             {forbidden && (
@@ -107,7 +112,14 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
               </div>
             )}
             {threadId && history.data && (
-              <AgentChat key={threadId} threadId={threadId} initialMessages={history.data} isOpen={open} />
+              <AgentChat
+                key={threadId}
+                threadId={threadId}
+                initialMessages={history.data}
+                isOpen={open}
+                budgetExceeded={usage.data?.exceeded ?? false}
+                budgetResetsOn={usage.data?.resetsOn}
+              />
             )}
           </div>
         </div>
