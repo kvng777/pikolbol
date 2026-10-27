@@ -62,8 +62,11 @@ export function AgentChat({
         return { body: { id, text, regenerate: trigger === 'regenerate-message' } }
       },
     }),
-    // Refresh the budget meter after every answer (and when the server says the budget is used up).
-    onFinish: () => void queryClient.invalidateQueries({ queryKey: ['agentUsage'] }),
+    // Refresh the budget meter and previous-chats list after every answer (budget also when the server says it is used up).
+    onFinish: () => {
+      void queryClient.invalidateQueries({ queryKey: ['agentUsage'] })
+      void queryClient.invalidateQueries({ queryKey: ['agentThreads'] })
+    },
     onError: err => {
       if (budgetErrorKind(err)) void queryClient.invalidateQueries({ queryKey: ['agentUsage'] })
     },

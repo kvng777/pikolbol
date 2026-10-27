@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Sparkles, X, SquarePen, Loader2 } from 'lucide-react'
+import { Sparkles, X, SquarePen, Loader2, History } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { HttpError, useAgentThread } from '@/hooks/useAgentThread'
 import { useAgentUsage } from '@/hooks/useAgentUsage'
 import { AgentUsageBar } from './AgentUsageBar'
+import { AgentThreadList } from './AgentThreadList'
 
 function Spinner() {
   return (
@@ -33,7 +34,8 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
   const [open, setOpen] = useState(false)
   const [everOpened, setEverOpened] = useState(false)
   const launcherRef = useRef<HTMLButtonElement>(null)
-  const { threadId, newThread, history } = useAgentThread({ userId, enabled: everOpened })
+  const [view, setView] = useState<'chat' | 'history'>('chat')
+  const { threadId, newThread, selectThread, history } = useAgentThread({ userId, enabled: everOpened })
   const usage = useAgentUsage({ enabled: everOpened })
 
   const openPanel = () => {
@@ -45,6 +47,16 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
   useEffect(() => {
     if (!open && everOpened) launcherRef.current?.focus()
   }, [open, everOpened])
+
+  const startNewChat = () => {
+    newThread()
+    setView('chat')
+  }
+
+  const openThread = (id: string) => {
+    selectThread(id)
+    setView('chat')
+  }
 
   const forbidden = history.error instanceof HttpError && history.error.status === 403
 
@@ -73,7 +85,9 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
           onKeyDown={e => {
             if (e.key === 'Escape') {
               e.stopPropagation()
-              setOpen(false)
+              // Escape steps back out of the history list first, then closes the panel.
+              if (view === 'history') setView('chat')
+              else setOpen(false)
             }
           }}
         >
@@ -84,7 +98,15 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
               <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">read-only</span>
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={newThread} className="rounded p-1.5 text-gray-500 hover:bg-gray-100" aria-label="New chat">
+              <button
+                onClick={() => setView(v => (v === 'history' ? 'chat' : 'history'))}
+                className={`rounded p-1.5 hover:bg-gray-100 ${view === 'history' ? 'bg-gray-100 text-emerald-600' : 'text-gray-500'}`}
+                aria-label="Previous chats"
+                aria-pressed={view === 'history'}
+              >
+                <History className="h-4 w-4" />
+              </button>
+              <button onClick={startNewChat} className="rounded p-1.5 text-gray-500 hover:bg-gray-100" aria-label="New chat">
                 <SquarePen className="h-4 w-4" />
               </button>
               <button onClick={() => setOpen(false)} className="rounded p-1.5 text-gray-500 hover:bg-gray-100" aria-label="Close">
@@ -95,12 +117,19 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
 
           <AgentUsageBar usage={usage.data} isLoading={usage.isLoading} isError={usage.isError} />
 
-          <div className="min-h-0 flex-1">
+          {view === 'history' && (
+            <div className="min-h-0 flex-1">
+              <AgentThreadList currentThreadId={threadId} onSelect={openThread} onBack={() => setView('chat')} />
+            </div>
+          )}
+
+          {/* Hidden (not unmounted) while browsing history so an in-progress answer isn't lost. */}
+          <div className={`min-h-0 flex-1 ${view === 'chat' ? '' : 'hidden'}`}>
             {history.isLoading && <Spinner />}
             {forbidden && (
               <div className="p-4 text-sm text-gray-600">
                 This chat belongs to another account.{' '}
-                <button className="font-medium text-emerald-700 underline" onClick={newThread}>
+                <button className="font-medium text-emerald-700 underline" onClick={startNewChat}>
                   Start new chat
                 </button>
               </div>
@@ -116,7 +145,7 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
                 key={threadId}
                 threadId={threadId}
                 initialMessages={history.data}
-                isOpen={open}
+                isOpen={open && view === 'chat'}
                 usageLoaded={usage.data !== undefined}
                 budgetExceeded={usage.data?.exceeded ?? false}
                 budgetResetsOn={usage.data?.resetsOn}

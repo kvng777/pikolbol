@@ -67,6 +67,16 @@ export function useAgentThread({ userId, enabled }: UseAgentThreadOptions) {
     setThreadId(id)
   }, [userId])
 
+  /** Switch to an existing thread (e.g. from the previous chats list) and remember it. */
+  const selectThread = useCallback(
+    (id: string) => {
+      if (!userId) return
+      writeThreadId(userId, id)
+      setThreadId(id)
+    },
+    [userId]
+  )
+
   const history = useQuery({
     queryKey: ['agentHistory', threadId],
     enabled: enabled && !!threadId,
@@ -85,5 +95,5 @@ export function useAgentThread({ userId, enabled }: UseAgentThreadOptions) {
     },
   })
 
-  return { threadId, newThread, history }
+  return { threadId, newThread, selectThread, history }
 }
