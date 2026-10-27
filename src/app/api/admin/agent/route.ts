@@ -21,6 +21,7 @@ import {
   saveThreadMessages,
   trimForModel,
 } from '@/lib/agent/history'
+import { getBudgetSummary, recordUsage } from '@/lib/agent/usage'
 import type { AgentUIMessage } from '@/lib/agent/types'
 
 // Allow multi-step tool loops to finish on Vercel.
@@ -45,6 +46,15 @@ export async function POST(req: Request) {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return new Response('Bad request', { status: 400 })
   const { id: threadId, text, regenerate } = parsed.data
+
+  // Monthly budget gate (shared across admins). A turn already in flight may overshoot slightly.
+  const budget = await getBudgetSummary()
+  if (budget.exceeded) {
+    return Response.json(
+      { error: 'budget_exceeded', resetsOn: budget.resetsOn },
+      { status: 402 }
+    )
+  }
 
   if ((await ensureThread(threadId, auth.userId)) === 'forbidden') {
     return new Response('Forbidden', { status: 403 })
@@ -76,6 +86,23 @@ export async function POST(req: Request) {
     maxOutputTokens: 8000,
     providerOptions: {
       anthropic: { effort: 'medium' } satisfies AnthropicLanguageModelOptions,
+    },
+    // Fires once all steps finish; consumeSseStream below keeps the stream draining after a client disconnect.
+    onEnd: async ({ totalUsage }) => {
+      const d = totalUsage.inputTokenDetails
+      const cacheRead = d?.cacheReadTokens ?? 0
+      const cacheWrite = d?.cacheWriteTokens ?? 0
+      const noCacheInput = d?.noCacheTokens ?? Math.max(0, (totalUsage.inputTokens ?? 0) - cacheRead - cacheWrite)
+      try {
+        await recordUsage({
+          adminUserId: auth.userId,
+          threadId,
+          model: AGENT_MODEL,
+          tokens: { noCacheInput, cacheRead, cacheWrite, output: totalUsage.outputTokens ?? 0 },
+        })
+      } catch (error) {
+        console.error('Failed to record agent usage:', error)
+      }
     },
   })
 
