@@ -109,6 +109,32 @@ export async function getConfirmedBookings(): Promise<Booking[]> {
   return data || []
 }
 
+/**
+ * Get all bookings (any status) with date in [startDate, endDate] inclusive.
+ * Pages through results because Supabase caps responses at 1000 rows.
+ * Throws on error so callers (agent tools) can surface it.
+ */
+export async function getBookingsInRange(startDate: string, endDate: string): Promise<Booking[]> {
+  const PAGE_SIZE = 1000
+  const rows: Booking[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true })
+      .order('time_slot', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+
+    if (error) throw new Error(`Failed to load bookings: ${error.message}`)
+    rows.push(...(data ?? []))
+    if (!data || data.length < PAGE_SIZE) break
+  }
+  return rows
+}
+
 export async function createBooking(booking: BookingFormData): Promise<CreateBookingResult> {
   const { data, error } = await supabase
     .from('bookings')
