@@ -17,7 +17,7 @@
 | `GET chat-history` | Task 9 |
 | Auth + ownership, never trust client ids | Tasks 5, 8, 9 |
 | System prompt + token budget | Tasks 7, 8 (`trimForModel`) |
-| One history mechanism (server replay only) | Tasks 8, 9, 10 (`prepareSendMessagesRequest` sends only the last message) |
+| One history mechanism (server replay only) | Tasks 8, 9, 10 (`prepareSendMessagesRequest` sends only the new text) |
 | Agent loop with iteration cap | Task 9 (`stopWhen: isStepCount(8)`) |
 | Persist on finish even if client disconnects | Task 9 (`consumeStream()` + `onEnd`) |
 | Read-only data access enforced in code, not the prompt | Task 6: tools only call fixed SELECT queries, with no free-form SQL |
@@ -1088,6 +1088,8 @@ git commit -m "feat(agent): add thread ownership and message persistence"
 
 ### Task 9: API routes
 
+> **Revised after code review (commit after d1265d9):** the chat route now takes `{ id, text }` (strict zod, max 4000 chars) and builds the user message server-side with a server id. It drops `validateUIMessages`, uses `consumeSseStream` instead of `result.consumeStream()` so a disconnect still saves the complete answer, passes `ignoreIncompleteToolCalls: true`, adds `onError`, saves only new messages, and compacts old tool outputs. The repo code is authoritative over the snippet below.
+
 **Files:**
 - Create: `src/app/api/admin/agent/route.ts`
 - Create: `src/app/api/admin/agent/history/route.ts`
@@ -1430,10 +1432,12 @@ export function AgentChat({ threadId, initialMessages }: AgentChatProps) {
     transport: new DefaultChatTransport<AgentUIMessage>({
       api: '/api/admin/agent',
       headers: async () => ({ Authorization: `Bearer ${await getAccessToken()}` }),
-      // Server replays history from the DB, so send only the new message.
-      prepareSendMessagesRequest: ({ id, messages }) => ({
-        body: { id, message: messages[messages.length - 1] },
-      }),
+      // Server replays history from the DB and builds the user message itself, so send only the new text.
+      prepareSendMessagesRequest: ({ id, messages }) => {
+        const last = messages[messages.length - 1]
+        const text = last.parts.map(p => (p.type === 'text' ? p.text : '')).join('\n')
+        return { body: { id, text } }
+      },
     }),
   })
 
