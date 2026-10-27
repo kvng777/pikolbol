@@ -8,7 +8,9 @@ const FILL: Record<BudgetLevel, string> = {
   exceeded: 'bg-red-500',
 }
 
-const peso = (n: number) => `₱${n.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`
+// Show centavos for small amounts (e.g. ₱0.74) so early usage isn't rounded to ₱1.
+const peso = (n: number) =>
+  `₱${n.toLocaleString('en-PH', n < 10 ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 0 })}`
 
 /** "2026-11-01" → "Nov 1" (date-only, so format in UTC to avoid a timezone shift). */
 export function formatResetDate(isoDate: string): string {
