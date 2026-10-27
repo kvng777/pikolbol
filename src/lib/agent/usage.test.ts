@@ -1,8 +1,23 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 
-vi.mock('@/lib/supabase-server', () => ({ supabase: {} }))
+// Configurable fake for supabase.from('agent_usage').select().gte().lt().order().range().
+const db = vi.hoisted(() => ({
+  from: vi.fn(),
+}))
+vi.mock('@/lib/supabase-server', () => ({ supabase: { from: db.from } }))
 
-import { turnCostUsd, manilaMonthWindow, summarizeBudget, readBudgetConfig } from './usage'
+import { turnCostUsd, manilaMonthWindow, summarizeBudget, readBudgetConfig, checkBudgetGate } from './usage'
+
+function usageRows(result: { data: { cost_usd: number }[] | null; error: { message: string } | null }) {
+  const chain = {
+    select: () => chain,
+    gte: () => chain,
+    lt: () => chain,
+    order: () => chain,
+    range: () => Promise.resolve(result),
+  }
+  return chain
+}
 
 describe('turnCostUsd', () => {
   it('prices each token class at Sonnet 5.5 rates', () => {
@@ -77,5 +92,42 @@ describe('readBudgetConfig', () => {
       budgetPhp: null,
       usdToPhp: 58,
     })
+  })
+})
+
+describe('checkBudgetGate', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    db.from.mockReset()
+    vi.restoreAllMocks()
+  })
+
+  it('skips the DB entirely when no budget is set', async () => {
+    vi.stubEnv('AGENT_MONTHLY_BUDGET_PHP', '')
+    expect(await checkBudgetGate()).toBeNull()
+    expect(db.from).not.toHaveBeenCalled()
+  })
+
+  it('allows the turn while under budget', async () => {
+    vi.stubEnv('AGENT_MONTHLY_BUDGET_PHP', '1000')
+    db.from.mockReturnValue(usageRows({ data: [{ cost_usd: 1 }], error: null })) // ₱58
+    expect(await checkBudgetGate()).toBeNull()
+  })
+
+  it('returns 402 budget_exceeded once the budget is reached', async () => {
+    vi.stubEnv('AGENT_MONTHLY_BUDGET_PHP', '100')
+    db.from.mockReturnValue(usageRows({ data: [{ cost_usd: 2 }], error: null })) // ₱116
+    const res = await checkBudgetGate()
+    expect(res?.status).toBe(402)
+    expect(await res?.json()).toMatchObject({ error: 'budget_exceeded' })
+  })
+
+  it('fails closed with 503 budget_unavailable when usage cannot be loaded', async () => {
+    vi.stubEnv('AGENT_MONTHLY_BUDGET_PHP', '1000')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    db.from.mockReturnValue(usageRows({ data: null, error: { message: 'relation does not exist' } }))
+    const res = await checkBudgetGate()
+    expect(res?.status).toBe(503)
+    expect(await res?.json()).toEqual({ error: 'budget_unavailable' })
   })
 })

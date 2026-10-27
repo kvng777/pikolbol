@@ -21,7 +21,7 @@ import {
   saveThreadMessages,
   trimForModel,
 } from '@/lib/agent/history'
-import { getBudgetSummary, recordUsage } from '@/lib/agent/usage'
+import { checkBudgetGate, recordUsage } from '@/lib/agent/usage'
 import type { AgentUIMessage } from '@/lib/agent/types'
 
 // Allow multi-step tool loops to finish on Vercel.
@@ -47,14 +47,10 @@ export async function POST(req: Request) {
   if (!parsed.success) return new Response('Bad request', { status: 400 })
   const { id: threadId, text, regenerate } = parsed.data
 
-  // Monthly budget gate (shared across admins). A turn already in flight may overshoot slightly.
-  const budget = await getBudgetSummary()
-  if (budget.exceeded) {
-    return Response.json(
-      { error: 'budget_exceeded', resetsOn: budget.resetsOn },
-      { status: 402 }
-    )
-  }
+  // Monthly budget gate (shared across admins): 402 when reached, 503 if usage can't be checked.
+  // A turn already in flight may overshoot slightly.
+  const blocked = await checkBudgetGate()
+  if (blocked) return blocked
 
   if ((await ensureThread(threadId, auth.userId)) === 'forbidden') {
     return new Response('Forbidden', { status: 403 })

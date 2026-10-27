@@ -10,6 +10,7 @@ import { getAccessToken } from '@/hooks/useAgentThread'
 import type { AgentUIMessage } from '@/lib/agent/types'
 import { AgentMessage } from './AgentMessage'
 import { formatResetDate } from './AgentUsageBar'
+import { budgetErrorKind } from '@/lib/agent/budgetErrors'
 
 const SUGGESTIONS = [
   'How much did we earn this month?',
@@ -21,20 +22,26 @@ const SUGGESTIONS = [
 // Auto-scroll only while the user is near the bottom, so reading older messages isn't interrupted.
 const STICK_TO_BOTTOM_PX = 80
 
-// A 402 from the chat route: the transport puts the response body (`{"error":"budget_exceeded",...}`) in error.message.
-const isBudgetError = (error: Error | undefined) => !!error?.message.includes('budget_exceeded')
-
 interface AgentChatProps {
   threadId: string
   initialMessages: AgentUIMessage[]
   isOpen: boolean
+  /** The usage query has data; once true it decides blocking (so a raised/reset budget unblocks the chat). */
+  usageLoaded: boolean
   /** Monthly AI budget reached: input is disabled until it resets. */
   budgetExceeded: boolean
   /** YYYY-MM-DD the budget resets (1st of next month, Manila). */
   budgetResetsOn?: string
 }
 
-export function AgentChat({ threadId, initialMessages, isOpen, budgetExceeded, budgetResetsOn }: AgentChatProps) {
+export function AgentChat({
+  threadId,
+  initialMessages,
+  isOpen,
+  usageLoaded,
+  budgetExceeded,
+  budgetResetsOn,
+}: AgentChatProps) {
   const queryClient = useQueryClient()
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
@@ -58,13 +65,15 @@ export function AgentChat({ threadId, initialMessages, isOpen, budgetExceeded, b
     // Refresh the budget meter after every answer (and when the server says the budget is used up).
     onFinish: () => void queryClient.invalidateQueries({ queryKey: ['agentUsage'] }),
     onError: err => {
-      if (isBudgetError(err)) void queryClient.invalidateQueries({ queryKey: ['agentUsage'] })
+      if (budgetErrorKind(err)) void queryClient.invalidateQueries({ queryKey: ['agentUsage'] })
     },
   })
 
   const busy = status === 'submitted' || status === 'streaming'
-  const budgetError = isBudgetError(error)
-  const blocked = budgetExceeded || budgetError
+  const budgetError = budgetErrorKind(error)
+  // Usage data (refreshed after a 402) is the source of truth once loaded; until then trust the 402 itself.
+  // If usage later shows room again, the stale 402 is simply not shown and the admin can send (which clears it).
+  const blocked = usageLoaded ? budgetExceeded : budgetError === 'exceeded'
   const budgetNotice = `This month's AI budget has been reached. The assistant will be available again on ${
     budgetResetsOn ? formatResetDate(budgetResetsOn) : 'the 1st of next month'
   }.`
@@ -129,9 +138,13 @@ export function AgentChat({ threadId, initialMessages, isOpen, budgetExceeded, b
           <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{budgetNotice}</div>
         )}
 
-        {error && !budgetError && (
+        {error && budgetError !== 'exceeded' && (
           <div className="flex items-center justify-between rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-            <span>Something went wrong.</span>
+            <span>
+              {budgetError === 'unavailable'
+                ? "Couldn't check the AI budget right now. Please try again shortly."
+                : 'Something went wrong.'}
+            </span>
             <button
               onClick={() => {
                 clearError()

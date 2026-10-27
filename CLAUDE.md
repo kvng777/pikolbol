@@ -127,7 +127,7 @@ Schema changes must be applied via Supabase dashboard or SQL editor using files 
 - Env: `ANTHROPIC_API_KEY` (server only).
 - Monthly budget meter: after each turn the chat route's `onEnd` converts `totalUsage` tokens to USD (Sonnet 5.5 prices live in `lib/agent/usage.ts`, update them if the model or pricing changes) and inserts a row into `agent_usage` (`sql/agent-usage-migration.sql`, service role only). `GET /api/admin/agent/usage` returns this Manila calendar month's spend across all admins vs. the budget; `AgentUsageBar` shows it in the drawer (query key `['agentUsage']`, refreshed after every answer; amber at 80%, red at 100%).
   - Env: `AGENT_MONTHLY_BUDGET_PHP` (unset/invalid = no limit, nothing blocked) and `AGENT_USD_TO_PHP` (default 58).
-  - Once the month's total reaches the budget, `POST /api/admin/agent` returns 402 `{ error: 'budget_exceeded', resetsOn }` and the chat input is disabled until the 1st of next month (Manila time).
+  - Once the month's total reaches the budget, `POST /api/admin/agent` returns 402 `{ error: 'budget_exceeded', resetsOn }` and the chat input is disabled until the 1st of next month (Manila time). With no budget set, the gate is skipped (no DB query); if usage can't be loaded, the chat route fails closed with 503 `{ error: 'budget_unavailable' }` (`checkBudgetGate` in `lib/agent/usage.ts`).
   - Self-metered limits: the check runs before a turn, so one in-flight turn can overshoot (~₱5–20); only this app's usage is counted, and a turn that crashes before `onEnd` isn't recorded. Keep the Anthropic Console spend limit as the hard backstop.
 - To add a tool: add it to `agentTools`, add a `case 'tool-<name>'` + label in `AgentMessage.tsx`, and mention it in the prompt only if it needs usage rules.
 

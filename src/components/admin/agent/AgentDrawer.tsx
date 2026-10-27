@@ -93,7 +93,7 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
             </div>
           </div>
 
-          <AgentUsageBar usage={usage.data} isLoading={usage.isLoading} />
+          <AgentUsageBar usage={usage.data} isLoading={usage.isLoading} isError={usage.isError} />
 
           <div className="min-h-0 flex-1">
             {history.isLoading && <Spinner />}
@@ -117,6 +117,7 @@ function AgentDrawerPanel({ userId }: { userId: string | null }) {
                 threadId={threadId}
                 initialMessages={history.data}
                 isOpen={open}
+                usageLoaded={usage.data !== undefined}
                 budgetExceeded={usage.data?.exceeded ?? false}
                 budgetResetsOn={usage.data?.resetsOn}
               />

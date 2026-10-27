@@ -134,3 +134,22 @@ export async function getBudgetSummary(now: Date = new Date()): Promise<BudgetSu
   const { budgetPhp, usdToPhp } = readBudgetConfig()
   return summarizeBudget({ spentUsd: await getMonthSpendUsd(now), budgetPhp, usdToPhp, now })
 }
+
+/**
+ * Pre-turn budget check for the chat route. Returns a Response to send instead of answering, or null to proceed.
+ * No budget configured → no DB query. Usage can't be loaded → fail closed with 503.
+ */
+export async function checkBudgetGate(now: Date = new Date()): Promise<Response | null> {
+  if (readBudgetConfig().budgetPhp === null) return null
+  let budget: BudgetSummary
+  try {
+    budget = await getBudgetSummary(now)
+  } catch (error) {
+    console.error('Agent budget check failed:', error)
+    return Response.json({ error: 'budget_unavailable' }, { status: 503 })
+  }
+  if (budget.exceeded) {
+    return Response.json({ error: 'budget_exceeded', resetsOn: budget.resetsOn }, { status: 402 })
+  }
+  return null
+}

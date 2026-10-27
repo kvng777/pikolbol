@@ -18,9 +18,10 @@ export function formatResetDate(isoDate: string): string {
 interface AgentUsageBarProps {
   usage?: BudgetSummary
   isLoading: boolean
+  isError: boolean
 }
 
-export function AgentUsageBar({ usage, isLoading }: AgentUsageBarProps) {
+export function AgentUsageBar({ usage, isLoading, isError }: AgentUsageBarProps) {
   if (isLoading) {
     return (
       <div className="border-b border-gray-100 px-4 py-2" aria-hidden>
@@ -28,7 +29,11 @@ export function AgentUsageBar({ usage, isLoading }: AgentUsageBarProps) {
       </div>
     )
   }
-  if (!usage) return null
+  if (!usage) {
+    return isError ? (
+      <div className="border-b border-gray-100 px-4 py-2 text-xs text-gray-400">AI usage unavailable</div>
+    ) : null
+  }
 
   if (usage.budgetPhp === null || usage.percent === null) {
     return (
@@ -50,6 +55,7 @@ export function AgentUsageBar({ usage, isLoading }: AgentUsageBarProps) {
           aria-valuenow={usage.percent}
           aria-valuemin={0}
           aria-valuemax={100}
+          aria-valuetext={`${peso(usage.usedPhp)} of ${peso(usage.budgetPhp)} used`}
           aria-label="Monthly AI budget used"
           className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100"
         >
