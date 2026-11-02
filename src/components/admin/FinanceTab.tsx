@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useFinanceData } from '@/hooks/useFinanceData'
 import { PeriodType } from '@/lib/financeUtils'
@@ -24,6 +24,9 @@ const PERIOD_OPTIONS: { value: PeriodType; label: string }[] = [
 export function FinanceTab() {
   const {
     isLoading,
+    isFetching,
+    dataUpdatedAt,
+    refetch,
     period,
     setPeriod,
     customRange,
@@ -120,7 +123,24 @@ export function FinanceTab() {
       </div>
 
       {/* Summary Cards */}
-      <FinanceSummaryCards summary={summary} isLoading={isLoading} />
+      <div className="space-y-3">
+        <div className="flex items-center justify-end gap-3">
+          {dataUpdatedAt > 0 && (
+            <span className="text-xs text-gray-400">Updated {format(dataUpdatedAt, 'h:mm a')}</span>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            aria-label="Refresh finance data"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+        <FinanceSummaryCards summary={summary} isLoading={isLoading} />
+      </div>
 
       {/* Daily / Weekly Revenue */}
       <FinanceDailyChart daily={dailyRevenue} isLoading={isLoading} />

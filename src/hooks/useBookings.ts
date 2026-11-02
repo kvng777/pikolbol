@@ -56,13 +56,15 @@ export function useActiveBookingsByDate(date: string) {
 
 /**
  * Get ALL bookings (for admin view)
+ * Refetches on mount and tab focus (no polling: each fetch is the whole table).
  */
 export function useAllBookings() {
   return useQuery<Booking[]>({
     queryKey: ['allBookings'],
     queryFn: getAllBookingsAction,
-    staleTime: CACHE_TIME,
+    staleTime: 0,
     gcTime: CACHE_TIME,
+    refetchOnWindowFocus: true,
   })
 }
 
