@@ -34,7 +34,7 @@ export interface FinanceSummary {
 }
 
 export function useFinanceData() {
-  const { data: allBookings = [], isLoading, refetch } = useAllBookings()
+  const { data: allBookings = [], isLoading, isFetching, dataUpdatedAt, refetch } = useAllBookings()
   
   // Period selection state
   const [period, setPeriod] = useState<PeriodType>('allTime')
@@ -123,6 +123,8 @@ export function useFinanceData() {
     allBookings,
     filteredBookings,
     isLoading,
+    isFetching,
+    dataUpdatedAt,
     refetch,
     // Period selection
     period,

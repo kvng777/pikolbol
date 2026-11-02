@@ -74,20 +74,28 @@ export async function getActiveBookingsByDate(date: string): Promise<Booking[]> 
 /**
  * Get all bookings - returns ALL bookings regardless of payment status
  * For admin view that needs to see everything
+ * Pages through results because Supabase caps responses at 1000 rows.
  */
 export async function getAllBookings(): Promise<Booking[]> {
-  const { data, error } = await supabase
-    .from('bookings')
-    .select('*')
-    .order('date', { ascending: false })
-    .order('time_slot', { ascending: true })
+  const PAGE_SIZE = 1000
+  const rows: Booking[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .order('date', { ascending: false })
+      .order('time_slot', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
 
-  if (error) {
-    console.error('Error fetching all bookings:', error)
-    return []
+    if (error) {
+      console.error('Error fetching all bookings:', error)
+      return []
+    }
+    rows.push(...(data ?? []))
+    if (!data || data.length < PAGE_SIZE) break
   }
-
-  return data || []
+  return rows
 }
 
 /**
