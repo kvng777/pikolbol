@@ -78,9 +78,6 @@ export function FinanceTab() {
             <CalendarDays className="w-5 h-5 text-gray-400" />
             <span className="text-sm font-medium text-gray-700">Period:</span>
             <span className="text-sm text-gray-500">{getPeriodDescription()}</span>
-            {dataUpdatedAt > 0 && (
-              <span className="text-xs text-gray-400">· Updated {format(dataUpdatedAt, 'h:mm a')}</span>
-            )}
           </div>
           
           <div className="flex flex-wrap gap-2">
@@ -95,16 +92,6 @@ export function FinanceTab() {
                 {option.label}
               </Button>
             ))}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => refetch()}
-              disabled={isFetching}
-              aria-label="Refresh finance data"
-            >
-              <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
           </div>
         </div>
 
@@ -136,6 +123,21 @@ export function FinanceTab() {
       </div>
 
       {/* Summary Cards */}
+      <div className="flex items-center justify-end gap-3 -mb-3">
+        {dataUpdatedAt > 0 && (
+          <span className="text-xs text-gray-400">Updated {format(dataUpdatedAt, 'h:mm a')}</span>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          aria-label="Refresh finance data"
+        >
+          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
       <FinanceSummaryCards summary={summary} isLoading={isLoading} />
 
       {/* Daily / Weekly Revenue */}
