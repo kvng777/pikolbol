@@ -123,22 +123,24 @@ export function FinanceTab() {
       </div>
 
       {/* Summary Cards */}
-      <div className="flex items-center justify-end gap-3 -mb-3">
-        {dataUpdatedAt > 0 && (
-          <span className="text-xs text-gray-400">Updated {format(dataUpdatedAt, 'h:mm a')}</span>
-        )}
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          aria-label="Refresh finance data"
-        >
-          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+      <div className="space-y-3">
+        <div className="flex items-center justify-end gap-3">
+          {dataUpdatedAt > 0 && (
+            <span className="text-xs text-gray-400">Updated {format(dataUpdatedAt, 'h:mm a')}</span>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            aria-label="Refresh finance data"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+        <FinanceSummaryCards summary={summary} isLoading={isLoading} />
       </div>
-      <FinanceSummaryCards summary={summary} isLoading={isLoading} />
 
       {/* Daily / Weekly Revenue */}
       <FinanceDailyChart daily={dailyRevenue} isLoading={isLoading} />
