@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Image from 'next/image'
 import { format } from 'date-fns'
 import { QrCode, CheckCircle, Loader2, Copy, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSubmitPayment, usePaymentStatus, usePaymentSettings } from '@/hooks/usePayment'
 import { formatEquipmentSummary } from '@/lib/paymentConfig'
-import { isEquipmentChargeable } from '@/lib/pricing'
+import { isEquipmentChargeable, formatPeso } from '@/lib/pricing'
 import { usePriceQuote, usePricingVersions } from '@/hooks/usePricing'
 import type { QuoteInput } from '@/types/pricing'
 import { Booking } from '@/types/booking'
@@ -69,6 +69,18 @@ export function PaymentScreen({
   // A refreshing, failed or already-rejected quote is never shown or submitted
   const quoteUsable = !!quote && !quoteFetching && !quoteError && quote.token !== rejectedToken
   
+  // Tell the user when a refreshed quote changes the amount they were looking at
+  const lastShownAmount = useRef<number | null>(null)
+  const quoteAmount = quote && !quoteFetching && !quoteError ? quote.amount : null
+  useEffect(() => {
+    if (quoteAmount === null) return
+    const prev = lastShownAmount.current
+    if (prev !== null && prev !== quoteAmount) {
+      toast(`Price updated from ${formatPeso(prev)} to ${formatPeso(quoteAmount)}`)
+    }
+    lastShownAmount.current = quoteAmount
+  }, [quoteAmount])
+
   // Only poll for status after payment is submitted
   const bookingIds = submittedBookings?.map(b => b.id) || []
   const { data: currentBookings } = usePaymentStatus(bookingIds)

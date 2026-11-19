@@ -299,7 +299,7 @@ export async function createAdminBooking(
     booking_group_id: bookingGroupId,
     payment_status: 'confirmed' as const,
     payment_amount: amount,
-    pricing_snapshot: pricingSnapshot,
+    ...(pricingSnapshot ? { pricing_snapshot: pricingSnapshot } : {}),
     payment_confirmed_at: nowIso,
     is_manual: true,
   }))
@@ -421,7 +421,7 @@ export async function updateAdminBooking(
     booking_group_id: bookingGroupId,
     payment_status: 'confirmed' as const,
     payment_amount: amount,
-    pricing_snapshot: pricingSnapshot,
+    ...(pricingSnapshot ? { pricing_snapshot: pricingSnapshot } : {}),
     payment_confirmed_at: existing[0].payment_confirmed_at || nowIso,
     is_manual: true,
   }))
@@ -699,7 +699,7 @@ export async function approveRescheduleRequest(
     // Deliberately keeps the original amount and snapshot: a booking keeps the price it was made under,
     // even if the new date crosses equipment_charge_start_date.
     payment_amount: first.payment_amount,
-    pricing_snapshot: first.pricing_snapshot ?? null,
+    ...(first.pricing_snapshot ? { pricing_snapshot: first.pricing_snapshot } : {}),
     payment_confirmed_at: first.payment_confirmed_at,
     gcash_reference: first.gcash_reference,
     is_manual: first.is_manual ?? false,

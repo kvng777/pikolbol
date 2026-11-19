@@ -82,6 +82,7 @@ Key query key patterns:
 - Payment screen: `getPriceQuoteAction` returns an HMAC-signed quote (`lib/priceQuote.ts`, 60 min). `submitPaymentAction` verifies it and saves exactly `quote.amount`; invalid or expired returns `code: 'quote_invalid'` and the UI refetches the quote. **`PRICE_QUOTE_SECRET` (server env) is required**; without it quotes and bookings fail.
 - Each booking row stores `payment_amount` and `pricing_snapshot` (`{ version_id, rules }`). Cancellation fees and Finance equipment revenue use the snapshot (`rulesFromSnapshot`; seed prices only for legacy rows without one). Emails use the stored amount.
 - If prices can't be loaded, quotes and bookings fail ("Prices unavailable") and screens show an unavailable state: never 0, never a constant fallback.
+- Deploy order: (1) run `sql/pricing-schedules-migration.sql`; (2) set `PRICE_QUOTE_SECRET` (>=32 chars) in Vercel; (3) then deploy. Rolling back to pre-pricing code after admins changed prices brings back the old hardcoded prices.
 - Query keys: `['pricing']` (all versions; invalidated by the Pricing tab), `['priceQuote', input]` (payment screen, gcTime 0).
 
 ### Auth & Roles

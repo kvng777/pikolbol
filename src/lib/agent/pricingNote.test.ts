@@ -19,6 +19,14 @@ describe('buildPricingNote', () => {
     expect(note).toContain('within 24 hours of the slot keep a ₱100/slot fee')
   })
 
+  it('calls the seed version the original prices', () => {
+    const note = buildPricingNote([v({})], '2026-11-19')
+    expect(note).toContain('original prices')
+    expect(note).not.toContain('2000-01-01')
+    const later = buildPricingNote([v({}), v({ id: 'n', effective_from: '2026-11-01' })], '2026-11-19')
+    expect(later).toContain('in effect since 2026-11-01')
+  })
+
   it('lists scheduled changes', () => {
     const dec = v({ id: 'dec', effective_from: '2026-12-01', rules: { ...SEED_PRICING_RULES, tier_prices: { daytime: 220, offpeak: 270, latenight: 320 } } })
     const note = buildPricingNote([v({}), dec], '2026-11-19')

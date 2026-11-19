@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import {
-  addDaysIso,
   rulesToFormRules,
   formRulesToRules,
   initialPricingFormValues,
@@ -8,7 +7,7 @@ import {
   nestFieldErrors,
   type PricingFormValues,
 } from './pricingForm'
-import { SEED_PRICING_RULES, maxPricingEffectiveFrom } from './pricing'
+import { SEED_PRICING_RULES, maxPricingEffectiveFrom, addDaysIso } from './pricing'
 
 const R = SEED_PRICING_RULES
 const TODAY = '2026-11-19'

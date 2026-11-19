@@ -5,7 +5,7 @@
  * server's rules inline before submitting.
  */
 import { createPricingVersionSchema } from './pricingSchema'
-import { maxPricingEffectiveFrom } from './pricing'
+import { maxPricingEffectiveFrom, addDaysIso } from './pricing'
 import { isRealDate } from './agent/dates'
 import type { CreatePricingInput, PricingRules } from '@/types/pricing'
 
@@ -19,12 +19,6 @@ export interface PricingFormValues {
   mode: 'now' | 'scheduled'
   /** Only used when mode = 'scheduled'. */
   effectiveFrom: string
-}
-
-/** 'YYYY-MM-DD' + n days (UTC calendar math, no time zone involved). */
-export function addDaysIso(date: string, days: number): string {
-  const [y, m, d] = date.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
 }
 
 export function rulesToFormRules(rules: PricingRules): PricingFormRules {

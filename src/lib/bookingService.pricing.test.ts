@@ -136,7 +136,7 @@ describe('admin bookings pricing', () => {
     expect(res.success).toBe(true)
     expect(getPricingForDate).not.toHaveBeenCalled()
     expect(ops.inserted[0].payment_amount).toBe(123)
-    expect(ops.inserted[0].pricing_snapshot).toBeNull()
+    expect(ops.inserted[0]).not.toHaveProperty('pricing_snapshot')
   })
 
   it('updateAdminBooking re-prices when the stored payment_amount is null', async () => {
@@ -170,6 +170,19 @@ describe('admin bookings pricing', () => {
     expect(ops.inserted[0].pricing_snapshot).toEqual(OLD_SNAPSHOT)
     expect(ops.inserted[0].payment_amount).toBe(123)
     expect(ops.inserted[0].training_balls).toBe(true)
+  })
+
+  it('approveRescheduleRequest omits pricing_snapshot when the booking has none', async () => {
+    const ops = setup([existingRow({ is_manual: false, pricing_snapshot: null })], {
+      reschedule_requests: {
+        id: 'r1', status: 'pending', booking_group_id: 'g1', new_date: '2026-12-05', new_time_slots: ['12:00'],
+        original_date: DATE, original_time_slots: ['10:00'], customer_email: 'a@b.c', customer_name: 'Ann',
+      },
+    })
+    const res = await approveRescheduleRequest('r1')
+    expect(res.success).toBe(true)
+    expect(ops.inserted[0]).not.toHaveProperty('pricing_snapshot')
+    expect(ops.inserted[0].payment_amount).toBe(123)
   })
 })
 

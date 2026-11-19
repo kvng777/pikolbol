@@ -25,45 +25,6 @@ export const RELEASED_PAYMENT_STATUSES = ['rejected', 'cancelled'] as const
 export const PENDING_VERIFICATION_STATUSES = ['pending'] as const
 
 /**
- * Extract the start hour from a time slot string
- * Handles formats like "18:00", "6:00 PM", "18:00 - 19:00", "6:00 PM - 7:00 PM"
- */
-export function getSlotStartHour(timeSlot: string): number {
-  // Get the start time (before any dash separator)
-  const startTime = timeSlot.split('-')[0].trim()
-  
-  // Try to parse 24-hour format first (e.g., "18:00")
-  const match24h = startTime.match(/^(\d{1,2}):(\d{2})$/)
-  if (match24h) {
-    return parseInt(match24h[1], 10)
-  }
-  
-  // Try to parse 12-hour format (e.g., "6:00 PM")
-  const match12h = startTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
-  if (match12h) {
-    let hour = parseInt(match12h[1], 10)
-    const period = match12h[3].toUpperCase()
-    
-    if (period === 'PM' && hour !== 12) {
-      hour += 12
-    } else if (period === 'AM' && hour === 12) {
-      hour = 0
-    }
-    
-    return hour
-  }
-  
-  // Fallback: try to extract any leading number
-  const fallbackMatch = startTime.match(/^(\d{1,2})/)
-  if (fallbackMatch) {
-    return parseInt(fallbackMatch[1], 10)
-  }
-  
-  // Default to daytime if parsing fails
-  return 12
-}
-
-/**
  * Format the selected equipment into a human-readable summary.
  * Returns null when no equipment was selected.
  * e.g. "2 paddles, balls (set of 4)", "1 paddle", "Balls (set of 4)"

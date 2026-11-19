@@ -695,6 +695,8 @@ export function calculateEquipmentBreakdown(bookings: Booking[]): EquipmentBreak
       console.warn(`Finance: skipping equipment revenue for booking group ${key} (invalid pricing snapshot)`)
       continue
     }
+    // Known limitation: this uses the booking's CURRENT date. A reschedule that crosses
+    // equipment_charge_start_date can misattribute equipment revenue (rare; the stored amount is correct).
     if (isEquipmentChargeable(rules, b.date)) {
       paddleRevenue += paddles * rules.paddle_price
       if (hasBalls) ballSetRevenue += rules.ball_set_price

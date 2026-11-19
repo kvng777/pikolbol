@@ -140,8 +140,12 @@ export default function BookingConfirmedModal({ open, onClose, bookings, booking
                               const timeSlots = bookings.map(b => b.time_slot)
                               const players = bookings[0]?.players ?? 1
                               // Legacy rows without a stored amount predate admin pricing
-                              const totalCost = calculatePaymentAmount(SEED_PRICING_RULES, timeSlots, players)
-                              return `Php${totalCost.toLocaleString()}`
+                              try {
+                                const totalCost = calculatePaymentAmount(SEED_PRICING_RULES, timeSlots, players)
+                                return `Php${totalCost.toLocaleString()}`
+                              } catch {
+                                return '—'
+                              }
                             })()}
                           </p>
                         </div>

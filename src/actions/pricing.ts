@@ -8,6 +8,7 @@ import {
   createPricingVersion,
   cancelPricingVersion,
 } from '@/lib/pricingService'
+import { addDaysIso } from '@/lib/pricing'
 import { createPriceQuote } from '@/lib/priceQuote'
 import { createPricingInputSchema, quoteInputSchema } from '@/lib/pricingSchema'
 import { maxPricingEffectiveFrom } from '@/lib/pricing'
@@ -51,11 +52,6 @@ export async function getPriceQuoteAction(input: QuoteInput): Promise<PriceQuote
   }
 }
 
-function addDays(date: string, days: number): string {
-  const [y, m, d] = date.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
-}
-
 export type CreatePricingVersionResult =
   | { success: true; version: PricingVersion; appliedNow: boolean }
   | { success: false; error: string }
@@ -80,7 +76,7 @@ export async function createPricingVersionAction(
   let effectiveFrom = today
   if (parsed.data.mode === 'scheduled') {
     effectiveFrom = parsed.data.effectiveFrom
-    if (effectiveFrom < addDays(today, 1)) {
+    if (effectiveFrom < addDaysIso(today, 1)) {
       return { success: false, error: 'Pick tomorrow or a later date (use "Apply now" for today).' }
     }
     if (effectiveFrom > maxPricingEffectiveFrom(today)) {

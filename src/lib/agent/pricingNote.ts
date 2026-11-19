@@ -39,7 +39,8 @@ export function buildPricingNote(versions: PricingVersion[] | null, today: strin
     return 'Pricing note: no price version applies today. Do not quote prices.'
   }
 
-  const parts = [`Pricing note (prices apply by play date; in effect since ${current.effective_from}):`, describeRules(current.rules)]
+  const since = current.effective_from === '2000-01-01' ? 'original prices' : `in effect since ${current.effective_from}`
+  const parts = [`Pricing note (prices apply by play date; ${since}):`, describeRules(current.rules)]
   // One entry per start date: the version that actually applies on it (newer same-date versions win).
   const dates = [...new Set(upcomingPricingVersions(versions, today).map((v) => v.effective_from))]
   for (const date of dates) {

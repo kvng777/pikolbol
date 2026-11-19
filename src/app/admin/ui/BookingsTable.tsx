@@ -203,8 +203,12 @@ export default function BookingsTable({ table, onEditBooking }: BookingsTablePro
                       : (() => {
                           const players = typeof group.players === 'number' ? group.players : 4
                           // Legacy rows without a stored amount predate admin pricing
-                          const total = calculatePaymentAmount(SEED_PRICING_RULES, group.timeSlots, players)
-                          return `₱${total.toLocaleString()}`
+                          try {
+                            const total = calculatePaymentAmount(SEED_PRICING_RULES, group.timeSlots, players)
+                            return `₱${total.toLocaleString()}`
+                          } catch {
+                            return '—'
+                          }
                         })()
                     }
                     {group.timeSlots.length > 1 && (

@@ -305,3 +305,9 @@ export function diffPricingRules(from: PricingRules, to: PricingRules): PricingC
   add('Free cancellation window', `${from.cancellation_window_hours}h`, `${to.cancellation_window_hours}h`)
   return changes
 }
+
+/** 'YYYY-MM-DD' + n days (UTC calendar math, no time zone involved). */
+export function addDaysIso(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+}
