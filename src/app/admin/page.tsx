@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { useAdminTable } from './hooks/useAdminTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Calendar, Clock, Plus, Ban, Lock, CreditCard, Settings, Banknote, DollarSign, Megaphone, UserCog } from 'lucide-react'
+import { Calendar, Clock, Plus, Ban, Lock, CreditCard, Settings, Banknote, DollarSign, Megaphone, UserCog, Tag } from 'lucide-react'
 import AdminHeader from './ui/AdminHeader'
 import TodaySummary from './ui/TodaySummary'
 import AdminControls from './ui/AdminControls'
@@ -15,6 +15,7 @@ import NavBar from '@/components/NavBar'
 import { PendingPayments } from '@/components/admin/PendingPayments'
 import { PendingRefunds } from '@/components/admin/PendingRefunds'
 import { PaymentSettings } from '@/components/admin/PaymentSettings'
+import { PricingSettings } from '@/components/admin/PricingSettings'
 import { FinanceTab } from '@/components/admin/FinanceTab'
 import { NoticeSettings } from '@/components/admin/NoticeSettings'
 import { AgentDrawer } from '@/components/admin/agent/AgentDrawer'
@@ -186,6 +187,14 @@ export default function AdminPage() {
               Payment Settings
             </Button>
             <Button
+              variant={table.activeTab === 'pricing' ? 'default' : 'outline'}
+              onClick={() => table.setActiveTab('pricing')}
+              className={table.activeTab === 'pricing' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}
+            >
+              <Tag className="w-4 h-4 mr-2" />
+              Pricing
+            </Button>
+            <Button
               variant={table.activeTab === 'finance' ? 'default' : 'outline'}
               onClick={() => table.setActiveTab('finance')}
               className={table.activeTab === 'finance' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}
@@ -236,6 +245,12 @@ export default function AdminPage() {
           {table.activeTab === 'settings' && (
             <div className="space-y-6">
               <PaymentSettings />
+            </div>
+          )}
+
+          {table.activeTab === 'pricing' && (
+            <div className="space-y-6">
+              <PricingSettings />
             </div>
           )}
 

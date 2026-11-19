@@ -208,8 +208,8 @@ describe('diffPricingRules', () => {
     }
     expect(diffPricingRules(R, next)).toEqual([
       { label: 'Daytime rate', from: '₱200', to: '₱220' },
-      { label: '18:00 slot', from: 'Off-peak', to: 'Daytime' },
-      { label: 'Equipment charged from', from: '2026-06-01', to: 'Always' },
+      { label: '6 PM - 7 PM slot', from: 'Off-peak', to: 'Daytime' },
+      { label: 'Equipment charged from', from: 'Jun 1, 2026', to: 'Always' },
     ])
   })
   it('is empty when nothing changed', () => {

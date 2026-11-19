@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useId } from 'react'
 import { createPortal } from 'react-dom'
 import { X, AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { Button } from './button'
@@ -60,6 +60,8 @@ export function ConfirmationDialog({
   children,
 }: ConfirmationDialogProps) {
   const isClient = typeof document !== 'undefined'
+  const titleId = useId()
+  const descriptionId = useId()
   const styles = variantStyles[variant]
 
   // Handle escape key and body scroll lock
@@ -92,7 +94,12 @@ export function ConfirmationDialog({
       />
 
       {/* Dialog */}
-      <div className="relative z-10 w-full max-w-md mx-auto bg-white rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        className="relative z-10 w-full max-w-md mx-auto max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white rounded-2xl shadow-xl animate-in fade-in zoom-in-95 duration-200">
         {/* Close Button */}
         {!isLoading && (
           <button
@@ -113,10 +120,10 @@ export function ConfirmationDialog({
           </div>
 
           {/* Title & Description */}
-          <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+          <h3 id={titleId} className="text-lg font-semibold text-gray-900 text-center mb-2">
             {title}
           </h3>
-          <p className="text-sm text-gray-600 text-center mb-4">
+          <p id={descriptionId} className="text-sm text-gray-600 text-center mb-4">
             {description}
           </p>
 

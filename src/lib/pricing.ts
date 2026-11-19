@@ -196,7 +196,8 @@ export function assertValidPricingRules(rules: unknown): asserts rules is Pricin
   if (!ok) throw new Error('Invalid pricing snapshot')
 }
 
-function formatHour(hour: number): string {
+/** 12-hour clock label, e.g. 5 → '5 AM', 18 → '6 PM', 24 → '12 AM'. */
+export function formatHour(hour: number): string {
   const h = hour % 24
   const suffix = h < 12 ? 'AM' : 'PM'
   const display = h % 12 === 0 ? 12 : h % 12
@@ -252,7 +253,26 @@ export interface PricingChange {
   to: string
 }
 
-const peso = (n: number) => `₱${n.toLocaleString()}`
+/** Peso amount as shown to admins and customers, e.g. ₱1,234. */
+export const formatPeso = (n: number) => `₱${n.toLocaleString('en-US')}`
+const peso = formatPeso
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** 'YYYY-MM-DD' → 'Jun 1, 2026' (no time zone involved). */
+function formatIsoDate(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return `${MONTHS[m - 1]} ${d}, ${y}`
+}
+
+/**
+ * Latest start date an admin may pick: Manila today + 2 years (Feb 29 → Feb 28).
+ * Shared by the server check and the admin date picker.
+ */
+export function maxPricingEffectiveFrom(today: string): string {
+  const [y, m, d] = today.split('-')
+  const candidate = `${Number(y) + 2}-${m}-${d}`
+  return isIsoDate(candidate) ? candidate : `${Number(y) + 2}-${m}-28`
+}
 
 /** Changed fields between two rule sets, for the admin confirmation dialog. */
 export function diffPricingRules(from: PricingRules, to: PricingRules): PricingChange[] {
@@ -266,7 +286,7 @@ export function diffPricingRules(from: PricingRules, to: PricingRules): PricingC
   }
   SLOT_START_HOURS.forEach((hour, i) => {
     add(
-      `${String(hour).padStart(2, '0')}:00 slot`,
+      `${formatHour(hour)} - ${formatHour(hour + 1)} slot`,
       RATE_TIER_LABELS[from.hour_tiers[i]],
       RATE_TIER_LABELS[to.hour_tiers[i]]
     )
@@ -278,8 +298,8 @@ export function diffPricingRules(from: PricingRules, to: PricingRules): PricingC
   add('Training balls', peso(from.training_balls_price), peso(to.training_balls_price))
   add(
     'Equipment charged from',
-    from.equipment_charge_start_date ?? 'Always',
-    to.equipment_charge_start_date ?? 'Always'
+    from.equipment_charge_start_date ? formatIsoDate(from.equipment_charge_start_date) : 'Always',
+    to.equipment_charge_start_date ? formatIsoDate(to.equipment_charge_start_date) : 'Always'
   )
   add('Cancellation fee per slot', peso(from.cancellation_fee_per_slot), peso(to.cancellation_fee_per_slot))
   add('Free cancellation window', `${from.cancellation_window_hours}h`, `${to.cancellation_window_hours}h`)

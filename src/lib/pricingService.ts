@@ -5,8 +5,8 @@
  */
 import { supabase } from './supabase-server'
 import { pricingRulesSchema, createPricingVersionSchema } from './pricingSchema'
-import { pickPricingVersion } from './pricing'
-import { manilaNow, isRealDate } from './agent/dates'
+import { pickPricingVersion, maxPricingEffectiveFrom } from './pricing'
+import { manilaNow } from './agent/dates'
 import type { PricingRules, PricingVersion } from '@/types/pricing'
 
 export class PricingUnavailableError extends Error {
@@ -92,9 +92,7 @@ export async function getPricingForDate(date: string): Promise<PricingVersion> {
 
 /** Manila today + 2 years (Feb 29 falls back to Feb 28). */
 function maxEffectiveFrom(now: Date): string {
-  const [y, m, d] = manilaToday(now).split('-')
-  const candidate = `${Number(y) + 2}-${m}-${d}`
-  return isRealDate(candidate) ? candidate : `${Number(y) + 2}-${m}-28`
+  return maxPricingEffectiveFrom(manilaToday(now))
 }
 
 export async function createPricingVersion(
