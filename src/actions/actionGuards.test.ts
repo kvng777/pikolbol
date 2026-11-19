@@ -17,6 +17,8 @@ vi.mock('@/lib/paymentService')
 vi.mock('@/lib/paymentSettingsService')
 vi.mock('@/lib/noticeService')
 vi.mock('@/lib/emailService')
+vi.mock('@/lib/pricingService')
+vi.mock('@/lib/priceQuote')
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
 import * as bookings from './bookings'
@@ -30,11 +32,15 @@ import * as profileService from '@/lib/profileService'
 import * as paymentSettingsService from '@/lib/paymentSettingsService'
 import * as noticeService from '@/lib/noticeService'
 import * as emailService from '@/lib/emailService'
+import * as pricingActions from './pricing'
+import * as pricingService from '@/lib/pricingService'
+import * as priceQuote from '@/lib/priceQuote'
+import { SEED_PRICING_RULES } from '@/lib/pricing'
 import type { Profile } from '@/types/profile'
 
 type Call = [name: string, call: (token: string) => Promise<unknown>]
 
-const automockedModules = [bookingService, paymentService, paymentSettingsService, noticeService, emailService]
+const automockedModules = [bookingService, paymentService, paymentSettingsService, noticeService, emailService, pricingService, priceQuote]
 
 /** Every function exported by the automocked service modules that was called at least once. */
 function calledServiceFunctions(): string[] {
@@ -71,6 +77,8 @@ const ADMIN_ACTIONS: Call[] = [
   ['uploadQRCodeAction', (t) => paymentSettings.uploadQRCodeAction(t, new FormData())],
   ['getNoticeAction', (t) => notice.getNoticeAction(t)],
   ['updateNoticeAction', (t) => notice.updateNoticeAction(t, {})],
+  ['createPricingVersionAction', (t) => pricingActions.createPricingVersionAction(t, { effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES })],
+  ['cancelPricingVersionAction', (t) => pricingActions.cancelPricingVersionAction(t, 'v1')],
 ]
 
 describe('admin actions', () => {
@@ -254,5 +262,63 @@ describe('getActiveBookingsByDateAction (public)', () => {
     vi.mocked(bookingService.getActiveSlotOccupancyByDate).mockResolvedValue(rows)
     await expect(bookings.getActiveBookingsByDateAction('2026-12-01')).resolves.toEqual(rows)
     expect(bookingService.getActiveBookingsByDate).not.toHaveBeenCalled()
+  })
+})
+
+describe('pricing actions', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    getUser.mockResolvedValue({ data: { user: { id: 'admin-1' } }, error: null })
+    getProfileByUserId.mockResolvedValue({ role: 'admin' })
+  })
+
+  it('createPricingVersionAction records the admin and validates first', async () => {
+    vi.mocked(pricingService.createPricingVersion).mockResolvedValue({ success: true, version: {} as never })
+    await pricingActions.createPricingVersionAction('tok', { effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES })
+    expect(pricingService.createPricingVersion).toHaveBeenCalledWith({
+      effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES, createdBy: 'admin-1',
+    })
+  })
+
+  it('createPricingVersionAction rejects invalid prices without touching the DB', async () => {
+    const result = await pricingActions.createPricingVersionAction('tok', {
+      effectiveFrom: '2026-12-01',
+      rules: { ...SEED_PRICING_RULES, paddle_price: -1 },
+    })
+    expect(result.success).toBe(false)
+    expect(pricingService.createPricingVersion).not.toHaveBeenCalled()
+  })
+
+  it('getPricingVersionsAction hides who created each version', async () => {
+    vi.mocked(pricingService.getPricingVersions).mockResolvedValue([
+      { id: 'v', effective_from: '2000-01-01', rules: SEED_PRICING_RULES, created_by: 'admin-1', created_at: 'x', cancelled_at: null },
+    ])
+    const result = await pricingActions.getPricingVersionsAction()
+    expect(result).toMatchObject({ success: true, versions: [{ id: 'v', created_by: null }] })
+  })
+
+  it('getPricingVersionsAction reports unavailability instead of throwing', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(pricingService.getPricingVersions).mockRejectedValue(new Error('down'))
+    await expect(pricingActions.getPricingVersionsAction()).resolves.toMatchObject({ success: false })
+  })
+
+  it('getPriceQuoteAction rejects bad input without loading prices', async () => {
+    const result = await pricingActions.getPriceQuoteAction({
+      date: 'nope', timeSlots: [], players: 2, paddles: 0, needsBalls: false, trainingBalls: false,
+    })
+    expect(result.success).toBe(false)
+    expect(pricingService.getPricingForDate).not.toHaveBeenCalled()
+  })
+
+  it('getPriceQuoteAction returns a quote for valid input', async () => {
+    const quote = { amount: 200, versionId: 'v', expiresAt: 1, token: 'ab' }
+    vi.mocked(pricingService.getPricingForDate).mockResolvedValue({ id: 'v', rules: SEED_PRICING_RULES } as never)
+    vi.mocked(priceQuote.createPriceQuote).mockReturnValue(quote)
+    await expect(
+      pricingActions.getPriceQuoteAction({
+        date: '2026-12-01', timeSlots: ['08:00-09:00'], players: 2, paddles: 0, needsBalls: false, trainingBalls: false,
+      })
+    ).resolves.toEqual({ success: true, quote })
   })
 })
