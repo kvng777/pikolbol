@@ -50,6 +50,12 @@ export const createPricingVersionSchema = z.strictObject({
   rules: pricingRulesSchema,
 })
 
+/** Admin input: "now" lets the server pick today (Manila); "scheduled" carries the chosen date. */
+export const createPricingInputSchema = z.discriminatedUnion('mode', [
+  z.strictObject({ mode: z.literal('now'), rules: pricingRulesSchema }),
+  z.strictObject({ mode: z.literal('scheduled'), effectiveFrom: isoDate, rules: pricingRulesSchema }),
+])
+
 // Real slot strings ("05:00-06:00" … "23:00-00:00"), the same format bookings store.
 const VALID_SLOTS: ReadonlySet<string> = new Set(generateTimeSlots())
 const timeSlot = z.string().refine((s) => VALID_SLOTS.has(s), 'Invalid time slot')

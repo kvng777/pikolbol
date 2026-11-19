@@ -53,3 +53,8 @@ export interface PriceQuote {
   expiresAt: number  // epoch ms
   token: string      // hex HMAC
 }
+
+/** Admin input to add a price version. "now" is resolved to today on the server (Manila). */
+export type CreatePricingInput =
+  | { mode: 'now'; rules: PricingRules }
+  | { mode: 'scheduled'; effectiveFrom: string; rules: PricingRules }

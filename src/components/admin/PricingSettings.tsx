@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useForm, useWatch, get, type FieldErrors, type Resolver } from 'react-hook-form'
 import { format, parseISO } from 'date-fns'
 import { Tag, Loader2, CalendarClock, ClipboardCheck, AlertTriangle } from 'lucide-react'
@@ -33,7 +33,7 @@ import {
   type PricingFormValues,
 } from '@/lib/pricingForm'
 import { manilaNow } from '@/lib/agent/dates'
-import type { PricingRules, PricingVersion, RateTier } from '@/types/pricing'
+import type { CreatePricingInput, PricingRules, PricingVersion, RateTier } from '@/types/pricing'
 
 const formatDate = (d: string) => format(parseISO(d), 'MMM d, yyyy')
 const SEED_EFFECTIVE_FROM = '2000-01-01'
@@ -52,7 +52,10 @@ const pricingResolver: Resolver<PricingFormValues> = async (values) => {
 }
 
 interface PendingChange {
+  /** Client's best guess of the start date (used for comparing and display; the server decides "today"). */
   effectiveFrom: string
+  /** What is sent to the server. */
+  input: CreatePricingInput
   rules: PricingRules
   changes: PricingChange[]
   /** Scheduled versions that start on/after this one and will still take over on their date. */
@@ -107,6 +110,9 @@ export function PricingSettings() {
 
   const [pending, setPending] = useState<PendingChange | null>(null)
   const [cancelTarget, setCancelTarget] = useState<PricingVersion | null>(null)
+  // Synchronous guards: a fast double click can fire twice before `isPending` re-renders.
+  const confirmInFlight = useRef(false)
+  const cancelInFlight = useRef(false)
 
   // Prefill from the version in effect. react-hook-form only resets the form when these
   // values actually change (deep compare), so background refetches don't wipe edits.
@@ -153,6 +159,7 @@ export function PricingSettings() {
     }
     setPending({
       effectiveFrom: result.effectiveFrom,
+      input: result.input,
       rules: result.rules,
       changes,
       laterVersions: upcomingPricingVersions(versions, now).filter((v) => v.effective_from >= result.effectiveFrom),
@@ -160,12 +167,16 @@ export function PricingSettings() {
   }
 
   const onConfirm = async () => {
-    if (!pending) return
+    if (!pending || confirmInFlight.current) return
+    confirmInFlight.current = true
     try {
-      const result = await createVersion.mutateAsync({ effectiveFrom: pending.effectiveFrom, rules: pending.rules })
+      const result = await createVersion.mutateAsync(pending.input)
       if (result.success) {
-        const appliedNow = pending.effectiveFrom === manilaNow().date
-        toast.success(appliedNow ? 'New prices are live' : `Price change scheduled for ${formatDate(pending.effectiveFrom)}`)
+        // The server decides whether these prices are live (its "today", not this browser's).
+        const { appliedNow } = result
+        toast.success(
+          appliedNow ? 'New prices are live' : `Price change scheduled for ${formatDate(result.version.effective_from)}`
+        )
         setPending(null)
         // Scheduled: back to the prices in effect (the change shows in the list above).
         // Applied now: the refetched prices become the new prefill automatically.
@@ -175,11 +186,14 @@ export function PricingSettings() {
       }
     } catch {
       toast.error('Failed to save prices. Check your connection and that you are still signed in.')
+    } finally {
+      confirmInFlight.current = false
     }
   }
 
   const onCancelUpcoming = async () => {
-    if (!cancelTarget) return
+    if (!cancelTarget || cancelInFlight.current) return
+    cancelInFlight.current = true
     try {
       const result = await cancelVersion.mutateAsync(cancelTarget.id)
       if (result.success) {
@@ -190,6 +204,8 @@ export function PricingSettings() {
       }
     } catch {
       toast.error('Failed to cancel the price change. Check your connection and that you are still signed in.')
+    } finally {
+      cancelInFlight.current = false
     }
   }
 
@@ -197,6 +213,21 @@ export function PricingSettings() {
     return (
       <div className="flex items-center justify-center py-12" role="status" aria-label="Loading prices">
         <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+      </div>
+    )
+  }
+
+  if (!isError && versions && !current) {
+    return (
+      <div className="bg-white rounded-xl border border-red-200 p-6 text-red-700 space-y-3" role="alert">
+        <p>
+          No prices are in effect today, so new bookings can&apos;t be priced. Prices were loaded fine; none of them
+          starts on or before today. Add the missing prices (or check that the starting prices were set up), then try
+          again.
+        </p>
+        <Button type="button" variant="outline" onClick={() => refetch()}>
+          Try again
+        </Button>
       </div>
     )
   }
@@ -465,13 +496,13 @@ export function PricingSettings() {
             </span>
           </label>
           <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3 text-sm cursor-pointer has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50">
-            <input type="radio" value="schedule" className="mt-0.5 h-4 w-4 accent-emerald-600" {...register('mode')} />
+            <input type="radio" value="scheduled" className="mt-0.5 h-4 w-4 accent-emerald-600" {...register('mode')} />
             <span>
               <span className="font-medium text-gray-900">Schedule for a date</span>
               <span className="block text-gray-500">New bookings for play dates from the date you pick (tomorrow or later).</span>
             </span>
           </label>
-          {mode === 'schedule' && (
+          {mode === 'scheduled' && (
             <div className="space-y-1 sm:max-w-xs">
               <Label htmlFor="effectiveFrom" className="text-sm text-gray-700">
                 First play date with the new prices
@@ -521,13 +552,13 @@ export function PricingSettings() {
         open={!!pending}
         onClose={() => setPending(null)}
         onConfirm={onConfirm}
-        title={pending?.effectiveFrom === today ? 'Apply new prices now?' : 'Schedule new prices?'}
+        title={pending?.input.mode === 'now' ? 'Apply new prices now?' : 'Schedule new prices?'}
         description={
           pending
-            ? `Applies to new bookings for play dates from ${formatDate(pending.effectiveFrom)}; existing bookings keep their price.`
+            ? `Applies to new bookings for play dates from ${pending.input.mode === 'now' ? `today (${formatDate(pending.effectiveFrom)})` : formatDate(pending.effectiveFrom)}; existing bookings keep their price.`
             : ''
         }
-        confirmText={pending?.effectiveFrom === today ? 'Apply now' : 'Schedule'}
+        confirmText={pending?.input.mode === 'now' ? 'Apply now' : 'Schedule'}
         cancelText="Back"
         variant="confirm"
         isLoading={createVersion.isPending}

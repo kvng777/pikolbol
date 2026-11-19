@@ -10,7 +10,7 @@ import {
 } from '@/actions/pricing'
 import { getAccessToken } from '@/lib/accessToken'
 import { pickPricingVersion, QUOTE_REFRESH_MS } from '@/lib/pricing'
-import type { PricingRules, PricingVersion, PriceQuote, QuoteInput } from '@/types/pricing'
+import type { CreatePricingInput, PricingRules, PricingVersion, PriceQuote, QuoteInput } from '@/types/pricing'
 
 export const PRICING_QUERY_KEY = ['pricing'] as const
 const QUOTE_QUERY_KEY = 'priceQuote'
@@ -70,7 +70,7 @@ export function usePriceQuote(input: QuoteInput | null) {
 export function useCreatePricingVersion() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { effectiveFrom: string; rules: PricingRules }) =>
+    mutationFn: async (input: CreatePricingInput) =>
       createPricingVersionAction(await getAccessToken(), input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PRICING_QUERY_KEY })

@@ -80,7 +80,7 @@ const ADMIN_ACTIONS: Call[] = [
   ['uploadQRCodeAction', (t) => paymentSettings.uploadQRCodeAction(t, new FormData())],
   ['getNoticeAction', (t) => notice.getNoticeAction(t)],
   ['updateNoticeAction', (t) => notice.updateNoticeAction(t, {})],
-  ['createPricingVersionAction', (t) => pricingActions.createPricingVersionAction(t, { effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES })],
+  ['createPricingVersionAction', (t) => pricingActions.createPricingVersionAction(t, { mode: 'scheduled', effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES })],
   ['cancelPricingVersionAction', (t) => pricingActions.cancelPricingVersionAction(t, 'v1')],
 ]
 
@@ -447,21 +447,77 @@ describe('pricing actions', () => {
     getProfileByUserId.mockResolvedValue({ role: 'admin' })
   })
 
-  it('createPricingVersionAction records the admin and validates first', async () => {
-    vi.mocked(pricingService.createPricingVersion).mockResolvedValue({ success: true, version: {} as never })
-    await pricingActions.createPricingVersionAction('tok', { effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES })
-    expect(pricingService.createPricingVersion).toHaveBeenCalledWith({
-      effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES, createdBy: 'admin-1',
+  describe('createPricingVersionAction', () => {
+    // 2026-11-19 12:00 Manila
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-11-19T04:00:00Z'))
     })
-  })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+    const stored = (effective_from: string) => ({ success: true as const, version: { effective_from } as never })
 
-  it('createPricingVersionAction rejects invalid prices without touching the DB', async () => {
-    const result = await pricingActions.createPricingVersionAction('tok', {
-      effectiveFrom: '2026-12-01',
-      rules: { ...SEED_PRICING_RULES, paddle_price: -1 },
+    it('"now" starts on the server\'s Manila today and reports appliedNow', async () => {
+      vi.mocked(pricingService.createPricingVersion).mockResolvedValue(stored('2026-11-19'))
+      const result = await pricingActions.createPricingVersionAction('tok', { mode: 'now', rules: SEED_PRICING_RULES })
+      expect(pricingService.createPricingVersion).toHaveBeenCalledWith({
+        effectiveFrom: '2026-11-19', rules: SEED_PRICING_RULES, createdBy: 'admin-1',
+      })
+      expect(result).toMatchObject({ success: true, appliedNow: true })
     })
-    expect(result.success).toBe(false)
-    expect(pricingService.createPricingVersion).not.toHaveBeenCalled()
+
+    it('"now" uses Manila, not UTC, for today', async () => {
+      vi.setSystemTime(new Date('2026-11-19T17:00:00Z')) // already Nov 20 in Manila
+      vi.mocked(pricingService.createPricingVersion).mockResolvedValue(stored('2026-11-20'))
+      await pricingActions.createPricingVersionAction('tok', { mode: 'now', rules: SEED_PRICING_RULES })
+      expect(pricingService.createPricingVersion).toHaveBeenCalledWith(expect.objectContaining({ effectiveFrom: '2026-11-20' }))
+    })
+
+    it('"scheduled" records the admin and reports appliedNow false', async () => {
+      vi.mocked(pricingService.createPricingVersion).mockResolvedValue(stored('2026-12-01'))
+      const result = await pricingActions.createPricingVersionAction('tok', {
+        mode: 'scheduled', effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES,
+      })
+      expect(pricingService.createPricingVersion).toHaveBeenCalledWith({
+        effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES, createdBy: 'admin-1',
+      })
+      expect(result).toMatchObject({ success: true, appliedNow: false })
+    })
+
+    it('"scheduled" accepts tomorrow and the 2-year limit only', async () => {
+      vi.mocked(pricingService.createPricingVersion).mockResolvedValue(stored('2026-11-20'))
+      for (const d of ['2026-11-20', '2028-11-19']) {
+        const r = await pricingActions.createPricingVersionAction('tok', { mode: 'scheduled', effectiveFrom: d, rules: SEED_PRICING_RULES })
+        expect(r.success).toBe(true)
+      }
+      vi.mocked(pricingService.createPricingVersion).mockClear()
+      for (const d of ['2026-11-19', '2026-11-01', '2028-11-20']) {
+        const r = await pricingActions.createPricingVersionAction('tok', { mode: 'scheduled', effectiveFrom: d, rules: SEED_PRICING_RULES })
+        expect(r.success).toBe(false)
+      }
+      expect(pricingService.createPricingVersion).not.toHaveBeenCalled()
+    })
+
+    it('rejects invalid prices, a missing date and an unknown mode without touching the DB', async () => {
+      const bad = [
+        { mode: 'now', rules: { ...SEED_PRICING_RULES, paddle_price: -1 } },
+        { mode: 'scheduled', rules: SEED_PRICING_RULES },
+        { mode: 'later', rules: SEED_PRICING_RULES },
+        { effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES },
+      ]
+      for (const input of bad) {
+        const result = await pricingActions.createPricingVersionAction('tok', input as never)
+        expect(result.success).toBe(false)
+      }
+      expect(pricingService.createPricingVersion).not.toHaveBeenCalled()
+    })
+
+    it('passes a service failure through', async () => {
+      vi.mocked(pricingService.createPricingVersion).mockResolvedValue({ success: false, error: 'Failed to save prices' })
+      const result = await pricingActions.createPricingVersionAction('tok', { mode: 'now', rules: SEED_PRICING_RULES })
+      expect(result).toEqual({ success: false, error: 'Failed to save prices' })
+    })
   })
 
   it('getPricingVersionsAction hides who created each version', async () => {

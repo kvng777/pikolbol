@@ -7,7 +7,7 @@
 import { createPricingVersionSchema } from './pricingSchema'
 import { maxPricingEffectiveFrom } from './pricing'
 import { isRealDate } from './agent/dates'
-import type { PricingRules } from '@/types/pricing'
+import type { CreatePricingInput, PricingRules } from '@/types/pricing'
 
 /** Form shape: same as PricingRules except the equipment start date is '' when "always charged". */
 export type PricingFormRules = Omit<PricingRules, 'equipment_charge_start_date'> & {
@@ -16,8 +16,8 @@ export type PricingFormRules = Omit<PricingRules, 'equipment_charge_start_date'>
 
 export interface PricingFormValues {
   rules: PricingFormRules
-  mode: 'now' | 'schedule'
-  /** Only used when mode = 'schedule'. */
+  mode: 'now' | 'scheduled'
+  /** Only used when mode = 'scheduled'. */
   effectiveFrom: string
 }
 
@@ -51,7 +51,8 @@ export function initialPricingFormValues(rules: PricingRules, today: string): Pr
 }
 
 export type PricingFormResult =
-  | { ok: true; effectiveFrom: string; rules: PricingRules }
+  /** effectiveFrom is the client's best guess (for comparing prices); input is what gets sent to the server. */
+  | { ok: true; effectiveFrom: string; rules: PricingRules; input: CreatePricingInput }
   /** errors: field path (e.g. 'rules.tier_prices.daytime') → first message for that field. */
   | { ok: false; errors: Record<string, string> }
 
@@ -64,7 +65,7 @@ export function validatePricingForm(values: PricingFormValues, today: string): P
   const tomorrow = addDaysIso(today, 1)
   let effectiveFrom = today
 
-  if (values.mode === 'schedule') {
+  if (values.mode === 'scheduled') {
     effectiveFrom = values.effectiveFrom
     if (!effectiveFrom || !isRealDate(effectiveFrom)) {
       errors.effectiveFrom = 'Pick the first play date for the new prices'
@@ -91,7 +92,10 @@ export function validatePricingForm(values: PricingFormValues, today: string): P
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors }
-  return { ok: true, effectiveFrom, rules: parsed.success ? parsed.data.rules : rules }
+  const finalRules = parsed.success ? parsed.data.rules : rules
+  const input: CreatePricingInput =
+    values.mode === 'now' ? { mode: 'now', rules: finalRules } : { mode: 'scheduled', effectiveFrom, rules: finalRules }
+  return { ok: true, effectiveFrom, rules: finalRules, input }
 }
 
 type ErrorTree = { [key: string]: ErrorTree | { type: string; message: string } }

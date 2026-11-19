@@ -72,6 +72,7 @@ export async function POST(req: Request) {
     pricingVersions = null // The note tells the model prices are unavailable
   }
 
+  const now = new Date()
   const result = streamText({
     model: anthropic(AGENT_MODEL),
     instructions: [
@@ -82,7 +83,7 @@ export async function POST(req: Request) {
         providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
       },
       // Changes every request, so it goes after the cache breakpoint.
-      { role: 'system', content: `${buildContextNote()}\n\n${buildPricingNote(pricingVersions, manilaNow().date)}` },
+      { role: 'system', content: `${buildContextNote(now)}\n\n${buildPricingNote(pricingVersions, manilaNow(now).date)}` },
     ],
     messages: await convertToModelMessages(compactOldToolOutputs(trimForModel(messages)), {
       tools: agentTools,

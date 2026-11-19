@@ -1,5 +1,5 @@
 import type { PricingRules, PricingVersion } from '@/types/pricing'
-import { describeTierHours, pickPricingVersion, upcomingPricingVersions } from '@/lib/pricing'
+import { describeTierHours, formatPeso, pickPricingVersion, upcomingPricingVersions } from '@/lib/pricing'
 
 function describeRules(rules: PricingRules): string {
   const hours = describeTierHours(rules)
@@ -11,7 +11,7 @@ function describeRules(rules: PricingRules): string {
     ] as const
   )
     .filter(([tier]) => hours[tier])
-    .map(([tier, label]) => `${label} ₱${rules.tier_prices[tier]} (${hours[tier]})`)
+    .map(([tier, label]) => `${label} ${formatPeso(rules.tier_prices[tier])} (${hours[tier]})`)
     .join('; ')
   const equipmentWhen = rules.equipment_charge_start_date
     ? `charged for play dates from ${rules.equipment_charge_start_date}; free before`
@@ -19,9 +19,9 @@ function describeRules(rules: PricingRules): string {
 
   return [
     `- Rates per slot: ${tiers}.`,
-    `- ${rules.base_players_included} players included; +₱${rules.extra_player_charge} per extra player.`,
-    `- Equipment per booking (${equipmentWhen}): paddles ₱${rules.paddle_price} each, ball set ₱${rules.ball_set_price}, training balls with basket ₱${rules.training_balls_price}.`,
-    `- Cancellations within ${rules.cancellation_window_hours} hours of the slot keep a ₱${rules.cancellation_fee_per_slot}/slot fee.`,
+    `- ${rules.base_players_included} players included; +${formatPeso(rules.extra_player_charge)} per extra player.`,
+    `- Equipment per booking (${equipmentWhen}): paddles ${formatPeso(rules.paddle_price)} each, ball set ${formatPeso(rules.ball_set_price)}, training balls with basket ${formatPeso(rules.training_balls_price)}.`,
+    `- Cancellations within ${rules.cancellation_window_hours} hours of the slot keep a ${formatPeso(rules.cancellation_fee_per_slot)}/slot fee.`,
   ].join('\n')
 }
 
@@ -40,7 +40,11 @@ export function buildPricingNote(versions: PricingVersion[] | null, today: strin
   }
 
   const parts = [`Pricing note (prices apply by play date; in effect since ${current.effective_from}):`, describeRules(current.rules)]
-  for (const next of upcomingPricingVersions(versions, today)) {
+  // One entry per start date: the version that actually applies on it (newer same-date versions win).
+  const dates = [...new Set(upcomingPricingVersions(versions, today).map((v) => v.effective_from))]
+  for (const date of dates) {
+    const next = pickPricingVersion(versions, date)
+    if (!next || next.effective_from !== date) continue
     parts.push(`Scheduled change for play dates from ${next.effective_from}:`, describeRules(next.rules))
   }
   return parts.join('\n')

@@ -9,8 +9,10 @@ import {
   cancelPricingVersion,
 } from '@/lib/pricingService'
 import { createPriceQuote } from '@/lib/priceQuote'
-import { createPricingVersionSchema, quoteInputSchema } from '@/lib/pricingSchema'
-import type { PricingRules, PricingVersion, PriceQuote, QuoteInput } from '@/types/pricing'
+import { createPricingInputSchema, quoteInputSchema } from '@/lib/pricingSchema'
+import { maxPricingEffectiveFrom } from '@/lib/pricing'
+import { manilaNow } from '@/lib/agent/dates'
+import type { CreatePricingInput, PricingVersion, PriceQuote, QuoteInput } from '@/types/pricing'
 
 const UNAVAILABLE = 'Prices are unavailable right now. Please try again in a moment.'
 
@@ -49,31 +51,49 @@ export async function getPriceQuoteAction(input: QuoteInput): Promise<PriceQuote
   }
 }
 
+function addDays(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+}
+
+export type CreatePricingVersionResult =
+  | { success: true; version: PricingVersion; appliedNow: boolean }
+  | { success: false; error: string }
+
 /**
- * Add a price version (admin only). effectiveFrom = today applies immediately.
+ * Add a price version (admin only). The server decides "today" (Manila): "now" starts today,
+ * "scheduled" must start tomorrow or later (2 years at most). appliedNow tells the caller
+ * whether the new prices are already in effect.
  */
 export async function createPricingVersionAction(
   accessToken: string,
-  input: { effectiveFrom: string; rules: PricingRules }
-): Promise<{ success: boolean; error?: string; version?: PricingVersion }> {
+  input: CreatePricingInput
+): Promise<CreatePricingVersionResult> {
   const adminId = await requireAdmin(accessToken)
 
-  const parsed = createPricingVersionSchema.safeParse(input)
+  const parsed = createPricingInputSchema.safeParse(input)
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid prices' }
   }
 
-  const result = await createPricingVersion({
-    effectiveFrom: parsed.data.effectiveFrom,
-    rules: parsed.data.rules,
-    createdBy: adminId,
-  })
-
-  if (result.success) {
-    revalidatePath('/')
-    revalidatePath('/admin')
+  const today = manilaNow().date
+  let effectiveFrom = today
+  if (parsed.data.mode === 'scheduled') {
+    effectiveFrom = parsed.data.effectiveFrom
+    if (effectiveFrom < addDays(today, 1)) {
+      return { success: false, error: 'Pick tomorrow or a later date (use "Apply now" for today).' }
+    }
+    if (effectiveFrom > maxPricingEffectiveFrom(today)) {
+      return { success: false, error: 'The start date is too far ahead (2 years at most).' }
+    }
   }
-  return result
+
+  const result = await createPricingVersion({ effectiveFrom, rules: parsed.data.rules, createdBy: adminId })
+  if (!result.success) return result
+
+  revalidatePath('/')
+  revalidatePath('/admin')
+  return { success: true, version: result.version, appliedNow: result.version.effective_from === today }
 }
 
 /**

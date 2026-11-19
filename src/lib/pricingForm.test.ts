@@ -65,6 +65,7 @@ describe('validatePricingForm', () => {
       ok: true,
       effectiveFrom: TODAY,
       rules: { ...R, paddle_price: 60 },
+      input: { mode: 'now', rules: { ...R, paddle_price: 60 } },
     })
   })
 
@@ -75,14 +76,14 @@ describe('validatePricingForm', () => {
 
   it('schedule accepts tomorrow and the 2-year limit', () => {
     for (const d of ['2026-11-20', '2028-11-19']) {
-      const r = validatePricingForm(form({ mode: 'schedule', effectiveFrom: d }), TODAY)
-      expect(r).toMatchObject({ ok: true, effectiveFrom: d })
+      const r = validatePricingForm(form({ mode: 'scheduled', effectiveFrom: d }), TODAY)
+      expect(r).toMatchObject({ ok: true, effectiveFrom: d, input: { mode: 'scheduled', effectiveFrom: d } })
     }
   })
 
   it('schedule rejects today, the past, blank, bad and too-far dates', () => {
     for (const d of [TODAY, '2026-11-01', '', '2026-02-30', '2028-11-20']) {
-      const r = validatePricingForm(form({ mode: 'schedule', effectiveFrom: d }), TODAY)
+      const r = validatePricingForm(form({ mode: 'scheduled', effectiveFrom: d }), TODAY)
       expect(r.ok).toBe(false)
       if (!r.ok) expect(Object.keys(r.errors)).toEqual(['effectiveFrom'])
     }
@@ -98,6 +99,29 @@ describe('validatePricingForm', () => {
     expect(r.errors['rules.tier_prices.daytime']).toBe('Daytime rate: enter an amount')
     expect(r.errors['rules.paddle_price']).toBe('Paddle: whole pesos only')
     expect(r.errors['rules.equipment_charge_start_date']).toBe('Enter a valid date')
+  })
+
+  it('rejects negative numbers', () => {
+    const r = validatePricingForm(
+      form({}, { tier_prices: { ...R.tier_prices, offpeak: -5 }, paddle_price: -1, cancellation_window_hours: -2 }),
+      TODAY
+    )
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.errors['rules.tier_prices.offpeak']).toBe('Off-peak rate: minimum ₱1')
+    expect(r.errors['rules.paddle_price']).toBe('Paddle: minimum ₱0')
+    expect(r.errors['rules.cancellation_window_hours']).toBe('Cancellation window: minimum 0')
+  })
+
+  it('maps a whitespace-only equipment date to null (always charged)', () => {
+    const r = validatePricingForm(form({}, { equipment_charge_start_date: '   ' }), TODAY)
+    expect(r).toMatchObject({ ok: true, rules: { equipment_charge_start_date: null } })
+    expect(formRulesToRules(form({}, { equipment_charge_start_date: '  ' }).rules).equipment_charge_start_date).toBeNull()
+  })
+
+  it('rejects an invalid mode', () => {
+    const r = validatePricingForm(form({ mode: 'later' as never }), TODAY)
+    expect(r).toEqual({ ok: false, errors: { mode: 'Choose when the prices apply' } })
   })
 
   it('applies the cross-field rule: cancellation fee ≤ highest slot rate', () => {
@@ -123,6 +147,16 @@ describe('nestFieldErrors', () => {
         hour_tiers: { 3: { type: 'validation', message: 'b' } },
       },
       effectiveFrom: { type: 'validation', message: 'c' },
+    })
+  })
+
+  it('replaces a parent message with nested child errors, whichever order they arrive in', () => {
+    expect(nestFieldErrors({ 'rules.hour_tiers': 'parent', 'rules.hour_tiers.2': 'child' })).toEqual({
+      rules: { hour_tiers: { 2: { type: 'validation', message: 'child' } } },
+    })
+    // Child first, parent second: the parent message is dropped.
+    expect(nestFieldErrors({ 'rules.hour_tiers.2': 'child', 'rules.hour_tiers': 'parent' })).toEqual({
+      rules: { hour_tiers: { 2: { type: 'validation', message: 'child' } } },
     })
   })
 })
