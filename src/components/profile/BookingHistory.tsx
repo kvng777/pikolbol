@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { formatEquipmentSummary } from '@/lib/paymentConfig'
 import { calculateCancellationFee, rulesFromSnapshot } from '@/lib/pricing'
 import type { PricingRules } from '@/types/pricing'
+import { parseBookingDateTime } from '@/lib/manilaTime'
 import { RescheduleModal } from './RescheduleModal'
 
 // ============================================================================
@@ -77,30 +78,6 @@ function getBookingStatus(booking: Booking): BookingStatus {
     return 'upcoming'
   }
   return 'past'
-}
-
-function parseBookingDateTime(date: string, timeSlot: string): Date {
-  const startTime = timeSlot.split(' - ')[0].trim()
-  const timeMatch = startTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i)
-  
-  if (!timeMatch) {
-    return new Date(date)
-  }
-
-  let hours = parseInt(timeMatch[1], 10)
-  const minutes = parseInt(timeMatch[2], 10)
-  const period = timeMatch[3].toUpperCase()
-
-  if (period === 'PM' && hours !== 12) {
-    hours += 12
-  } else if (period === 'AM' && hours === 12) {
-    hours = 0
-  }
-
-  const bookingDate = new Date(date)
-  bookingDate.setHours(hours, minutes, 0, 0)
-  
-  return bookingDate
 }
 
 function calculateHoursUntilBooking(bookings: Booking[]): number {
@@ -259,7 +236,7 @@ function CancelConfirmModal({ group, onConfirm, onCancel, isLoading }: CancelCon
             <>
               <p className="font-medium text-gray-800">Cancellation terms unavailable</p>
               <p className="text-sm text-gray-600 mt-1">
-                We could not read the pricing saved with this booking, so we cannot show the fee. Please contact support to cancel.
+                We could not read the pricing saved with this booking, so we cannot show the fee. Please call or text us at 0906 451 4819 to cancel.
               </p>
             </>
           ) : isFreeCancel ? (

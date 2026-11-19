@@ -68,7 +68,8 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
     return getAvailableSlotsForCourt(others, date, COURT_NUMBER, disabledSlots, true)
   }, [activeBookings, disabledSlots, date, initialValues])
 
-  const { rules, error: pricingError } = usePricingForDate(date)
+  const { rules, error: pricingError, isLoading: pricingLoading } = usePricingForDate(date)
+  const noPricesForDate = !pricingLoading && !pricingError && !rules
   const equipmentChargeable = rules ? isEquipmentChargeable(rules, date) : false
 
   const keepsStoredPrice =
@@ -125,7 +126,9 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
         : await createBooking.mutateAsync(payload)
 
       if (result.success) {
-        toast.success(isEdit ? 'Booking updated' : 'Booking created')
+        const saved = result.bookings?.[0]?.payment_amount
+        const amountText = typeof saved === 'number' ? ` (₱${saved.toLocaleString('en-US')})` : ''
+        toast.success(`${isEdit ? 'Booking updated' : 'Booking created'}${amountText}`)
         onClose()
       } else {
         toast.error(result.error || 'Failed to save booking')
@@ -231,7 +234,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
               {keepsStoredPrice && <span className="block text-xs text-gray-500">Original price kept</span>}
             </span>
             <span className="text-xl font-bold text-indigo-700">
-              {total === null ? (pricingError ? 'Prices unavailable' : '…') : `₱${total.toLocaleString()}`}
+              {total === null ? (pricingError ? 'Prices unavailable' : noPricesForDate ? 'No prices for this date' : '…') : `₱${total.toLocaleString()}`}
             </span>
           </div>
 

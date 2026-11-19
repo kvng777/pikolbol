@@ -17,6 +17,7 @@ import {
 } from './paymentConfig'
 import { calculatePaymentAmount, isSamePricedSelection, calculateCancellationFee, rulesFromSnapshot } from './pricing'
 import { getPricingForDate } from './pricingService'
+import { parseBookingDateTime } from './manilaTime'
 import type { PricingSnapshot, PricingVersion } from '@/types/pricing'
 import { generateUniqueShortId, generateBookingGroupId } from './bookingIdGenerator'
 import {
@@ -230,14 +231,22 @@ const MANUAL_COURT_NUMBER = 1
 const MANUAL_DEFAULT_PLAYERS = 2
 
 const PRICING_UNAVAILABLE = 'Prices are unavailable right now. Please try again in a moment.'
+const NO_PRICES_FOR_DATE = 'No prices are set for this date.'
 
-/** Version for a play date, or null when prices can't be loaded (callers fail the booking). */
-async function loadPricingOrNull(date: string): Promise<PricingVersion | null> {
+/**
+ * Version for a play date, or an error message for the caller to return.
+ * "No version covers the date" is told apart from read failures by error name
+ * (NoPricesForDateError), so callers fail the booking with the right message.
+ */
+async function loadPricing(
+  date: string
+): Promise<{ version: PricingVersion; error?: undefined } | { version: null; error: string }> {
   try {
-    return await getPricingForDate(date)
+    return { version: await getPricingForDate(date) }
   } catch (error) {
     console.error('Failed to load pricing:', error)
-    return null
+    const noCover = error instanceof Error && error.name === 'NoPricesForDateError'
+    return { version: null, error: noCover ? NO_PRICES_FOR_DATE : PRICING_UNAVAILABLE }
   }
 }
 
@@ -259,8 +268,8 @@ export async function createAdminBooking(
   const needsBalls = payload.needsBalls ?? false
   const trainingBalls = payload.trainingBalls ?? false
 
-  const version = await loadPricingOrNull(payload.date)
-  if (!version) return { success: false, error: PRICING_UNAVAILABLE }
+  const { version, error: pricingError } = await loadPricing(payload.date)
+  if (!version) return { success: false, error: pricingError }
 
   const amount = calculatePaymentAmount(version.rules, payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
     date: payload.date,
@@ -374,8 +383,8 @@ export async function updateAdminBooking(
     amount = first.payment_amount as number
     pricingSnapshot = first.pricing_snapshot ?? null
   } else {
-    const version = await loadPricingOrNull(payload.date)
-    if (!version) return { success: false, error: PRICING_UNAVAILABLE }
+    const { version, error: pricingError } = await loadPricing(payload.date)
+    if (!version) return { success: false, error: pricingError }
     amount = calculatePaymentAmount(version.rules, payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
       date: payload.date,
       paddles: paddlesCount,
@@ -687,6 +696,8 @@ export async function approveRescheduleRequest(
     short_id: shortId,
     booking_group_id: effectiveGroupId,
     payment_status: 'confirmed' as const,
+    // Deliberately keeps the original amount and snapshot: a booking keeps the price it was made under,
+    // even if the new date crosses equipment_charge_start_date.
     payment_amount: first.payment_amount,
     pricing_snapshot: first.pricing_snapshot ?? null,
     payment_confirmed_at: first.payment_confirmed_at,
@@ -1003,53 +1014,6 @@ export async function getBookingsByUserId(userId: string): Promise<Booking[]> {
 }
 
 /**
- * Parse booking date and time_slot into a Date object in Philippines timezone (UTC+8)
- * Handles both formats:
- *   - 24-hour: "17:00-18:00" or "17:00 - 18:00"
- *   - 12-hour: "6:00 AM - 7:00 AM" or "6:00 PM - 7:00 PM"
- */
-function parseBookingDateTime(date: string, timeSlot: string): Date {
-  // Extract the start time from the time_slot (split on '-' with optional spaces)
-  const startTime = timeSlot.split('-')[0].trim()
-  
-  let hours = 0
-  let minutes = 0
-  
-  // Try to parse 24-hour format first (e.g., "17:00")
-  const match24h = startTime.match(/^(\d{1,2}):(\d{2})$/)
-  if (match24h) {
-    hours = parseInt(match24h[1], 10)
-    minutes = parseInt(match24h[2], 10)
-  } else {
-    // Try to parse 12-hour format (e.g., "6:00 PM")
-    const match12h = startTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
-    if (match12h) {
-      hours = parseInt(match12h[1], 10)
-      minutes = parseInt(match12h[2], 10)
-      const period = match12h[3].toUpperCase()
-      
-      if (period === 'PM' && hours !== 12) {
-        hours += 12
-      } else if (period === 'AM' && hours === 12) {
-        hours = 0
-      }
-    } else {
-      // Fallback: return start of the booking date in PH timezone (midnight)
-      // Parse as Philippines time by constructing explicit ISO string
-      return new Date(`${date}T00:00:00+08:00`)
-    }
-  }
-
-  // Construct the datetime explicitly in Philippines timezone (UTC+8)
-  // Format: YYYY-MM-DDTHH:MM:SS+08:00
-  const paddedHours = hours.toString().padStart(2, '0')
-  const paddedMinutes = minutes.toString().padStart(2, '0')
-  const isoString = `${date}T${paddedHours}:${paddedMinutes}:00+08:00`
-  
-  return new Date(isoString)
-}
-
-/**
  * Calculate hours until the earliest booking in a group
  */
 export function calculateHoursUntilBooking(bookings: Booking[]): number {
@@ -1144,7 +1108,7 @@ export async function cancelBookingGroup(
     console.error('Cannot calculate cancellation fee (bad pricing snapshot):', err)
     return {
       success: false,
-      error: 'We could not read the pricing for this booking. Please contact support to cancel it.',
+      error: 'We could not read the pricing for this booking. Please call or text us at 0906 451 4819 to cancel it.',
     }
   }
 

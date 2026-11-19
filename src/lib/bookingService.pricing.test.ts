@@ -110,6 +110,54 @@ describe('admin bookings pricing', () => {
     expect(ops.inserted).toHaveLength(0)
   })
 
+  it('updateAdminBooking keeps the price when slots are only reordered', async () => {
+    const ops = setup([existingRow({ time_slot: '10:00' }), existingRow({ id: 'b2', time_slot: '11:00' })])
+    const res = await updateAdminBooking('g1', { name: 'Ann', date: DATE, timeSlots: ['11:00', '10:00'] })
+    expect(res.success).toBe(true)
+    expect(getPricingForDate).not.toHaveBeenCalled()
+    expect(ops.inserted[0].payment_amount).toBe(123)
+    expect(ops.inserted[0].pricing_snapshot).toEqual(OLD_SNAPSHOT)
+  })
+
+  it('updateAdminBooking re-prices when only equipment changes', async () => {
+    getPricingForDate.mockResolvedValue(VERSION)
+    const ops = setup([existingRow()])
+    const res = await updateAdminBooking('g1', { name: 'Ann', date: DATE, timeSlots: ['10:00'], paddles: 2 })
+    expect(res.success).toBe(true)
+    expect(ops.inserted[0].payment_amount).toBe(
+      calculatePaymentAmount(RULES, ['10:00'], 2, { date: DATE, paddles: 2, needsBalls: false, trainingBalls: false })
+    )
+    expect(ops.inserted[0].pricing_snapshot).toEqual({ version_id: 'v2', rules: RULES })
+  })
+
+  it('updateAdminBooking keeps amount and a null snapshot when nothing priced changed', async () => {
+    const ops = setup([existingRow({ pricing_snapshot: null })])
+    const res = await updateAdminBooking('g1', { name: 'Bob', date: DATE, timeSlots: ['10:00'] })
+    expect(res.success).toBe(true)
+    expect(getPricingForDate).not.toHaveBeenCalled()
+    expect(ops.inserted[0].payment_amount).toBe(123)
+    expect(ops.inserted[0].pricing_snapshot).toBeNull()
+  })
+
+  it('updateAdminBooking re-prices when the stored payment_amount is null', async () => {
+    getPricingForDate.mockResolvedValue(VERSION)
+    const ops = setup([existingRow({ payment_amount: null })])
+    const res = await updateAdminBooking('g1', { name: 'Ann', date: DATE, timeSlots: ['10:00'] })
+    expect(res.success).toBe(true)
+    expect(ops.inserted[0].payment_amount).toBe(
+      calculatePaymentAmount(RULES, ['10:00'], 2, { date: DATE, paddles: 0, needsBalls: false, trainingBalls: false })
+    )
+    expect(ops.inserted[0].pricing_snapshot).toEqual({ version_id: 'v2', rules: RULES })
+  })
+
+  it('createAdminBooking says so when no price version covers the date', async () => {
+    getPricingForDate.mockRejectedValue(Object.assign(new Error('x'), { name: 'NoPricesForDateError' }))
+    const ops = setup([])
+    const res = await createAdminBooking({ name: 'Ann', date: DATE, timeSlots: ['10:00'] })
+    expect(res).toMatchObject({ success: false, error: 'No prices are set for this date.' })
+    expect(ops.inserted).toHaveLength(0)
+  })
+
   it('approveRescheduleRequest carries snapshot, amount and training balls', async () => {
     const ops = setup([existingRow({ training_balls: true, is_manual: false })], {
       reschedule_requests: {

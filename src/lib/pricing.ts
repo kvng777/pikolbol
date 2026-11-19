@@ -130,7 +130,8 @@ export function calculateCancellationFee(
   if (hoursUntilBooking > rules.cancellation_window_hours) {
     return { cancellationFee: 0, refundAmount: totalAmount }
   }
-  const fee = numberOfSlots * rules.cancellation_fee_per_slot
+  // The fee can never exceed what was paid.
+  const fee = Math.min(totalAmount, numberOfSlots * rules.cancellation_fee_per_slot)
   return { cancellationFee: fee, refundAmount: Math.max(0, totalAmount - fee) }
 }
 

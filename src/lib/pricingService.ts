@@ -16,6 +16,14 @@ export class PricingUnavailableError extends Error {
   }
 }
 
+/** Prices were read fine, but no version covers the requested date. */
+export class NoPricesForDateError extends PricingUnavailableError {
+  constructor() {
+    super('No prices are set for this date.')
+    this.name = 'NoPricesForDateError'
+  }
+}
+
 interface PricingRow {
   id: string
   effective_from: string
@@ -78,7 +86,7 @@ export async function getPricingVersionById(id: string): Promise<PricingVersion 
 /** The version that prices a given play date. */
 export async function getPricingForDate(date: string): Promise<PricingVersion> {
   const version = pickPricingVersion(await getPricingVersions(), date)
-  if (!version) throw new PricingUnavailableError()
+  if (!version) throw new NoPricesForDateError()
   return version
 }
 

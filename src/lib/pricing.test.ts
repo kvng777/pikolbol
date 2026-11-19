@@ -120,7 +120,11 @@ describe('calculateCancellationFee', () => {
   })
   it('charges per slot inside the window, refund never negative', () => {
     expect(calculateCancellationFee(R, 450, 2, 10)).toEqual({ cancellationFee: 200, refundAmount: 250 })
-    expect(calculateCancellationFee(R, 100, 2, 10)).toEqual({ cancellationFee: 200, refundAmount: 0 })
+    expect(calculateCancellationFee(R, 100, 2, 10)).toEqual({ cancellationFee: 100, refundAmount: 0 })
+  })
+  it('caps the fee at the total paid', () => {
+    const rules = { ...R, cancellation_fee_per_slot: 300 }
+    expect(calculateCancellationFee(rules, 400, 2, 10)).toEqual({ cancellationFee: 400, refundAmount: 0 })
   })
   it('uses the rules window and fee', () => {
     const rules = { ...R, cancellation_window_hours: 48, cancellation_fee_per_slot: 150 }
