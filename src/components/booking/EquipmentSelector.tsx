@@ -2,7 +2,8 @@
 
 import { Minus, Plus, Volleyball, ShoppingBasket } from 'lucide-react'
 import { Label } from '@/components/ui/label'
-import { PADDLE_PRICE, BALL_SET_PRICE, TRAINING_BALLS_PRICE, MAX_PADDLES } from '@/lib/paymentConfig'
+import { MAX_PADDLES } from '@/lib/paymentConfig'
+import type { PricingRules } from '@/types/pricing'
 
 interface EquipmentSelectorProps {
   paddles: number
@@ -13,6 +14,10 @@ interface EquipmentSelectorProps {
   onTrainingBallsChange: (value: boolean) => void
   /** Whether equipment is currently chargeable (post-promo). Drives the price labels. */
   chargeable: boolean
+  /** Prices for the selected play date (null while loading or if they failed to load). */
+  rules: PricingRules | null
+  /** True when prices failed to load (shows "Prices unavailable" instead of a loading dash). */
+  pricesUnavailable?: boolean
 }
 
 /**
@@ -39,12 +44,18 @@ export function EquipmentSelector({
   onNeedsBallsChange,
   onTrainingBallsChange,
   chargeable,
+  rules,
+  pricesUnavailable = false,
 }: EquipmentSelectorProps) {
-  const paddleLabel = chargeable ? `Php${PADDLE_PRICE} each` : 'FREE (promo)'
-  const ballLabel = chargeable ? `Php${BALL_SET_PRICE} / set of 4` : 'FREE (promo)'
-  const trainingBallsLabel = chargeable
-    ? `Php${TRAINING_BALLS_PRICE} / booking · with movable basket`
-    : 'FREE (promo) · with movable basket'
+  // Without rules we know nothing about prices: never show a price or "FREE".
+  const unknown = pricesUnavailable ? 'Prices unavailable' : '…'
+  const paddleLabel = !rules ? unknown : chargeable ? `Php${rules.paddle_price} each` : 'FREE (promo)'
+  const ballLabel = !rules ? unknown : chargeable ? `Php${rules.ball_set_price} / set of 4` : 'FREE (promo)'
+  const trainingBallsLabel = !rules
+    ? `${unknown} · with movable basket`
+    : chargeable
+      ? `Php${rules.training_balls_price} / booking · with movable basket`
+      : 'FREE (promo) · with movable basket'
 
   const adjustPaddles = (delta: number) => {
     onPaddlesChange(Math.min(MAX_PADDLES, Math.max(0, paddles + delta)))

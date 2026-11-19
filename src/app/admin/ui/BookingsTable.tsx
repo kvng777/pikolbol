@@ -14,7 +14,8 @@ import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { BookingStatusBadge } from '@/components/ui/BookingStatusBadge'
 import { PaymentStatus } from '@/types/payment'
-import { calculatePaymentAmount, formatEquipmentSummary } from '@/lib/paymentConfig'
+import { formatEquipmentSummary } from '@/lib/paymentConfig'
+import { calculatePaymentAmount, SEED_PRICING_RULES } from '@/lib/pricing'
 import type { TableUI } from '@/app/admin/hooks/useAdminTable'
 
 // Type for grouped bookings used by this UI
@@ -201,7 +202,8 @@ export default function BookingsTable({ table, onEditBooking }: BookingsTablePro
                       ? `₱${group.payment_amount.toLocaleString()}`
                       : (() => {
                           const players = typeof group.players === 'number' ? group.players : 4
-                          const total = calculatePaymentAmount(group.timeSlots, players)
+                          // Legacy rows without a stored amount predate admin pricing
+                          const total = calculatePaymentAmount(SEED_PRICING_RULES, group.timeSlots, players)
                           return `₱${total.toLocaleString()}`
                         })()
                     }

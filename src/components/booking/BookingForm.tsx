@@ -4,7 +4,8 @@ import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { BulkBookingPayload } from '@/types/booking'
-import { calculatePaymentAmount, isEquipmentChargeable } from '@/lib/paymentConfig'
+import { calculatePaymentAmount, isEquipmentChargeable } from '@/lib/pricing'
+import { usePricingForDate } from '@/hooks/usePricing'
 import { EquipmentSelector } from './EquipmentSelector'
 
 export interface BookingFormDefaultValues {
@@ -32,15 +33,21 @@ export function BookingForm({
   const [needsBalls, setNeedsBalls] = useState(false)
   const [trainingBalls, setTrainingBalls] = useState(false)
 
-  // Paddles & balls are free during the promo; charged for play dates from June 1, 2026
-  const equipmentChargeable = isEquipmentChargeable(selectedDate)
+  // Prices for the selected play date (versioned by the admin Pricing tab)
+  const { rules, error: pricingError } = usePricingForDate(selectedDate)
+  const equipmentChargeable = rules ? isEquipmentChargeable(rules, selectedDate) : false
 
-  const totalCost = calculatePaymentAmount(
-    selectedSlots.length > 0 ? selectedSlots : ['12:00'],
-    2,
-    { date: selectedDate, paddles, needsBalls, trainingBalls }
-  )
-  const formattedTotal = `Php${totalCost.toLocaleString()}`
+  // Estimate only: the payment screen shows the server-signed amount
+  const totalCost = rules
+    ? calculatePaymentAmount(rules, selectedSlots.length > 0 ? selectedSlots : ['12:00'], 2, {
+        date: selectedDate,
+        paddles,
+        needsBalls,
+        trainingBalls,
+      })
+    : null
+  const formattedTotal =
+    totalCost === null ? (pricingError ? 'prices unavailable' : '…') : `Php${totalCost.toLocaleString()}`
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,11 +86,13 @@ export function BookingForm({
         onNeedsBallsChange={setNeedsBalls}
         onTrainingBallsChange={setTrainingBalls}
         chargeable={equipmentChargeable}
+        rules={rules}
+        pricesUnavailable={!!pricingError}
       />
 
       <Button
         type="submit"
-        disabled={isSubmitting}
+        disabled={isSubmitting || !rules}
         className="text-lg w-full bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-0 h-11 font-medium"
       >
         {isSubmitting ? 'Booking...' : `Book ${selectedSlots.length} Slot(s) — ${formattedTotal}`}
