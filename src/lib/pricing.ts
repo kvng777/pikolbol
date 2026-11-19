@@ -10,7 +10,6 @@ import type {
   PricingSnapshot,
   EquipmentSelection,
 } from '@/types/pricing'
-import { getSlotStartHour } from './paymentConfig'
 
 export const RATE_TIERS: readonly RateTier[] = ['daytime', 'offpeak', 'latenight']
 
@@ -50,8 +49,30 @@ export const SEED_PRICING_RULES: PricingRules = {
   cancellation_window_hours: 24,
 }
 
+const SLOT_START_RE = /^\s*(\d{1,2}):(\d{2})(?:\s*(AM|PM))?\s*(?:-.*)?$/i
+
+/**
+ * Strict start-hour parser. Accepts `H:MM`/`HH:MM` (24-hour) or `h:MM AM|PM`,
+ * optionally followed by `-end` / ` - end` (ignored). Minutes must be 00.
+ * Anything else throws (never guess a price).
+ */
+function parseSlotStartHour(timeSlot: string): number {
+  const fail = () => new Error(`Unrecognised time slot: ${timeSlot}`)
+  const m = typeof timeSlot === 'string' ? SLOT_START_RE.exec(timeSlot) : null
+  if (!m || m[2] !== '00') throw fail()
+  let hour = parseInt(m[1], 10)
+  if (m[3]) {
+    if (hour < 1 || hour > 12) throw fail()
+    const pm = m[3].toUpperCase() === 'PM'
+    hour = (hour % 12) + (pm ? 12 : 0)
+  } else if (hour > 23) {
+    throw fail()
+  }
+  return hour
+}
+
 export function getSlotRateTier(rules: PricingRules, timeSlot: string): RateTier {
-  const hour = getSlotStartHour(timeSlot)
+  const hour = parseSlotStartHour(timeSlot)
   const tier = rules.hour_tiers[hour - FIRST_SLOT_HOUR]
   if (!tier) throw new Error(`No rate tier for slot "${timeSlot}"`)
   return tier
@@ -69,7 +90,10 @@ export function isEquipmentChargeable(rules: PricingRules, date?: string): boole
 
 export function calculateEquipmentCharge(rules: PricingRules, equipment?: EquipmentSelection): number {
   if (!equipment || !isEquipmentChargeable(rules, equipment.date)) return 0
-  const paddles = Math.max(0, equipment.paddles ?? 0)
+  const paddles = equipment.paddles ?? 0
+  if (!Number.isInteger(paddles) || paddles < 0) {
+    throw new Error(`Invalid paddle count: ${paddles}`)
+  }
   return (
     paddles * rules.paddle_price +
     (equipment.needsBalls ? rules.ball_set_price : 0) +
@@ -113,7 +137,7 @@ export function pickPricingVersion(versions: PricingVersion[], date: string): Pr
     if (
       !best ||
       v.effective_from > best.effective_from ||
-      (v.effective_from === best.effective_from && v.created_at > best.created_at)
+      (v.effective_from === best.effective_from && Date.parse(v.created_at) > Date.parse(best.created_at))
     ) {
       best = v
     }
@@ -130,7 +154,32 @@ export function upcomingPricingVersions(versions: PricingVersion[], today: strin
 
 /** Prices a saved booking was charged with (seed prices for rows from before snapshots). */
 export function rulesFromSnapshot(snapshot: PricingSnapshot | null | undefined): PricingRules {
-  return snapshot?.rules ?? SEED_PRICING_RULES
+  if (snapshot == null) return SEED_PRICING_RULES
+  assertValidPricingRules(snapshot.rules)
+  return snapshot.rules
+}
+
+const isMoney = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0
+
+/**
+ * Structural check for rules read from the DB (snapshots, schedules). Throws
+ * 'Invalid pricing snapshot' rather than pricing from corrupt data.
+ * (Not pricingSchema: that imports this module.)
+ */
+export function assertValidPricingRules(rules: unknown): asserts rules is PricingRules {
+  const r = rules as Partial<Record<string, unknown>> | null
+  const tp = r?.tier_prices as Record<string, unknown> | undefined
+  const ok =
+    !!r && typeof r === 'object' &&
+    Array.isArray(r.hour_tiers) &&
+    r.hour_tiers.length === SLOT_COUNT &&
+    r.hour_tiers.every((t) => (RATE_TIERS as readonly unknown[]).includes(t)) &&
+    !!tp && typeof tp === 'object' &&
+    RATE_TIERS.every((t) => isMoney(tp[t])) &&
+    [r.extra_player_charge, r.paddle_price, r.ball_set_price, r.training_balls_price, r.cancellation_fee_per_slot].every(isMoney) &&
+    isMoney(r.base_players_included) &&
+    isMoney(r.cancellation_window_hours)
+  if (!ok) throw new Error('Invalid pricing snapshot')
 }
 
 function formatHour(hour: number): string {
@@ -166,7 +215,10 @@ export interface PricedSelection {
   trainingBalls: boolean
 }
 
-/** True when nothing that affects the price changed (slot order ignored). */
+/**
+ * True when nothing that affects the price changed (slot order ignored).
+ * Ignores player count, so use it only for admin manual bookings (fixed player count).
+ */
 export function isSamePricedSelection(a: PricedSelection, b: PricedSelection): boolean {
   const slotsA = [...a.timeSlots].sort()
   const slotsB = [...b.timeSlots].sort()
