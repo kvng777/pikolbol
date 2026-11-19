@@ -149,7 +149,7 @@ export function pickPricingVersion(versions: PricingVersion[], date: string): Pr
 export function upcomingPricingVersions(versions: PricingVersion[], today: string): PricingVersion[] {
   return versions
     .filter((v) => !v.cancelled_at && v.effective_from > today)
-    .sort((a, b) => a.effective_from.localeCompare(b.effective_from) || a.created_at.localeCompare(b.created_at))
+    .sort((a, b) => a.effective_from.localeCompare(b.effective_from) || Date.parse(a.created_at) - Date.parse(b.created_at))
 }
 
 /** Prices a saved booking was charged with (seed prices for rows from before snapshots). */
@@ -157,6 +157,13 @@ export function rulesFromSnapshot(snapshot: PricingSnapshot | null | undefined):
   if (snapshot == null) return SEED_PRICING_RULES
   assertValidPricingRules(snapshot.rules)
   return snapshot.rules
+}
+
+/** 'YYYY-MM-DD' that is a real calendar date. (Not agent/dates: keeps this module dependency-free.) */
+const isIsoDate = (s: unknown): boolean => {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  const ms = Date.parse(s)
+  return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === s
 }
 
 const isMoney = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0
@@ -178,7 +185,8 @@ export function assertValidPricingRules(rules: unknown): asserts rules is Pricin
     RATE_TIERS.every((t) => isMoney(tp[t])) &&
     [r.extra_player_charge, r.paddle_price, r.ball_set_price, r.training_balls_price, r.cancellation_fee_per_slot].every(isMoney) &&
     isMoney(r.base_players_included) &&
-    isMoney(r.cancellation_window_hours)
+    isMoney(r.cancellation_window_hours) &&
+    (r.equipment_charge_start_date === null || isIsoDate(r.equipment_charge_start_date))
   if (!ok) throw new Error('Invalid pricing snapshot')
 }
 

@@ -147,6 +147,11 @@ describe('pickPricingVersion', () => {
   it('returns null when nothing applies', () => {
     expect(pickPricingVersion([dec], '2026-11-01')).toBeNull()
   })
+  it('upcoming tie-break compares created_at as instants, not strings', () => {
+    const a = version({ id: 'a', effective_from: '2026-12-01', created_at: '2026-11-20T08:00:00+08:00' }) // 00:00Z
+    const b = version({ id: 'b', effective_from: '2026-12-01', created_at: '2026-11-20T04:00:00Z' })
+    expect(upcomingPricingVersions([b, a], '2026-11-19').map((v) => v.id)).toEqual(['a', 'b'])
+  })
   it('lists upcoming versions after today, soonest first', () => {
     expect(upcomingPricingVersions([jan, dec, seed], '2026-11-19').map((v) => v.id)).toEqual(['dec'])
   })
@@ -234,10 +239,18 @@ describe('assertValidPricingRules / rulesFromSnapshot validation', () => {
     'fractional cancellation window': { ...R, cancellation_window_hours: 1.5 },
     'negative base players': { ...R, base_players_included: -1 },
     'not an object': 'x',
+    'malformed equipment date': { ...R, equipment_charge_start_date: '1/6/2026' },
+    'impossible equipment date': { ...R, equipment_charge_start_date: '2026-02-30' },
+    'non-string equipment date': { ...R, equipment_charge_start_date: 20260601 },
+    'missing equipment date': Object.fromEntries(Object.entries(R).filter(([k]) => k !== 'equipment_charge_start_date')),
   }
   it.each(Object.keys(bad))('rejects %s', (name) => {
     expect(() => assertValidPricingRules(bad[name])).toThrow('Invalid pricing snapshot')
     expect(() => rulesFromSnapshot({ version_id: 'x', rules: bad[name] as PricingRules })).toThrow('Invalid pricing snapshot')
+  })
+  it('accepts a null or valid equipment start date', () => {
+    expect(() => assertValidPricingRules({ ...R, equipment_charge_start_date: null })).not.toThrow()
+    expect(() => assertValidPricingRules({ ...R, equipment_charge_start_date: '2026-06-01' })).not.toThrow()
   })
   it('accepts valid rules', () => {
     expect(() => assertValidPricingRules(R)).not.toThrow()

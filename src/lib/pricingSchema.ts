@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { SLOT_COUNT } from './pricing'
 import { MAX_PADDLES } from './paymentConfig'
 import { isRealDate } from './agent/dates'
+import { generateTimeSlots } from './timeSlotGenerator'
 
 const rateTier = z.enum(['daytime', 'offpeak', 'latenight'])
 
@@ -14,7 +15,7 @@ const pesos = (label: string, min: number, max: number) =>
 
 const isoDate = z.string().refine(isRealDate, 'Enter a valid date')
 
-export const pricingRulesSchema = z.strictObject({
+const pricingRulesBase = z.strictObject({
   tier_prices: z.strictObject({
     daytime: pesos('Daytime rate', 1, 10000),
     offpeak: pesos('Off-peak rate', 1, 10000),
@@ -39,12 +40,19 @@ export const pricingRulesSchema = z.strictObject({
     .max(168, 'Cancellation window: maximum 168 hours'),
 })
 
+export const pricingRulesSchema = pricingRulesBase.refine(
+  (r) => r.cancellation_fee_per_slot <= Math.max(...Object.values(r.tier_prices)),
+  { message: 'Cancellation fee: cannot exceed the highest slot rate', path: ['cancellation_fee_per_slot'] }
+)
+
 export const createPricingVersionSchema = z.strictObject({
   effectiveFrom: isoDate,
   rules: pricingRulesSchema,
 })
 
-const timeSlot = z.string().regex(/^\d{2}:00-\d{2}:00$/, 'Invalid time slot')
+// Real slot strings ("05:00-06:00" … "23:00-00:00"), the same format bookings store.
+const VALID_SLOTS: ReadonlySet<string> = new Set(generateTimeSlots())
+const timeSlot = z.string().refine((s) => VALID_SLOTS.has(s), 'Invalid time slot')
 
 /** Booking details that a price quote is bound to (public input: validate strictly). */
 export const quoteInputSchema = z.strictObject({

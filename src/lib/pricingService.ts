@@ -4,9 +4,9 @@
  * Fails closed: unreadable, empty or invalid data throws PricingUnavailableError.
  */
 import { supabase } from './supabase-server'
-import { pricingRulesSchema } from './pricingSchema'
+import { pricingRulesSchema, createPricingVersionSchema } from './pricingSchema'
 import { pickPricingVersion } from './pricing'
-import { manilaNow } from './agent/dates'
+import { manilaNow, isRealDate } from './agent/dates'
 import type { PricingRules, PricingVersion } from '@/types/pricing'
 
 export class PricingUnavailableError extends Error {
@@ -82,12 +82,27 @@ export async function getPricingForDate(date: string): Promise<PricingVersion> {
   return version
 }
 
+/** Manila today + 2 years (Feb 29 falls back to Feb 28). */
+function maxEffectiveFrom(now: Date): string {
+  const [y, m, d] = manilaToday(now).split('-')
+  const candidate = `${Number(y) + 2}-${m}-${d}`
+  return isRealDate(candidate) ? candidate : `${Number(y) + 2}-${m}-28`
+}
+
 export async function createPricingVersion(
   input: { effectiveFrom: string; rules: PricingRules; createdBy: string },
   now: Date = new Date()
 ): Promise<{ success: true; version: PricingVersion } | { success: false; error: string }> {
+  // A bad row would make getPricingVersions fail closed for every booking, so validate here too.
+  const parsed = createPricingVersionSchema.safeParse({ effectiveFrom: input.effectiveFrom, rules: input.rules })
+  if (!parsed.success) {
+    return { success: false, error: 'Invalid prices' }
+  }
   if (input.effectiveFrom < manilaToday(now)) {
     return { success: false, error: 'The start date cannot be in the past.' }
+  }
+  if (input.effectiveFrom > maxEffectiveFrom(now)) {
+    return { success: false, error: 'The start date is too far ahead (2 years at most).' }
   }
 
   const { data, error } = await supabase
@@ -100,7 +115,11 @@ export async function createPricingVersion(
     console.error('Error creating pricing version:', error)
     return { success: false, error: 'Failed to save prices' }
   }
-  return { success: true, version: toVersion(data as PricingRow) }
+  try {
+    return { success: true, version: toVersion(data as PricingRow) }
+  } catch {
+    return { success: false, error: 'Failed to save prices' }
+  }
 }
 
 /** Cancel an upcoming version (effective_from after today). Versions in effect can't be cancelled. */

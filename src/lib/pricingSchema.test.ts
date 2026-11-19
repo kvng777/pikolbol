@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { pricingRulesSchema, createPricingVersionSchema, quoteInputSchema } from './pricingSchema'
 import { SEED_PRICING_RULES } from './pricing'
+import { generateTimeSlots } from './timeSlotGenerator'
 
 describe('pricingRulesSchema', () => {
   it('accepts the seed rules', () => {
@@ -28,6 +29,17 @@ describe('pricingRulesSchema', () => {
   })
 })
 
+describe('cancellation fee sanity', () => {
+  const withFee = (fee: number) => ({ ...SEED_PRICING_RULES, cancellation_fee_per_slot: fee })
+  it('accepts a fee up to the highest tier price', () => {
+    expect(pricingRulesSchema.safeParse(withFee(300)).success).toBe(true)
+    expect(pricingRulesSchema.safeParse(withFee(0)).success).toBe(true)
+  })
+  it('rejects a fee above the highest tier price', () => {
+    expect(pricingRulesSchema.safeParse(withFee(301)).success).toBe(false)
+  })
+})
+
 describe('createPricingVersionSchema', () => {
   it('requires a real date', () => {
     expect(createPricingVersionSchema.safeParse({ effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES }).success).toBe(true)
@@ -43,8 +55,17 @@ describe('quoteInputSchema', () => {
   it('rejects duplicate or malformed slots and silly counts', () => {
     expect(quoteInputSchema.safeParse({ ...ok, timeSlots: ['08:00-09:00', '08:00-09:00'] }).success).toBe(false)
     expect(quoteInputSchema.safeParse({ ...ok, timeSlots: ['8am'] }).success).toBe(false)
+    expect(quoteInputSchema.safeParse({ ...ok, timeSlots: ['02:00-03:00'] }).success).toBe(false)
+    expect(quoteInputSchema.safeParse({ ...ok, timeSlots: ['08:00-11:00'] }).success).toBe(false)
+    expect(quoteInputSchema.safeParse({ ...ok, timeSlots: ['99:00-00:00'] }).success).toBe(false)
     expect(quoteInputSchema.safeParse({ ...ok, timeSlots: [] }).success).toBe(false)
     expect(quoteInputSchema.safeParse({ ...ok, players: 0 }).success).toBe(false)
     expect(quoteInputSchema.safeParse({ ...ok, paddles: 99 }).success).toBe(false)
+  })
+  it('accepts every real slot, including the last one', () => {
+    for (const slot of generateTimeSlots()) {
+      expect(quoteInputSchema.safeParse({ ...ok, timeSlots: [slot] }).success).toBe(true)
+    }
+    expect(generateTimeSlots().at(-1)).toBe('23:00-00:00')
   })
 })
