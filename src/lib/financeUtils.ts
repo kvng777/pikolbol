@@ -1,13 +1,8 @@
 import { Booking } from '@/types/booking'
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, parseISO, isWithinInterval, getDay, eachDayOfInterval, startOfWeek } from 'date-fns'
-import {
-  EVENING_START_HOUR,
-  LATE_NIGHT_START_HOUR,
-  PADDLE_PRICE,
-  BALL_SET_PRICE,
-  TRAINING_BALLS_PRICE,
-  isEquipmentChargeable,
-} from './paymentConfig'
+import { EVENING_START_HOUR, LATE_NIGHT_START_HOUR } from './paymentConfig'
+import { isEquipmentChargeable, rulesFromSnapshot } from './pricing'
+import type { PricingRules } from '@/types/pricing'
 
 // ============================================================================
 // Types
@@ -658,8 +653,11 @@ export function rollupDailyToWeekly(daily: DailyRevenue[]): DailyRevenue[] {
 
 /**
  * Aggregate equipment rentals + revenue over confirmed bookings, deduplicated
- * by booking_group_id so a multi-slot order counts once. Revenue applies only
- * to play dates on/after the promo end (see isEquipmentChargeable).
+ * by booking_group_id so a multi-slot order counts once. Revenue uses each
+ * order's saved prices (pricing_snapshot) and applies only to play dates
+ * on/after that snapshot's equipment charge start date. An order with a
+ * malformed snapshot counts its rentals but 0 revenue (logged), so one bad row
+ * can't break the Finance tab.
  */
 export function calculateEquipmentBreakdown(bookings: Booking[]): EquipmentBreakdown {
   const confirmed = getConfirmedBookings(bookings)
@@ -689,10 +687,18 @@ export function calculateEquipmentBreakdown(bookings: Booking[]): EquipmentBreak
     if (hasBalls) ballSetRentals += 1
     if (hasTraining) trainingBallsRentals += 1
 
-    if (isEquipmentChargeable(b.date)) {
-      paddleRevenue += paddles * PADDLE_PRICE
-      if (hasBalls) ballSetRevenue += BALL_SET_PRICE
-      if (hasTraining) trainingBallsRevenue += TRAINING_BALLS_PRICE
+    // Price with what this order was actually charged (seed prices for legacy rows)
+    let rules: PricingRules
+    try {
+      rules = rulesFromSnapshot(b.pricing_snapshot)
+    } catch {
+      console.warn(`Finance: skipping equipment revenue for booking group ${key} (invalid pricing snapshot)`)
+      continue
+    }
+    if (isEquipmentChargeable(rules, b.date)) {
+      paddleRevenue += paddles * rules.paddle_price
+      if (hasBalls) ballSetRevenue += rules.ball_set_price
+      if (hasTraining) trainingBallsRevenue += rules.training_balls_price
     }
   }
 
