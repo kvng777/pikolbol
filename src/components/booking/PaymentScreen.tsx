@@ -23,7 +23,6 @@ export interface BookingData {
   paddles: number
   needsBalls: boolean
   trainingBalls: boolean
-  user_id?: string
 }
 
 interface PaymentScreenProps {

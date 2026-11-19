@@ -27,8 +27,25 @@ import * as paymentSettings from './paymentSettings'
 import * as notice from './notice'
 import * as profile from './profile'
 import * as profileService from '@/lib/profileService'
+import * as paymentSettingsService from '@/lib/paymentSettingsService'
+import * as noticeService from '@/lib/noticeService'
+import * as emailService from '@/lib/emailService'
+import type { Profile } from '@/types/profile'
 
 type Call = [name: string, call: (token: string) => Promise<unknown>]
+
+const automockedModules = [bookingService, paymentService, paymentSettingsService, noticeService, emailService]
+
+/** Every function exported by the automocked service modules that was called at least once. */
+function calledServiceFunctions(): string[] {
+  const called: string[] = []
+  for (const mod of automockedModules) {
+    for (const [name, fn] of Object.entries(mod)) {
+      if (typeof fn === 'function' && vi.isMockFunction(fn) && fn.mock.calls.length > 0) called.push(name)
+    }
+  }
+  return called
+}
 
 const payload = { name: 'X', date: '2026-12-01', timeSlots: ['08:00 - 09:00'] }
 
@@ -58,17 +75,19 @@ const ADMIN_ACTIONS: Call[] = [
 
 describe('admin actions', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
   })
 
   it.each(ADMIN_ACTIONS)('%s rejects a missing token', async (_name, call) => {
     await expect(call('')).rejects.toMatchObject({ code: 'unauthorized' })
+    expect(calledServiceFunctions()).toEqual([])
   })
 
   it.each(ADMIN_ACTIONS)('%s rejects a signed-in non-admin', async (_name, call) => {
     getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
     getProfileByUserId.mockResolvedValue({ role: 'user' })
     await expect(call('tok')).rejects.toMatchObject({ code: 'forbidden' })
+    expect(calledServiceFunctions()).toEqual([])
   })
 
   it('does not touch the database when the guard fails', async () => {
@@ -87,9 +106,7 @@ describe('admin actions', () => {
 
 describe('submitPaymentAction', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    getUser.mockReset()
-    getProfileByUserId.mockReset()
+    vi.resetAllMocks()
     vi.mocked(bookingService.isDateClosed).mockResolvedValue(false)
     vi.mocked(paymentService.createBookingWithPendingPayment).mockResolvedValue({ success: false, error: 'x' })
   })
@@ -109,9 +126,22 @@ describe('submitPaymentAction', () => {
 
   it('books as a guest when there is no token', async () => {
     await payment.submitPaymentAction(null, body)
+    expect(getUser).not.toHaveBeenCalled()
     expect(paymentService.createBookingWithPendingPayment).toHaveBeenCalledWith(
       expect.objectContaining({ user_id: undefined })
     )
+  })
+
+  it('books as a guest when the token fails verification', async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: new Error('expired') })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await payment.submitPaymentAction('bad-token', body)
+    expect(paymentService.createBookingWithPendingPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: undefined })
+    )
+    expect(warn).toHaveBeenCalledWith('submitPayment: access token rejected, booking as guest')
+    expect(warn.mock.calls.flat().join(' ')).not.toContain('bad-token')
+    warn.mockRestore()
   })
 })
 
@@ -122,9 +152,7 @@ describe('getPaymentStatusAction', () => {
   })
 })
 
-type UserCall = [name: string, call: (token: string) => Promise<unknown>]
-
-const USER_ACTIONS: UserCall[] = [
+const USER_ACTIONS: Call[] = [
   ['getMyBookingsAction', (t) => bookings.getMyBookingsAction(t)],
   ['cancelBookingGroupAction', (t) => bookings.cancelBookingGroupAction(t, 'g1', null)],
   ['createRescheduleRequestAction', (t) => bookings.createRescheduleRequestAction(t, 'g1', null, '2026-12-01', ['08:00 - 09:00'])],
@@ -135,14 +163,40 @@ const USER_ACTIONS: UserCall[] = [
 
 describe('customer actions', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    getUser.mockReset()
-    getProfileByUserId.mockReset()
+    vi.resetAllMocks()
     vi.mocked(bookingService.isDateClosed).mockResolvedValue(false)
   })
 
   it.each(USER_ACTIONS)('%s rejects a missing token', async (_name, call) => {
     await expect(call('')).rejects.toMatchObject({ code: 'unauthorized' })
+  })
+
+  it.each(USER_ACTIONS)('%s rejects a token that fails verification', async (_name, call) => {
+    getUser.mockResolvedValue({ data: { user: null }, error: new Error('expired') })
+    await expect(call('tok')).rejects.toMatchObject({ code: 'unauthorized' })
+  })
+
+  it('createRescheduleRequestAction uses the token user', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    vi.mocked(bookingService.createRescheduleRequest).mockResolvedValue({ success: false, error: 'x' })
+    await bookings.createRescheduleRequestAction('tok', 'g1', null, '2026-12-01', ['08:00 - 09:00'])
+    expect(bookingService.createRescheduleRequest).toHaveBeenCalledWith(
+      'g1', null, 'u1', '2026-12-01', ['08:00 - 09:00']
+    )
+  })
+
+  it('getMyPendingRescheduleRequestsAction uses the token user', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    vi.mocked(bookingService.getPendingRescheduleRequestsByUser).mockResolvedValue([])
+    await bookings.getMyPendingRescheduleRequestsAction('tok')
+    expect(bookingService.getPendingRescheduleRequestsByUser).toHaveBeenCalledWith('u1')
+  })
+
+  it('getMyProfileAction uses the token user', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    getProfileByUserId.mockResolvedValue({ user_id: 'u1', role: 'user' })
+    await profile.getMyProfileAction('tok')
+    expect(getProfileByUserId).toHaveBeenCalledWith('u1')
   })
 
   it('uses the user id from the token, not an argument', async () => {
@@ -171,9 +225,26 @@ describe('customer actions', () => {
 
   it("upsertMyProfileAction writes to the caller's profile", async () => {
     getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
-    vi.mocked(profileService.upsertProfile).mockResolvedValue({ user_id: 'u1' } as never)
-    await profile.upsertMyProfileAction('tok', { name: 'N' } as never)
+    vi.mocked(profileService.upsertProfile).mockResolvedValue({ user_id: 'u1' } as Profile)
+    await profile.upsertMyProfileAction('tok', { name: 'N' })
     expect(profileService.upsertProfile).toHaveBeenCalledWith('u1', { name: 'N' })
+  })
+
+  it('upsertMyProfileAction never passes an injected role to the service', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    vi.mocked(profileService.upsertProfile).mockResolvedValue({ user_id: 'u1' } as Profile)
+    const injected = { name: ' N ', phone: '0917', role: 'admin' } as { name: string; phone: string }
+    await profile.upsertMyProfileAction('tok', injected)
+    expect(profileService.upsertProfile).toHaveBeenCalledWith('u1', { name: 'N', phone: '0917' })
+  })
+
+  it('upsertMyProfileAction rejects an over-long name without calling the service', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    await expect(profile.upsertMyProfileAction('tok', { name: 'a'.repeat(101) })).resolves.toEqual({
+      success: false,
+      error: 'Invalid profile details',
+    })
+    expect(profileService.upsertProfile).not.toHaveBeenCalled()
   })
 })
 

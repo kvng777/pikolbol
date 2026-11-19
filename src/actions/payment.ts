@@ -44,6 +44,9 @@ export async function submitPaymentAction(
 
   // Link the booking to the signed-in user (verified), or book as a guest
   const userId = (await getUserIdFromToken(accessToken)) ?? undefined
+  if (accessToken && !userId) {
+    console.warn('submitPayment: access token rejected, booking as guest')
+  }
 
   const result = await createBookingWithPendingPayment({
     name: payload.name,

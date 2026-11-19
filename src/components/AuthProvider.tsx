@@ -1,7 +1,7 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase, SupabaseClient } from '@/lib/supabase'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import { User, Session } from '@supabase/supabase-js'
 import { isCurrentUserAdminAction } from '@/actions/profile'
 import { UserRole } from '@/types/profile'
@@ -35,8 +35,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [role, setRole] = useState<UserRole | null>(null)
 
+  // Only the latest check may update state; a sign-out or newer session wins over an older in-flight check
+  const checkIdRef = useRef(0)
+
   // Check admin status when the session changes
   const checkAdminStatus = async (session: Session | null) => {
+    const checkId = ++checkIdRef.current
+
     if (!session?.user) {
       setIsAdmin(false)
       setRole(null)
@@ -45,10 +50,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const result = await isCurrentUserAdminAction(session.access_token)
+      if (checkId !== checkIdRef.current) return
       setIsAdmin(result.isAdmin)
       setRole(result.role)
     } catch (error) {
       console.error('Error checking admin status:', error)
+      if (checkId !== checkIdRef.current) return
       setIsAdmin(false)
       setRole(null)
     }
@@ -75,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signOut = async () => {
+    checkIdRef.current++
     await supabase.auth.signOut()
     setUser(null)
     setSession(null)

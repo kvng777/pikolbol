@@ -215,6 +215,7 @@ export function useCancelBookingGroup() {
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
       queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
       queryClient.invalidateQueries({ queryKey: ['pendingRefunds'] })
+      queryClient.invalidateQueries({ queryKey: ['pendingRescheduleRequests'] })
     },
   })
 }

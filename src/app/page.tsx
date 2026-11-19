@@ -13,7 +13,6 @@ import { Booking, BulkBookingPayload } from '@/types/booking'
 import { toast } from 'sonner'
 import BookingConfirmedModal from '@/components/ui/BookingConfirmedModal'
 import { PaymentScreen, BookingData } from '@/components/booking/PaymentScreen'
-import { useAuth } from '@/components/AuthProvider'
 import { calculatePaymentAmount } from '@/lib/paymentConfig'
 import RatesPolicies from '@/components/home/RatesPolicies'
 import NoticeToast from '@/components/NoticeToast'
@@ -28,7 +27,6 @@ export default function Home() {
   const [confirmedBookings, setConfirmedBookings] = useState<Booking[]>([])
   const bookingCardRef = useRef<HTMLDivElement | null>(null)
 
-  const { user } = useAuth()
   const dateString = format(selectedDate, 'yyyy-MM-dd')
   
   // Use ACTIVE bookings for slot availability (pending + confirmed)
@@ -63,7 +61,6 @@ export default function Home() {
       paddles: data.paddles ?? 0,
       needsBalls: data.needsBalls ?? false,
       trainingBalls: data.trainingBalls ?? false,
-      user_id: user?.id,
     }
 
     setPendingBookingData(bookingData)

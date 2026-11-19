@@ -43,13 +43,41 @@ export async function getMyProfileAction(accessToken: string): Promise<ProfileRe
   }
 }
 
+const MAX_NAME_LENGTH = 100
+const MAX_PHONE_LENGTH = 20
+
+/**
+ * Build the service payload from name/phone only (never role or other keys).
+ * Returns null when a present field is not a string or is too long.
+ */
+function parseProfileInput(data: unknown): UpdateProfileData | null {
+  if (typeof data !== 'object' || data === null) return null
+  const input = data as Record<string, unknown>
+  const payload: UpdateProfileData = {}
+
+  for (const [key, max] of [['name', MAX_NAME_LENGTH], ['phone', MAX_PHONE_LENGTH]] as const) {
+    const value = input[key]
+    if (value === undefined) continue
+    if (typeof value !== 'string') return null
+    const trimmed = value.trim()
+    if (trimmed.length > max) return null
+    payload[key] = trimmed
+  }
+
+  return payload
+}
+
 export async function upsertMyProfileAction(
   accessToken: string,
   data: UpdateProfileData
 ): Promise<ProfileResult> {
   const userId = await requireUser(accessToken)
+  const payload = parseProfileInput(data)
+  if (!payload) {
+    return { success: false, error: 'Invalid profile details' }
+  }
   try {
-    const profile = await upsertProfile(userId, data)
+    const profile = await upsertProfile(userId, payload)
 
     if (!profile) {
       return { success: false, error: 'Failed to save profile' }

@@ -186,9 +186,10 @@ export function useAdminPage() {
 
     if (!confirm(message)) return
 
+    const token = await getAccessToken()
     let successCount = 0
     for (const id of bookingIds) {
-      const result = await deleteBookingAction(await getAccessToken(), id)
+      const result = await deleteBookingAction(token, id)
       if (result.success) successCount++
     }
 

@@ -54,8 +54,8 @@ export default function ProfilePage() {
     if (!user?.id) return
 
     try {
-      const result = await cancelBookingGroup.mutateAsync({ 
-        bookingGroupId, 
+      const result = await cancelBookingGroup.mutateAsync({
+        bookingGroupId,
         legacyBookingId,
       })
       if (result.success) {
@@ -121,8 +121,8 @@ export default function ProfilePage() {
 
       <main className="max-w-4xl mx-auto px-4 py-8 pt-24">
         {/* Back link */}
-        <Link 
-          href="/" 
+        <Link
+          href="/"
           className="inline-flex items-center gap-2 text-gray-600 hover:text-emerald-600 transition-colors mb-6"
         >
           <ArrowLeft className="w-4 h-4" />
