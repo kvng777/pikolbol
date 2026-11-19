@@ -38,13 +38,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Only the latest check may update state; a sign-out or newer session wins over an older in-flight check
   const checkIdRef = useRef(0)
 
-  // Check admin status when the session changes
+  // Check admin status when the session changes.
+  // Only the latest check clears `loading`, so a stale check can't end loading while isAdmin is still unset.
   const checkAdminStatus = async (session: Session | null) => {
     const checkId = ++checkIdRef.current
 
     if (!session?.user) {
       setIsAdmin(false)
       setRole(null)
+      setLoading(false)
       return
     }
 
@@ -59,23 +61,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAdmin(false)
       setRole(null)
     }
+    setLoading(false)
   }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
-      checkAdminStatus(session).then(() => {
-        setLoading(false)
-      })
+      checkAdminStatus(session)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
-      checkAdminStatus(session).then(() => {
-        setLoading(false)
-      })
+      checkAdminStatus(session)
     })
 
     return () => subscription.unsubscribe()
