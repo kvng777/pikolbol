@@ -87,6 +87,8 @@ Key query key patterns:
 - `profiles` table has `role: 'user' | 'admin'`
 - `AuthProvider.tsx` wraps the app with session context
 - Two Supabase clients: `lib/supabase.ts` (client-side, anon key) and `lib/supabase-server.ts` (server-side, service role key)
+- Server actions verify the caller on the server: protected actions take the Supabase `accessToken` as their first argument (hooks get it via `getAccessToken()` in `lib/accessToken.ts`). `lib/actionAuth.ts`: `requireAdmin(token)` for admin actions, `requireUser(token)` for user-scoped ones (user id comes from the token, never from an argument). Public actions return no personal data (`getActiveBookingsByDateAction` → `SlotOccupancy`, `getPaymentStatusAction` → id + status). `src/actions/actionGuards.test.ts` must list every protected action.
+- Email links (`/api/admin/confirm-payment`, `/api/admin/reschedule`) are protected by HMAC tokens (`lib/adminTokens.ts`, `ADMIN_ACTION_SECRET`), not sessions.
 
 ### Database Tables
 
