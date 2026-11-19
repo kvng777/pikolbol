@@ -5,10 +5,10 @@
  * so a price change while the customer is paying never changes what they owe.
  */
 import { createHmac, timingSafeEqual } from 'crypto'
-import { calculatePaymentAmount } from './pricing'
+import { calculatePaymentAmount, QUOTE_TTL_MS } from './pricing'
 import type { PricingRules, PriceQuote, QuoteInput } from '@/types/pricing'
 
-export const QUOTE_TTL_MS = 60 * 60 * 1000 // 60 minutes
+export { QUOTE_TTL_MS }
 
 function secret(): string {
   const s = process.env.PRICE_QUOTE_SECRET ?? ''

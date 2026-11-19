@@ -9,7 +9,7 @@ import {
   cancelPricingVersionAction,
 } from '@/actions/pricing'
 import { getAccessToken } from '@/lib/accessToken'
-import { pickPricingVersion } from '@/lib/pricing'
+import { pickPricingVersion, QUOTE_REFRESH_MS } from '@/lib/pricing'
 import type { PricingRules, PricingVersion, PriceQuote, QuoteInput } from '@/types/pricing'
 
 export const PRICING_QUERY_KEY = ['pricing'] as const
@@ -43,7 +43,11 @@ export function usePricingForDate(date: string) {
   }
 }
 
-/** Signed quote for the payment screen. Disabled while input is null. */
+/**
+ * Signed quote for the payment screen. Disabled while input is null.
+ * Refreshed before it expires (QUOTE_REFRESH_MS) so an open screen never submits an expired quote;
+ * a tab that slept past that refetches on focus.
+ */
 export function usePriceQuote(input: QuoteInput | null) {
   return useQuery<PriceQuote>({
     queryKey: [QUOTE_QUERY_KEY, input],
@@ -53,10 +57,12 @@ export function usePriceQuote(input: QuoteInput | null) {
       return result.quote
     },
     enabled: !!input,
-    staleTime: Infinity,
+    staleTime: QUOTE_REFRESH_MS,
+    refetchInterval: QUOTE_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true, // only refetches once stale (after QUOTE_REFRESH_MS)
     gcTime: 0,
     retry: 1,
-    refetchOnWindowFocus: false,
   })
 }
 

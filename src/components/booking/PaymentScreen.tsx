@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useSubmitPayment, usePaymentStatus, usePaymentSettings } from '@/hooks/usePayment'
 import { formatEquipmentSummary } from '@/lib/paymentConfig'
 import { isEquipmentChargeable } from '@/lib/pricing'
-import { usePriceQuote, usePricingForDate } from '@/hooks/usePricing'
+import { usePriceQuote, usePricingVersions } from '@/hooks/usePricing'
 import type { QuoteInput } from '@/types/pricing'
 import { Booking } from '@/types/booking'
 import { PaymentStatus } from '@/types/payment'
@@ -44,6 +44,8 @@ export function PaymentScreen({
   const [copiedField, setCopiedField] = useState<'name' | 'number' | null>(null)
   const [submittedBookings, setSubmittedBookings] = useState<Booking[] | null>(null)
   const [gcashReference, setGcashReference] = useState('')
+  // Token the server rejected (quote_invalid): submit stays disabled until a different quote arrives
+  const [rejectedToken, setRejectedToken] = useState<string | null>(null)
   
   const { data: settings, isLoading: settingsLoading } = usePaymentSettings()
   const submitPayment = useSubmitPayment()
@@ -60,8 +62,12 @@ export function PaymentScreen({
     }),
     [bookingData]
   )
-  const { data: quote, isLoading: quoteLoading, error: quoteError, refetch: refetchQuote } = usePriceQuote(quoteInput)
-  const { rules } = usePricingForDate(bookingData.date)
+  const { data: quote, isFetching: quoteFetching, error: quoteError, refetch: refetchQuote } = usePriceQuote(quoteInput)
+  // Equipment rules come from the version that priced this quote (unknown until found: show no label)
+  const { data: pricingVersions } = usePricingVersions()
+  const quoteRules = quote ? pricingVersions?.find((v) => v.id === quote.versionId)?.rules ?? null : null
+  // A refreshing, failed or already-rejected quote is never shown or submitted
+  const quoteUsable = !!quote && !quoteFetching && !quoteError && quote.token !== rejectedToken
   
   // Only poll for status after payment is submitted
   const bookingIds = submittedBookings?.map(b => b.id) || []
@@ -78,7 +84,7 @@ export function PaymentScreen({
   }, [paymentStatus, onPaymentConfirmed])
 
   const handleSubmitPayment = async () => {
-    if (!quote) return
+    if (!quote || !quoteUsable) return
     try {
       const result = await submitPayment.mutateAsync({
         payload: {
@@ -103,6 +109,7 @@ export function PaymentScreen({
         toast.success('Payment submitted! Waiting for confirmation.')
       } else if (result.code === 'quote_invalid') {
         toast.error(result.error)
+        setRejectedToken(quote.token)
         await refetchQuote()
       } else {
         toast.error(result.error || 'Failed to submit payment')
@@ -122,7 +129,7 @@ export function PaymentScreen({
   const timeSlots = bookingData.timeSlots.join(', ')
 
   // Equipment rental summary (charged only from the price version's equipment start date)
-  const equipmentChargeable = rules ? isEquipmentChargeable(rules, bookingData.date) : false
+  const equipmentFree = quoteRules ? !isEquipmentChargeable(quoteRules, bookingData.date) : false
   const equipmentSummary = formatEquipmentSummary(bookingData.paddles, bookingData.needsBalls, bookingData.trainingBalls)
 
   // Show "Awaiting Verification" after payment is submitted
@@ -175,9 +182,9 @@ export function PaymentScreen({
           {/* Amount */}
           <div className="text-center mb-3">
             <p className="text-sm text-gray-500">Amount to Pay</p>
-            {quoteLoading ? (
+            {quoteFetching ? (
               <Loader2 className="w-6 h-6 text-emerald-600 animate-spin mx-auto my-1" />
-            ) : quote ? (
+            ) : quoteUsable ? (
               <p className="text-2xl font-bold text-gray-900">₱{quote.amount.toLocaleString()}</p>
             ) : (
               <div className="text-sm text-red-600">
@@ -266,7 +273,7 @@ export function PaymentScreen({
             {equipmentSummary && (
               <p className="text-gray-600 text-sm mt-1">
                 Equipment: {equipmentSummary}
-                {rules && !equipmentChargeable && <span className="text-emerald-600 font-medium"> (FREE)</span>}
+                {equipmentFree && <span className="text-emerald-600 font-medium"> (FREE)</span>}
               </p>
             )}
           </div>
@@ -290,7 +297,7 @@ export function PaymentScreen({
             </div>
             <Button
               onClick={handleSubmitPayment}
-              disabled={submitPayment.isPending || !gcashReference.trim() || !quote}
+              disabled={submitPayment.isPending || !gcashReference.trim() || !quoteUsable}
               className="w-full h-12 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium"
             >
               {submitPayment.isPending ? (

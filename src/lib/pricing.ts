@@ -21,6 +21,11 @@ export const RATE_TIER_LABELS: Record<RateTier, string> = {
 
 export const FIRST_SLOT_HOUR = 5
 export const SLOT_COUNT = 19
+
+/** How long a signed price quote stays valid (shared so the client can refresh before expiry). */
+export const QUOTE_TTL_MS = 60 * 60 * 1000 // 60 minutes
+/** The payment screen refreshes its quote this long after fetching it, 10 minutes before expiry. */
+export const QUOTE_REFRESH_MS = QUOTE_TTL_MS - 10 * 60 * 1000
 /** Start hour of every bookable slot: 5 … 23. */
 export const SLOT_START_HOURS: readonly number[] = Array.from({ length: SLOT_COUNT }, (_, i) => FIRST_SLOT_HOUR + i)
 
