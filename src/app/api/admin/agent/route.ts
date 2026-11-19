@@ -21,6 +21,10 @@ import {
   saveThreadMessages,
   trimForModel,
 } from '@/lib/agent/history'
+import { buildPricingNote } from '@/lib/agent/pricingNote'
+import { manilaNow } from '@/lib/agent/dates'
+import { getPricingVersions } from '@/lib/pricingService'
+import type { PricingVersion } from '@/types/pricing'
 import { checkBudgetGate, recordUsage } from '@/lib/agent/usage'
 import type { AgentUIMessage } from '@/lib/agent/types'
 
@@ -61,6 +65,13 @@ export async function POST(req: Request) {
   const { messages, deleteFromSeq, startSeq } = planTurn(history, text, regenerate ?? false, generateId)
   if (deleteFromSeq !== null) await deleteMessagesFromSeq(threadId, deleteFromSeq)
 
+  let pricingVersions: PricingVersion[] | null = null
+  try {
+    pricingVersions = await getPricingVersions()
+  } catch {
+    pricingVersions = null // The note tells the model prices are unavailable
+  }
+
   const result = streamText({
     model: anthropic(AGENT_MODEL),
     instructions: [
@@ -71,7 +82,7 @@ export async function POST(req: Request) {
         providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
       },
       // Changes every request, so it goes after the cache breakpoint.
-      { role: 'system', content: buildContextNote() },
+      { role: 'system', content: `${buildContextNote()}\n\n${buildPricingNote(pricingVersions, manilaNow().date)}` },
     ],
     messages: await convertToModelMessages(compactOldToolOutputs(trimForModel(messages)), {
       tools: agentTools,
