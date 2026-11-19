@@ -16,7 +16,7 @@
 
 | Action | Today | After |
 |---|---|---|
-| `getAllBookingsAction`, `deleteBookingAction`, `createAdminBookingAction`, `updateAdminBookingAction`, `addDisabledSlotAction`, `removeDisabledSlotAction`, `addClosedDateAction`, `removeClosedDateAction`, `getPendingRefundsAction`, `markRefundCompletedAction`, `approveRescheduleRequestAction`, `rejectRescheduleRequestAction`, `getPendingRescheduleRequestsAction` | open | **admin** |
+| `getAllBookingsAction`, `deleteBookingAction`, `createAdminBookingAction`, `updateAdminBookingAction`, `addDisabledSlotAction`, `removeDisabledSlotAction`, `addClosedDateAction`, `removeClosedDateAction`, `getAllDisabledSlotsAction`, `getPendingRefundsAction`, `markRefundCompletedAction`, `approveRescheduleRequestAction`, `rejectRescheduleRequestAction`, `getPendingRescheduleRequestsAction` | open | **admin** |
 | `confirmPaymentAction`, `rejectPaymentAction`, `getPendingPaymentsAction` | open | **admin** |
 | `updatePaymentSettingsAction`, `uploadQRCodeAction`, `getNoticeAction`, `updateNoticeAction` | open | **admin** |
 | `getBookingsByUserIdAction(userId)` | trusts userId | **replaced** by `getMyBookingsAction(token)` |
@@ -26,7 +26,7 @@
 | `getActiveBookingsByDateAction` (public booking page) returns full rows incl. name/email/phone | leak | returns only `date, time_slot, court_number, booking_group_id` |
 | `getPaymentStatusAction` returns full rows | leak | returns only `id, payment_status` |
 | `submitPaymentAction` takes `user_id` from browser | trusts it | optional token → user id derived server-side (guests still allowed) |
-| `createBookingAction`, `createBookingsAction`, `getPaymentInfoAction`, `getBookingsByDateAction`, `getConfirmedBookingsAction`, `cancelBookingAction`, `getAllDisabledSlotsAction`, `updateProfileAction` | no callers (some create bookings without payment) | **deleted**, with their unused hooks |
+| `createBookingAction`, `createBookingsAction`, `getPaymentInfoAction`, `getBookingsByDateAction`, `getConfirmedBookingsAction`, `cancelBookingAction`, `updateProfileAction` | no callers (some create bookings without payment) | **deleted**, with their unused hooks |
 | `getActiveNoticeAction`, `getPaymentSettingsAction`, `getDisabledSlotsByDateAction`, `getClosedDatesAction`, `getHeldRescheduleSlotsByDateAction` | public, no personal data | unchanged |
 
 Out of scope: `/api/admin/confirm-payment` (already HMAC-protected), `/api/admin/agent/*` (already guarded).
@@ -1617,7 +1617,7 @@ Expected: all pass.
 - [ ] **Step 2: Inventory check — no unguarded admin action left**
 
 Run: `grep -n "export async function" src/actions/*.ts`
-Compare against the inventory table at the top of this plan. Every action marked **admin** must have `await requireAdmin(accessToken)` as its first statement; every customer action must call `requireUser`. Run: `grep -c "requireAdmin(accessToken)" src/actions/*.ts` — expected counts: bookings.ts 13, payment.ts 3, paymentSettings.ts 2, notice.ts 2.
+Compare against the inventory table at the top of this plan. Every action marked **admin** must have `await requireAdmin(accessToken)` as its first statement; every customer action must call `requireUser`. Run: `grep -c "requireAdmin(accessToken)" src/actions/*.ts` — expected counts: bookings.ts 14, payment.ts 3, paymentSettings.ts 2, notice.ts 2.
 
 - [ ] **Step 3: Manual test (local, port 3001)**
 
