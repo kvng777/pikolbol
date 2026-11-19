@@ -17,21 +17,28 @@ const TIER_CARDS: { tier: RateTier; title: string; icon: LucideIcon; gradient: s
 
 const formatDate = (d: string) => format(parseISO(d), 'MMMM d, yyyy')
 
-/** Banner wording: new prices for the tiers the next version uses, or a short summary when prices are unchanged. */
-function describeNextRates(current: PricingRules | undefined, next: PricingRules): { title: string; body: string } {
+/**
+ * Banner wording. When slot prices or hours change, list each tier the next version uses with its
+ * price and hours (so a customer sees e.g. that 6–10 PM moved to late-night); otherwise a short summary.
+ */
+function describeNextRates(current: PricingRules | undefined, next: PricingRules): { title: string; lines: string[] } {
   const usedTiers = RATE_TIERS.filter((t) => next.hour_tiers.includes(t))
-  const pricesChanged = !current || usedTiers.some((t) => current.tier_prices[t] !== next.tier_prices[t])
-  if (pricesChanged) {
+  const ratesChanged =
+    !current ||
+    usedTiers.some((t) => current.tier_prices[t] !== next.tier_prices[t]) ||
+    current.hour_tiers.some((t, i) => t !== next.hour_tiers[i])
+  if (ratesChanged) {
+    const hours = describeTierHours(next)
     return {
       title: 'New rates for play dates from',
-      body: usedTiers.map((t) => `${RATE_TIER_LABELS[t]} ${formatPeso(next.tier_prices[t])}`).join(' · '),
+      lines: usedTiers.map((t) => `${RATE_TIER_LABELS[t]} ${formatPeso(next.tier_prices[t])}/hr (${hours[t]})`),
     }
   }
   const labels = diffPricingRules(current, next).map((c) => c.label)
   const shown = labels.slice(0, 3).join(', ')
   return {
     title: 'Updated rates from',
-    body: labels.length === 0 ? 'Rates and policies are updated.' : `Changes to: ${shown}${labels.length > 3 ? ' and more' : ''}.`,
+    lines: [labels.length === 0 ? 'Rates and policies are updated.' : `Changes to: ${shown}${labels.length > 3 ? ' and more' : ''}.`],
   }
 }
 
@@ -67,10 +74,14 @@ export default function RatesPolicies() {
             {next && nextBanner && (
               <div className="rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex gap-2">
                 <CalendarClock className="w-5 h-5 shrink-0 text-amber-600" />
-                <p>
-                  <span className="font-semibold">{nextBanner.title} {formatDate(next.effective_from)}:</span>{' '}
-                  {nextBanner.body}
-                </p>
+                <div>
+                  <p className="font-semibold">{nextBanner.title} {formatDate(next.effective_from)}:</p>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {nextBanner.lines.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             )}
 
