@@ -140,3 +140,6 @@ export interface AdminBookingPayload {
 export interface AdminBookingUpdatePayload extends AdminBookingPayload {
   bookingGroupId: string
 }
+
+/** Public view of an active booking: enough to compute availability, no personal data. */
+export type SlotOccupancy = Pick<Booking, 'date' | 'time_slot' | 'court_number' | 'booking_group_id'>

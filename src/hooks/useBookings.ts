@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Booking, DisabledSlot, ClosedDate, AdminBookingPayload, RescheduleRequest } from '@/types/booking'
+import { Booking, DisabledSlot, ClosedDate, AdminBookingPayload, RescheduleRequest, SlotOccupancy } from '@/types/booking'
 import { 
   getActiveBookingsByDateAction,
   getAllBookingsAction,
@@ -31,7 +31,7 @@ const CACHE_TIME = 5 * 60 * 1000 // 5 minutes
  * Use this for slot availability checking
  */
 export function useActiveBookingsByDate(date: string) {
-  return useQuery<Booking[]>({
+  return useQuery<SlotOccupancy[]>({
     queryKey: ['activeBookings', date],
     queryFn: () => getActiveBookingsByDateAction(date),
     enabled: !!date,

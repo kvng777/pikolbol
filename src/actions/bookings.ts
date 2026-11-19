@@ -1,7 +1,7 @@
 'use server'
 
 import {
-  getActiveBookingsByDate,
+  getActiveSlotOccupancyByDate,
   getAllBookings,
   deleteBooking,
   getDisabledSlotsByDate,
@@ -33,6 +33,7 @@ import {
   RescheduleBookingResult,
   RescheduleRequest,
   AdminBookingPayload,
+  SlotOccupancy,
 } from '@/types/booking'
 import { requireAdmin, requireUser } from '@/lib/actionAuth'
 import { revalidatePath } from 'next/cache'
@@ -88,12 +89,11 @@ export async function updateAdminBookingAction(
 }
 
 /**
- * Get ACTIVE bookings by date - only bookings that occupy slots
- * (pending payment, awaiting confirmation, or confirmed)
- * Use this for slot availability checking
+ * Slots occupied on a date by active bookings (pending or confirmed).
+ * Public: returns no personal data. Use this for slot availability checking.
  */
-export async function getActiveBookingsByDateAction(date: string): Promise<Booking[]> {
-  return getActiveBookingsByDate(date)
+export async function getActiveBookingsByDateAction(date: string): Promise<SlotOccupancy[]> {
+  return getActiveSlotOccupancyByDate(date)
 }
 
 /**

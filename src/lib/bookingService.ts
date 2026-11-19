@@ -9,6 +9,7 @@ import {
   RescheduleBookingResult,
   RescheduleRequest,
   AdminBookingPayload,
+  SlotOccupancy,
 } from '@/types/booking'
 import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from './constants'
 import {
@@ -69,6 +70,25 @@ export async function getActiveBookingsByDate(date: string): Promise<Booking[]> 
   }
 
   return data || []
+}
+
+/**
+ * Active slot occupancy for a date (public availability; no personal data).
+ */
+export async function getActiveSlotOccupancyByDate(date: string): Promise<SlotOccupancy[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('date, time_slot, court_number, booking_group_id')
+    .eq('date', date)
+    .in('payment_status', ACTIVE_PAYMENT_STATUSES)
+    .order('time_slot', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching slot occupancy:', error)
+    return []
+  }
+
+  return (data || []) as SlotOccupancy[]
 }
 
 /**

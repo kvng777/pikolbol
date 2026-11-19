@@ -26,7 +26,7 @@ export interface SlotAvailabilityOptions {
 }
 
 export function getAvailableSlotsForCourt(
-  bookings: Booking[],
+  bookings: Pick<Booking, 'date' | 'time_slot' | 'court_number'>[],
   date: string,
   courtNumber: number,
   disabledSlots: DisabledSlot[] = [],

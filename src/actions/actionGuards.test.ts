@@ -176,3 +176,12 @@ describe('customer actions', () => {
     expect(profileService.upsertProfile).toHaveBeenCalledWith('u1', { name: 'N' })
   })
 })
+
+describe('getActiveBookingsByDateAction (public)', () => {
+  it('returns slot occupancy only', async () => {
+    const rows = [{ date: '2026-12-01', time_slot: '08:00 - 09:00', court_number: 1, booking_group_id: 'g1' }]
+    vi.mocked(bookingService.getActiveSlotOccupancyByDate).mockResolvedValue(rows)
+    await expect(bookings.getActiveBookingsByDateAction('2026-12-01')).resolves.toEqual(rows)
+    expect(bookingService.getActiveBookingsByDate).not.toHaveBeenCalled()
+  })
+})
