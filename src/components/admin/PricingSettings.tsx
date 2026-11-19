@@ -102,6 +102,8 @@ export function PricingSettings() {
   const maxDate = maxPricingEffectiveFrom(today)
   const current = versions ? pickPricingVersion(versions, today) : null
   const upcoming = versions ? upcomingPricingVersions(versions, today) : []
+  // Same-date ties list newest first, so a later entry with an already-seen date is replaced.
+  const supersededIds = new Set(upcoming.filter((v, i) => upcoming.findIndex((u) => u.effective_from === v.effective_from) < i).map((v) => v.id))
 
   const [pending, setPending] = useState<PendingChange | null>(null)
   const [cancelTarget, setCancelTarget] = useState<PricingVersion | null>(null)
@@ -306,6 +308,9 @@ export function PricingSettings() {
                     <CalendarClock className="w-4 h-4 shrink-0" aria-hidden />
                     For play dates from {formatDate(v.effective_from)}
                   </p>
+                  {supersededIds.has(v.id) && (
+                    <p className="text-xs text-amber-800">Replaced by a later change for the same date</p>
+                  )}
                   <RulesDetails rules={v.rules} />
                 </div>
                 <Button

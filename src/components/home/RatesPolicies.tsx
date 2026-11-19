@@ -5,9 +5,9 @@ import { format, parseISO } from 'date-fns'
 import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw, CalendarClock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { usePricingVersions } from '@/hooks/usePricing'
-import { describeTierHours, pickPricingVersion, upcomingPricingVersions, RATE_TIER_LABELS } from '@/lib/pricing'
+import { describeTierHours, pickPricingVersion, upcomingPricingVersions, diffPricingRules, formatPeso, RATE_TIERS, RATE_TIER_LABELS } from '@/lib/pricing'
 import { manilaNow } from '@/lib/agent/dates'
-import type { RateTier } from '@/types/pricing'
+import type { PricingRules, RateTier } from '@/types/pricing'
 
 const TIER_CARDS: { tier: RateTier; title: string; icon: LucideIcon; gradient: string; iconClass: string; iconStyle: CSSProperties }[] = [
   { tier: 'daytime', title: 'Daytime Rate', icon: Sun, gradient: 'from-emerald-500 to-teal-600', iconClass: 'animate-spin', iconStyle: { animationDuration: '6s' } },
@@ -17,11 +17,32 @@ const TIER_CARDS: { tier: RateTier; title: string; icon: LucideIcon; gradient: s
 
 const formatDate = (d: string) => format(parseISO(d), 'MMMM d, yyyy')
 
+/** Banner wording: new prices for the tiers the next version uses, or a short summary when prices are unchanged. */
+function describeNextRates(current: PricingRules | undefined, next: PricingRules): { title: string; body: string } {
+  const usedTiers = RATE_TIERS.filter((t) => next.hour_tiers.includes(t))
+  const pricesChanged = !current || usedTiers.some((t) => current.tier_prices[t] !== next.tier_prices[t])
+  if (pricesChanged) {
+    return {
+      title: 'New rates for play dates from',
+      body: usedTiers.map((t) => `${RATE_TIER_LABELS[t]} ${formatPeso(next.tier_prices[t])}`).join(' · '),
+    }
+  }
+  const labels = diffPricingRules(current, next).map((c) => c.label)
+  const shown = labels.slice(0, 3).join(', ')
+  return {
+    title: 'Updated rates from',
+    body: labels.length === 0 ? 'Rates and policies are updated.' : `Changes to: ${shown}${labels.length > 3 ? ' and more' : ''}.`,
+  }
+}
+
 export default function RatesPolicies() {
   const { data: versions, isError } = usePricingVersions()
   const today = manilaNow().date
   const current = versions ? pickPricingVersion(versions, today) : null
-  const next = versions ? upcomingPricingVersions(versions, today)[0] : undefined
+  // The version that will actually apply on the first upcoming date (newest wins a same-date tie).
+  const nextDate = versions ? upcomingPricingVersions(versions, today)[0]?.effective_from : undefined
+  const next = versions && nextDate ? pickPricingVersion(versions, nextDate) : null
+  const nextBanner = next ? describeNextRates(current?.rules, next.rules) : null
   const rules = current?.rules
   // Loaded but nothing in effect is also "unavailable": never invent a price.
   const unavailable = isError || (!!versions && !current)
@@ -43,14 +64,12 @@ export default function RatesPolicies() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
           {/* Left Column - Rates + Equipment */}
           <div className="flex flex-col space-y-4 h-full">
-            {next && (
+            {next && nextBanner && (
               <div className="rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex gap-2">
                 <CalendarClock className="w-5 h-5 shrink-0 text-amber-600" />
                 <p>
-                  <span className="font-semibold">New rates for play dates from {formatDate(next.effective_from)}:</span>{' '}
-                  {(['daytime', 'offpeak', 'latenight'] as RateTier[])
-                    .map((t) => `${RATE_TIER_LABELS[t]} Php${next.rules.tier_prices[t]}`)
-                    .join(' · ')}
+                  <span className="font-semibold">{nextBanner.title} {formatDate(next.effective_from)}:</span>{' '}
+                  {nextBanner.body}
                 </p>
               </div>
             )}

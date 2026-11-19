@@ -151,11 +151,11 @@ export function pickPricingVersion(versions: PricingVersion[], date: string): Pr
   return best
 }
 
-/** Non-cancelled versions starting after `today`, soonest first. */
+/** Non-cancelled versions starting after `today`, soonest first; same-date ties newest first (the one that applies). */
 export function upcomingPricingVersions(versions: PricingVersion[], today: string): PricingVersion[] {
   return versions
     .filter((v) => !v.cancelled_at && v.effective_from > today)
-    .sort((a, b) => a.effective_from.localeCompare(b.effective_from) || Date.parse(a.created_at) - Date.parse(b.created_at))
+    .sort((a, b) => a.effective_from.localeCompare(b.effective_from) || Date.parse(b.created_at) - Date.parse(a.created_at))
 }
 
 /** Prices a saved booking was charged with (seed prices for rows from before snapshots). */

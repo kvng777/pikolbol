@@ -226,7 +226,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
             onTrainingBallsChange={setTrainingBalls}
             chargeable={equipmentChargeable}
             rules={rules}
-            pricesUnavailable={!!pricingError}
+            pricesUnavailable={!!pricingError || noPricesForDate}
           />
 
           {/* Total */}

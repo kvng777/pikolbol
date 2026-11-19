@@ -1,30 +1,13 @@
 /**
- * Payment Configuration
- * Centralized constants for payment-related settings
+ * Payment settings and helpers. Prices are NOT here: they live in the
+ * pricing_schedules table (see lib/pricing.ts).
  */
 
-// Pricing
-export const DAYTIME_PRICE_PER_SLOT = 200      // PHP per 1-hour slot (6:00 AM - 5:59 PM)
-export const EVENING_PRICE_PER_SLOT = 250      // PHP per 1-hour slot (off-peak: 5-6 AM & 6-10 PM)
-export const LATE_NIGHT_PRICE_PER_SLOT = 300   // PHP per 1-hour slot (10 PM - 12 AM)
-export const EARLY_MORNING_END_HOUR = 6        // Slots before 6:00 AM use off-peak rate (P250)
-export const EVENING_START_HOUR = 18           // 6:00 PM - off-peak begins
-export const LATE_NIGHT_START_HOUR = 22        // 10:00 PM - late-night rate begins (P300)
-export const EXTRA_PLAYER_CHARGE = 50          // PHP per player beyond 4
-export const BASE_PLAYERS_INCLUDED = 4         // Players included in base price
+// Finance "time of day" reporting bands (labels only; prices come from the pricing schedule)
+export const EVENING_START_HOUR = 18           // 6:00 PM
+export const LATE_NIGHT_START_HOUR = 22        // 10:00 PM
 
-// Equipment rental (paddles & balls)
-export const PADDLE_PRICE = 50             // PHP per paddle, per booking
-export const BALL_SET_PRICE = 25           // PHP per booking for a set of 4 balls
-export const TRAINING_BALLS_PRICE = 100    // PHP per booking for training balls (50) w/ movable basket
 export const MAX_PADDLES = 8               // UI cap for paddle quantity selector
-
-// Free use of paddles & balls promo ends on this date (PH date, inclusive).
-// Equipment is charged for play dates on/after EQUIPMENT_CHARGE_START_DATE.
-export const EQUIPMENT_CHARGE_START_DATE = '2026-06-01'
-
-// Legacy constant for backwards compatibility (use getPriceForSlot instead)
-export const PRICE_PER_SLOT = 200
 
 // Default timeout (can be overridden by admin settings)
 export const DEFAULT_PAYMENT_TIMEOUT_MINUTES = 15
@@ -80,61 +63,6 @@ export function getSlotStartHour(timeSlot: string): number {
   return 12
 }
 
-export type RateTier = 'daytime' | 'offpeak' | 'latenight'
-
-/**
- * Classify a slot into its rate tier.
- * - latenight: 10 PM - 12 AM        (P300)
- * - offpeak:   5-6 AM & 6-10 PM     (P250)
- * - daytime:   6 AM - 6 PM          (P200)
- */
-export function getSlotRateTier(timeSlot: string): RateTier {
-  const hour = getSlotStartHour(timeSlot)
-  if (hour >= LATE_NIGHT_START_HOUR) return 'latenight'
-  if (hour < EARLY_MORNING_END_HOUR || hour >= EVENING_START_HOUR) return 'offpeak'
-  return 'daytime'
-}
-
-/**
- * Check if a time slot uses a premium (non-daytime) rate.
- */
-export function isPremiumSlot(timeSlot: string): boolean {
-  return getSlotRateTier(timeSlot) !== 'daytime'
-}
-
-/** @deprecated Use isPremiumSlot instead */
-export const isEveningSlot = isPremiumSlot
-
-/**
- * Get the price for a single time slot
- */
-export function getPriceForSlot(timeSlot: string): number {
-  const tier = getSlotRateTier(timeSlot)
-  if (tier === 'latenight') return LATE_NIGHT_PRICE_PER_SLOT
-  if (tier === 'offpeak') return EVENING_PRICE_PER_SLOT
-  return DAYTIME_PRICE_PER_SLOT
-}
-
-/**
- * Equipment rental selection for a booking.
- */
-export interface EquipmentSelection {
-  date?: string           // Play date ('YYYY-MM-DD'). Charge applies on/after EQUIPMENT_CHARGE_START_DATE
-  paddles?: number        // Number of paddles to rent
-  needsBalls?: boolean    // Whether a set of balls is needed
-  trainingBalls?: boolean // Whether training balls (50) w/ movable basket are needed
-}
-
-/**
- * Whether equipment is chargeable for a given play date.
- * Free during the promo (before EQUIPMENT_CHARGE_START_DATE).
- * Compares ISO date strings lexicographically ('YYYY-MM-DD').
- */
-export function isEquipmentChargeable(date?: string): boolean {
-  if (!date) return false
-  return date >= EQUIPMENT_CHARGE_START_DATE
-}
-
 /**
  * Format the selected equipment into a human-readable summary.
  * Returns null when no equipment was selected.
@@ -159,52 +87,6 @@ export function formatEquipmentSummary(
   }
 
   return items.length > 0 ? items.join(', ') : null
-}
-
-/**
- * Calculate the equipment rental charge for a booking.
- * Returns 0 during the free promo period or when nothing is selected.
- */
-export function calculateEquipmentCharge(equipment?: EquipmentSelection): number {
-  if (!equipment || !isEquipmentChargeable(equipment.date)) return 0
-
-  const paddles = Math.max(0, equipment.paddles ?? 0)
-  const ballsCharge = equipment.needsBalls ? BALL_SET_PRICE : 0
-  const trainingBallsCharge = equipment.trainingBalls ? TRAINING_BALLS_PRICE : 0
-
-  return paddles * PADDLE_PRICE + ballsCharge + trainingBallsCharge
-}
-
-/**
- * Calculate the total payment amount for a booking with multiple time slots.
- * Each slot is priced based on its time (daytime vs evening). Optionally includes
- * equipment rental, which is only charged for play dates on/after the promo end.
- */
-export function calculatePaymentAmount(
-  timeSlots: string[],
-  playersCount: number,
-  equipment?: EquipmentSelection
-): number {
-  // Calculate base amount from all slots
-  const baseAmount = timeSlots.reduce((total, slot) => total + getPriceForSlot(slot), 0)
-
-  // Calculate extra player charge
-  const extraPlayers = Math.max(0, playersCount - BASE_PLAYERS_INCLUDED)
-  const extraCharge = extraPlayers * EXTRA_PLAYER_CHARGE
-
-  return baseAmount + extraCharge + calculateEquipmentCharge(equipment)
-}
-
-/**
- * Calculate payment amount from slot count only (legacy, uses daytime rate)
- * @deprecated Use calculatePaymentAmount with time slots array instead
- */
-export function calculatePaymentAmountLegacy(slotsCount: number, playersCount: number): number {
-  const baseAmount = DAYTIME_PRICE_PER_SLOT * slotsCount
-  const extraPlayers = Math.max(0, playersCount - BASE_PLAYERS_INCLUDED)
-  const extraCharge = extraPlayers * EXTRA_PLAYER_CHARGE
-  
-  return baseAmount + extraCharge
 }
 
 /**

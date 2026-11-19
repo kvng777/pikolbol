@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   SEED_PRICING_RULES,
-  SLOT_START_HOURS,
   getSlotRateTier,
   getPriceForSlot,
   isEquipmentChargeable,
@@ -17,7 +16,6 @@ import {
   assertValidPricingRules,
 } from './pricing'
 import { generateTimeSlots } from './timeSlotGenerator'
-import * as legacy from './paymentConfig'
 import type { PricingRules, PricingVersion } from '@/types/pricing'
 
 const R = SEED_PRICING_RULES
@@ -28,29 +26,6 @@ function version(over: Partial<PricingVersion>): PricingVersion {
     created_at: '2026-01-01T00:00:00Z', cancelled_at: null, ...over,
   }
 }
-
-describe('seed rules', () => {
-  it('match the legacy constants exactly (removed in the cleanup task)', () => {
-    expect(R.tier_prices).toEqual({
-      daytime: legacy.DAYTIME_PRICE_PER_SLOT,
-      offpeak: legacy.EVENING_PRICE_PER_SLOT,
-      latenight: legacy.LATE_NIGHT_PRICE_PER_SLOT,
-    })
-    expect(R.extra_player_charge).toBe(legacy.EXTRA_PLAYER_CHARGE)
-    expect(R.base_players_included).toBe(legacy.BASE_PLAYERS_INCLUDED)
-    expect(R.paddle_price).toBe(legacy.PADDLE_PRICE)
-    expect(R.ball_set_price).toBe(legacy.BALL_SET_PRICE)
-    expect(R.training_balls_price).toBe(legacy.TRAINING_BALLS_PRICE)
-    expect(R.equipment_charge_start_date).toBe(legacy.EQUIPMENT_CHARGE_START_DATE)
-  })
-
-  it('price every slot the same as the legacy functions', () => {
-    for (const h of SLOT_START_HOURS) {
-      const slot = `${String(h).padStart(2, '0')}:00-${String((h + 1) % 24).padStart(2, '0')}:00`
-      expect(getPriceForSlot(R, slot)).toBe(legacy.getPriceForSlot(slot))
-    }
-  })
-})
 
 describe('slot pricing', () => {
   it('uses the hour grid', () => {
@@ -106,12 +81,6 @@ describe('calculatePaymentAmount', () => {
     // 200 + 250 + 2 extra players * 50 + 1 paddle 50
     expect(calculatePaymentAmount(R, ['17:00-18:00', '18:00-19:00'], 6, { date: '2026-12-01', paddles: 1 })).toBe(600)
   })
-
-  it('matches the legacy function for the seed rules', () => {
-    const eq = { date: '2026-12-01', paddles: 3, needsBalls: true, trainingBalls: false }
-    expect(calculatePaymentAmount(R, ['05:00-06:00', '22:00-23:00'], 5, eq))
-      .toBe(legacy.calculatePaymentAmount(['05:00-06:00', '22:00-23:00'], 5, eq))
-  })
 })
 
 describe('calculateCancellationFee', () => {
@@ -151,10 +120,17 @@ describe('pickPricingVersion', () => {
   it('returns null when nothing applies', () => {
     expect(pickPricingVersion([dec], '2026-11-01')).toBeNull()
   })
-  it('upcoming tie-break compares created_at as instants, not strings', () => {
+  it('upcoming same-date ties list the newest first (the one pickPricingVersion applies)', () => {
     const a = version({ id: 'a', effective_from: '2026-12-01', created_at: '2026-11-20T08:00:00+08:00' }) // 00:00Z
     const b = version({ id: 'b', effective_from: '2026-12-01', created_at: '2026-11-20T04:00:00Z' })
-    expect(upcomingPricingVersions([b, a], '2026-11-19').map((v) => v.id)).toEqual(['a', 'b'])
+    expect(upcomingPricingVersions([b, a], '2026-11-19').map((v) => v.id)).toEqual(['b', 'a'])
+  })
+  it('upcoming first entry matches the version picked for its date', () => {
+    const older = version({ id: 'older', effective_from: '2026-12-01', created_at: '2026-11-20T00:00:00Z' })
+    const newer = version({ id: 'newer', effective_from: '2026-12-01', created_at: '2026-11-21T00:00:00Z' })
+    const up = upcomingPricingVersions([older, newer], '2026-11-19')
+    expect(up[0].id).toBe('newer')
+    expect(pickPricingVersion([older, newer], up[0].effective_from)?.id).toBe('newer')
   })
   it('lists upcoming versions after today, soonest first', () => {
     expect(upcomingPricingVersions([jan, dec, seed], '2026-11-19').map((v) => v.id)).toEqual(['dec'])

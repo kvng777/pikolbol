@@ -34,20 +34,34 @@ export function BookingForm({
   const [trainingBalls, setTrainingBalls] = useState(false)
 
   // Prices for the selected play date (versioned by the admin Pricing tab)
-  const { rules, error: pricingError } = usePricingForDate(selectedDate)
+  const { rules, error: pricingError, isLoading: pricingLoading } = usePricingForDate(selectedDate)
+  const noPricesForDate = !pricingLoading && !pricingError && !rules
   const equipmentChargeable = rules ? isEquipmentChargeable(rules, selectedDate) : false
 
   // Estimate only: the payment screen shows the server-signed amount
-  const totalCost = rules
-    ? calculatePaymentAmount(rules, selectedSlots.length > 0 ? selectedSlots : ['12:00'], 2, {
+  let totalCost: number | null = null
+  let priceFailed = false
+  if (rules) {
+    try {
+      totalCost = calculatePaymentAmount(rules, selectedSlots.length > 0 ? selectedSlots : ['12:00'], 2, {
         date: selectedDate,
         paddles,
         needsBalls,
         trainingBalls,
       })
-    : null
+    } catch {
+      // A malformed slot string must not crash the page: show the unavailable state.
+      priceFailed = true
+    }
+  }
   const formattedTotal =
-    totalCost === null ? (pricingError ? 'prices unavailable' : '…') : `Php${totalCost.toLocaleString()}`
+    totalCost !== null
+      ? `Php${totalCost.toLocaleString()}`
+      : pricingError || priceFailed
+        ? 'Prices unavailable'
+        : noPricesForDate
+          ? 'No prices for this date'
+          : '…'
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -87,7 +101,7 @@ export function BookingForm({
         onTrainingBallsChange={setTrainingBalls}
         chargeable={equipmentChargeable}
         rules={rules}
-        pricesUnavailable={!!pricingError}
+        pricesUnavailable={!!pricingError || noPricesForDate || priceFailed}
       />
 
       <Button

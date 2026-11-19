@@ -195,8 +195,8 @@ export function useUserBookings(userId: string | undefined) {
 /**
  * Hook to cancel a booking group (all slots in the same order)
  * Calculates cancellation fee based on timing:
- * - Free cancellation: > 24 hours before booking
- * - P100/slot fee: <= 24 hours before booking
+ * - Free cancellation: more than the booking's saved window before the slot
+ * - Otherwise the booking's saved per-slot fee applies (capped at the amount paid)
  */
 export function useCancelBookingGroup() {
   const queryClient = useQueryClient()

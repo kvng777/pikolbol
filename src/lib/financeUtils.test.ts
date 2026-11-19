@@ -35,6 +35,24 @@ describe('calculateEquipmentBreakdown', () => {
     expect(result.totalEquipmentRevenue).toBe(0)
   })
 
+  it('always charges when the snapshot start date is null', () => {
+    const rules = { ...SEED_PRICING_RULES, equipment_charge_start_date: null }
+    const result = calculateEquipmentBreakdown([
+      booking({ date: '2026-05-15', paddles_count: 2, pricing_snapshot: { version_id: 'v3', rules } }),
+    ])
+    expect(result.totalEquipmentRevenue).toBe(100)
+  })
+
+  it("uses the snapshot's own start date, not the seed's", () => {
+    const rules = { ...SEED_PRICING_RULES, equipment_charge_start_date: '2026-12-15' }
+    const result = calculateEquipmentBreakdown([
+      booking({ id: 'a', booking_group_id: 'g1', date: '2026-12-01', paddles_count: 2, pricing_snapshot: { version_id: 'v4', rules } }),
+      booking({ id: 'b', booking_group_id: 'g2', date: '2026-12-20', paddles_count: 1, pricing_snapshot: { version_id: 'v4', rules } }),
+    ])
+    // Dec 1 is free under this snapshot (the seed would charge it); Dec 20 is charged.
+    expect(result.paddleRevenue).toBe(50)
+  })
+
   it('counts a multi-slot order once', () => {
     const result = calculateEquipmentBreakdown([
       booking({ id: 'a', time_slot: '08:00-09:00', paddles_count: 1 }),
