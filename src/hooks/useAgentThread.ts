@@ -2,8 +2,10 @@
 
 import { useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
 import type { AgentUIMessage } from '@/lib/agent/types'
+import { getAccessToken } from '@/lib/accessToken'
+
+export { getAccessToken }
 
 const STORAGE_PREFIX = 'pikol-agent-thread-id'
 
@@ -12,11 +14,6 @@ export class HttpError extends Error {
     super(message)
     this.name = 'HttpError'
   }
-}
-
-export async function getAccessToken(): Promise<string> {
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token ?? ''
 }
 
 /** crypto.randomUUID is missing outside secure contexts (e.g. plain HTTP on a LAN IP). */
