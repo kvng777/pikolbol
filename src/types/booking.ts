@@ -1,4 +1,5 @@
 import { PaymentStatus } from './payment'
+import type { PricingSnapshot } from './pricing'
 
 export type RefundStatus = 'pending' | 'completed'
 
@@ -25,6 +26,7 @@ export interface Booking {
   payment_deadline?: string | null
   payment_confirmed_at?: string | null
   payment_amount?: number | null
+  pricing_snapshot?: PricingSnapshot | null // Prices this booking was charged with (null on legacy rows)
   // Payment reference
   gcash_reference?: string | null
   // Cancellation & refund fields
@@ -140,3 +142,6 @@ export interface AdminBookingPayload {
 export interface AdminBookingUpdatePayload extends AdminBookingPayload {
   bookingGroupId: string
 }
+
+/** Public view of an active booking: enough to compute availability, no personal data. */
+export type SlotOccupancy = Pick<Booking, 'date' | 'time_slot' | 'court_number' | 'booking_group_id'>

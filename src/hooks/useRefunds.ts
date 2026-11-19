@@ -4,6 +4,7 @@ import {
   getPendingRefundsAction, 
   markRefundCompletedAction 
 } from '@/actions/bookings'
+import { getAccessToken } from '@/lib/accessToken'
 
 /**
  * Hook to fetch all pending refunds (for admin)
@@ -12,7 +13,7 @@ import {
 export function usePendingRefunds() {
   return useQuery<Booking[]>({
     queryKey: ['pendingRefunds'],
-    queryFn: getPendingRefundsAction,
+    queryFn: async () => getPendingRefundsAction(await getAccessToken()),
     refetchInterval: 10000, // Auto-refresh every 10 seconds
     staleTime: 5000,
     gcTime: 30000,
@@ -26,13 +27,13 @@ export function useMarkRefundCompleted() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ 
+    mutationFn: async ({ 
       bookingGroupId, 
       legacyBookingId 
     }: { 
       bookingGroupId: string | null
       legacyBookingId: string | null
-    }) => markRefundCompletedAction(bookingGroupId, legacyBookingId),
+    }) => markRefundCompletedAction(await getAccessToken(), bookingGroupId, legacyBookingId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingRefunds'] })
       queryClient.invalidateQueries({ queryKey: ['allBookings'] })

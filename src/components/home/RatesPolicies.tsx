@@ -1,73 +1,110 @@
-import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw } from 'lucide-react'
+'use client'
+
+import type { CSSProperties } from 'react'
+import { format, parseISO } from 'date-fns'
+import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw, CalendarClock } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { usePricingVersions } from '@/hooks/usePricing'
+import { describeTierHours, pickPricingVersion, upcomingPricingVersions, diffPricingRules, formatPeso, RATE_TIERS, RATE_TIER_LABELS } from '@/lib/pricing'
+import { manilaNow } from '@/lib/agent/dates'
+import type { PricingRules, RateTier } from '@/types/pricing'
+
+const TIER_CARDS: { tier: RateTier; title: string; icon: LucideIcon; gradient: string; iconClass: string; iconStyle: CSSProperties }[] = [
+  { tier: 'daytime', title: 'Daytime Rate', icon: Sun, gradient: 'from-emerald-500 to-teal-600', iconClass: 'animate-spin', iconStyle: { animationDuration: '6s' } },
+  { tier: 'offpeak', title: 'Off-Peak Rate', icon: Moon, gradient: 'from-emerald-600 to-teal-700', iconClass: 'animate-pulse', iconStyle: { animationDuration: '3s' } },
+  { tier: 'latenight', title: 'Late Night Rate', icon: Stars, gradient: 'from-emerald-700 to-teal-900', iconClass: 'animate-pulse', iconStyle: { animationDuration: '3s' } },
+]
+
+const formatDate = (d: string) => format(parseISO(d), 'MMMM d, yyyy')
+
+/**
+ * Banner wording. When slot prices or hours change, list each tier the next version uses with its
+ * price and hours (so a customer sees e.g. that 6–10 PM moved to late-night); otherwise a short summary.
+ */
+function describeNextRates(current: PricingRules | undefined, next: PricingRules): { title: string; lines: string[] } {
+  const usedTiers = RATE_TIERS.filter((t) => next.hour_tiers.includes(t))
+  const ratesChanged =
+    !current ||
+    usedTiers.some((t) => current.tier_prices[t] !== next.tier_prices[t]) ||
+    current.hour_tiers.some((t, i) => t !== next.hour_tiers[i])
+  if (ratesChanged) {
+    const hours = describeTierHours(next)
+    return {
+      title: 'New rates for play dates from',
+      lines: usedTiers.map((t) => `${RATE_TIER_LABELS[t]} ${formatPeso(next.tier_prices[t])}/hr (${hours[t]})`),
+    }
+  }
+  const labels = diffPricingRules(current, next).map((c) => c.label)
+  const shown = labels.slice(0, 3).join(', ')
+  return {
+    title: 'Updated rates from',
+    lines: [labels.length === 0 ? 'Rates and policies are updated.' : `Changes to: ${shown}${labels.length > 3 ? ' and more' : ''}.`],
+  }
+}
 
 export default function RatesPolicies() {
+  const { data: versions, isError } = usePricingVersions()
+  const today = manilaNow().date
+  const current = versions ? pickPricingVersion(versions, today) : null
+  // The version that will actually apply on the first upcoming date (newest wins a same-date tie).
+  const nextDate = versions ? upcomingPricingVersions(versions, today)[0]?.effective_from : undefined
+  const next = versions && nextDate ? pickPricingVersion(versions, nextDate) : null
+  const nextBanner = next ? describeNextRates(current?.rules, next.rules) : null
+  const rules = current?.rules
+  // Loaded but nothing in effect is also "unavailable": never invent a price.
+  const unavailable = isError || (!!versions && !current)
+  const tierHours = rules ? describeTierHours(rules) : null
+  const amount = (n: number | undefined) => (n === undefined ? (unavailable ? '—' : '…') : n.toLocaleString())
+  const equipmentStart = rules?.equipment_charge_start_date
+
   return (
     <section id="rates" className="mb-12">
       <div className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Rates & Policies</h2>
 
+        {unavailable && (
+          <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900">
+            Prices unavailable
+          </p>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
           {/* Left Column - Rates + Equipment */}
           <div className="flex flex-col space-y-4 h-full">
-            {/* Daytime Rate Card */}
-            <div className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
-              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white flex-1 flex items-center">
-                <div className="flex gap-4 items-center w-full">
-                  <div className="p-3 bg-white/20 rounded-xl flex items-center justify-center shrink-0 w-16 h-16">
-                    <Sun className="w-10 h-10 animate-spin" style={{ animationDuration: '6s' }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold">Daytime Rate</h3>
-                    <p className="text-white/80 text-sm">(6 AM - 6 PM)</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-sm">Php</span>
-                    <span className="text-4xl font-bold ml-1">200</span>
-                    <span className="text-lg">/hr</span>
-                  </div>
+            {next && nextBanner && (
+              <div className="rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex gap-2">
+                <CalendarClock className="w-5 h-5 shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-semibold">{nextBanner.title} {formatDate(next.effective_from)}:</p>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {nextBanner.lines.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Evening / Early Morning Rate Card */}
-            <div className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
-              <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white flex-1 flex items-center">
-                <div className="flex gap-4 items-center w-full">
-                  <div className="p-3 bg-white/20 rounded-xl flex items-center justify-center shrink-0 w-16 h-16">
-                    <Moon className="w-10 h-10 animate-pulse" style={{ animationDuration: '3s' }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold">Off-Peak Rate</h3>
-                    <p className="text-white/80 text-sm">(5 - 6 AM &amp; 6 - 10 PM)</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-sm">Php</span>
-                    <span className="text-4xl font-bold ml-1">250</span>
-                    <span className="text-lg">/hr</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Late Night Rate Card */}
-            <div className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
-              <div className="bg-gradient-to-br from-emerald-700 to-teal-900 p-5 text-white flex-1 flex items-center">
-                <div className="flex gap-4 items-center w-full">
-                  <div className="p-3 bg-white/20 rounded-xl flex items-center justify-center shrink-0 w-16 h-16">
-                    <Stars className="w-10 h-10 animate-pulse" style={{ animationDuration: '3s' }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold">Late Night Rate</h3>
-                    <p className="text-white/80 text-sm">(10 PM - 12 AM)</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-sm">Php</span>
-                    <span className="text-4xl font-bold ml-1">300</span>
-                    <span className="text-lg">/hr</span>
+            {TIER_CARDS.filter(({ tier }) => !tierHours || tierHours[tier]).map(({ tier, title, icon: Icon, gradient, iconClass, iconStyle }) => (
+              <div key={tier} className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
+                <div className={`bg-gradient-to-br ${gradient} p-5 text-white flex-1 flex items-center`}>
+                  <div className="flex gap-4 items-center w-full">
+                    <div className="p-3 bg-white/20 rounded-xl flex items-center justify-center shrink-0 w-16 h-16">
+                      <Icon className={`w-10 h-10 ${iconClass}`} style={iconStyle} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold">{title}</h3>
+                      {tierHours && <p className="text-white/80 text-sm">({tierHours[tier]})</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-sm">Php</span>
+                      <span className="text-4xl font-bold ml-1">{amount(rules?.tier_prices[tier])}</span>
+                      <span className="text-lg">/hr</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            ))}
 
             {/* Equipment Rental Card */}
             <div className="rounded-xl border-2 border-emerald-500 bg-white p-5 shadow-sm">
@@ -77,30 +114,32 @@ export default function RatesPolicies() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">Equipment Rental</h3>
-                  <p className="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
-                    <Clock className="w-3.5 h-3.5 shrink-0" />
-                    Effective June 1, 2026
-                  </p>
+                  {equipmentStart && equipmentStart > today && (
+                    <p className="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      Effective {formatDate(equipmentStart)}
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center gap-3 rounded-lg bg-emerald-50/60 px-4 py-3">
-                  <span className="text-xl font-bold text-emerald-600 shrink-0">Php50</span>
+                  <span className="text-xl font-bold text-emerald-600 shrink-0">Php{amount(rules?.paddle_price)}</span>
                   <span className="text-gray-500">—</span>
                   <span className="text-sm text-gray-700">
                     Paddle <span className="text-gray-500">(per booking)</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-3 rounded-lg bg-emerald-50/60 px-4 py-3">
-                  <span className="text-xl font-bold text-emerald-600 shrink-0">Php25</span>
+                  <span className="text-xl font-bold text-emerald-600 shrink-0">Php{amount(rules?.ball_set_price)}</span>
                   <span className="text-gray-500">—</span>
                   <span className="text-sm text-gray-700">
                     Balls, set of 4 <span className="text-gray-500">(per booking)</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-3 rounded-lg bg-emerald-50/60 px-4 py-3">
-                  <span className="text-xl font-bold text-emerald-600 shrink-0">Php100</span>
+                  <span className="text-xl font-bold text-emerald-600 shrink-0">Php{amount(rules?.training_balls_price)}</span>
                   <span className="text-gray-500">—</span>
                   <span className="text-sm text-gray-700">
                     Training balls, set of 50 <span className="text-gray-500">(per booking, w/ movable basket)</span>
@@ -124,12 +163,12 @@ export default function RatesPolicies() {
                   <li className="flex items-center gap-2">
                     <span className="font-semibold text-emerald-600">Free</span>
                     <span className="text-gray-500">—</span>
-                    <span>Cancel 24 hours before booking</span>
+                    <span>Cancel {amount(rules?.cancellation_window_hours)} hours before booking</span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="font-semibold text-amber-600">P100/hour</span>
+                    <span className="font-semibold text-amber-600">Php{amount(rules?.cancellation_fee_per_slot)}/hour</span>
                     <span className="text-gray-500">—</span>
-                    <span>Cancellation within 24 hours</span>
+                    <span>Cancellation within {amount(rules?.cancellation_window_hours)} hours</span>
                   </li>
                 </ul>
               </div>

@@ -84,3 +84,9 @@ export interface PaymentEmailData {
   amount: number
   reason?: string // For rejection
 }
+
+/** What the payment screen polls for: no personal data. */
+export interface PaymentStatusSummary {
+  id: string
+  payment_status: PaymentStatus
+}

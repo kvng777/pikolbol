@@ -58,6 +58,7 @@ Key query key patterns:
 - `['disabledSlots', date]`, `['closedDates']` — admin slot controls
 - `['agentHistory', threadId]` — admin assistant chat history (gcTime 0)
 - `['agentUsage']` — admin assistant monthly AI budget meter
+- `['pricing']` — price versions; `['priceQuote', input]` — signed quote on the payment screen (gcTime 0)
 
 ### Booking System
 
@@ -73,13 +74,16 @@ Key query key patterns:
 
 **Payment holding:** Pending payments hold slots for a configurable timeout (default 15 min). Admin confirms payment after user claims via GCash QR flow.
 
-### Pricing (from `lib/paymentConfig.ts`)
+### Pricing (admin-managed, `pricing_schedules`)
 
-- Daytime (6 AM–5:59 PM): 200 PHP/slot
-- Off-peak (5–6 AM, 6–10 PM): 250 PHP/slot
-- Late-night (10 PM–12 AM): 300 PHP/slot
-- Extra players beyond 4: +50 PHP/player
-- Equipment: paddles 50, ball set 25, training balls 100 PHP per booking (charged for play dates from 2026-06-01)
+- Prices are versioned rows in `pricing_schedules` (`sql/pricing-schedules-migration.sql`, service role only). A booking uses the newest non-cancelled version with `effective_from <= play date` (Manila); same-day ties go to the newest `created_at`. Rows are never edited; upcoming ones can be cancelled. The seed row (2000-01-01) holds the original prices.
+- Editable in the admin **Pricing** tab (`components/admin/PricingSettings.tsx`): 3 tier prices and the tier of each hour (19 slots), extra-player charge and players included, paddle / ball set / training balls, equipment charge start date, cancellation fee per slot and free-cancellation window. Apply now or schedule for a future play date, with an old -> new confirmation.
+- All math is in `lib/pricing.ts` (pure, client + server) and takes a version's `PricingRules`. Never hardcode a price; `paymentConfig.ts` holds no prices.
+- Payment screen: `getPriceQuoteAction` returns an HMAC-signed quote (`lib/priceQuote.ts`, 60 min). `submitPaymentAction` verifies it and saves exactly `quote.amount`; invalid or expired returns `code: 'quote_invalid'` and the UI refetches the quote. **`PRICE_QUOTE_SECRET` (server env) is required**; without it quotes and bookings fail.
+- Each booking row stores `payment_amount` and `pricing_snapshot` (`{ version_id, rules }`). Cancellation fees and Finance equipment revenue use the snapshot (`rulesFromSnapshot`; seed prices only for legacy rows without one). Emails use the stored amount.
+- If prices can't be loaded, quotes and bookings fail ("Prices unavailable") and screens show an unavailable state: never 0, never a constant fallback.
+- Deploy order: (1) run `sql/pricing-schedules-migration.sql`; (2) set `PRICE_QUOTE_SECRET` (>=32 chars) in Vercel; (3) then deploy. Rolling back to pre-pricing code after admins changed prices brings back the old hardcoded prices.
+- Query keys: `['pricing']` (all versions; invalidated by the Pricing tab), `['priceQuote', input]` (payment screen, gcTime 0).
 
 ### Auth & Roles
 
@@ -87,6 +91,8 @@ Key query key patterns:
 - `profiles` table has `role: 'user' | 'admin'`
 - `AuthProvider.tsx` wraps the app with session context
 - Two Supabase clients: `lib/supabase.ts` (client-side, anon key) and `lib/supabase-server.ts` (server-side, service role key)
+- Server actions verify the caller on the server: protected actions take the Supabase `accessToken` as their first argument (hooks get it via `getAccessToken()` in `lib/accessToken.ts`). `lib/actionAuth.ts`: `requireAdmin(token)` for admin actions, `requireUser(token)` for user-scoped ones (user id comes from the token, never from an argument). Public actions return no personal data (`getActiveBookingsByDateAction` → `SlotOccupancy`, `getPaymentStatusAction` → id + status). `src/actions/actionGuards.test.ts` must list every protected action.
+- Email links (`/api/admin/confirm-payment`, `/api/admin/reschedule`) are protected by HMAC tokens (`lib/adminTokens.ts`, `ADMIN_ACTION_SECRET`), not sessions.
 
 ### Database Tables
 
@@ -96,6 +102,7 @@ Key query key patterns:
 - `payment_settings` — GCash QR URL, name, number, timeout_minutes
 - `disabled_slots` — admin-blocked individual slots
 - `closed_dates` — admin-blocked date ranges with reason
+- `pricing_schedules` — versioned prices by effective play date (`sql/pricing-schedules-migration.sql`); bookings also keep `pricing_snapshot`
 
 Schema changes must be applied via Supabase dashboard or SQL editor using files in `/sql`.
 
@@ -105,7 +112,10 @@ Schema changes must be applied via Supabase dashboard or SQL editor using files 
 |------|---------|
 | `src/app/page.tsx` | Main booking UI and flow orchestration |
 | `src/lib/bookingService.ts` | Core booking query logic |
-| `src/lib/paymentConfig.ts` | Pricing constants and calculations |
+| `src/lib/pricing.ts` | All price math from a version's `PricingRules` (pure) |
+| `src/lib/priceQuote.ts` | Signed price quotes (HMAC, `PRICE_QUOTE_SECRET`) |
+| `src/lib/paymentConfig.ts` | Payment statuses, timeouts, deadline helpers (no prices) |
+| `src/components/admin/PricingSettings.tsx` | Admin Pricing tab |
 | `src/lib/timeSlotGenerator.ts` | Slot availability logic |
 | `src/components/booking/PaymentScreen.tsx` | GCash payment flow UI |
 | `src/app/admin/page.tsx` | Admin dashboard |
@@ -130,6 +140,7 @@ Schema changes must be applied via Supabase dashboard or SQL editor using files 
   - Env: `AGENT_MONTHLY_BUDGET_PHP` (unset/invalid = no limit, nothing blocked) and `AGENT_USD_TO_PHP` (default 58).
   - Once the month's total reaches the budget, `POST /api/admin/agent` returns 402 `{ error: 'budget_exceeded', resetsOn }` and the chat input is disabled until the 1st of next month (Manila time). With no budget set, the gate is skipped (no DB query); if usage can't be loaded, the chat route fails closed with 503 `{ error: 'budget_unavailable' }` (`checkBudgetGate` in `lib/agent/usage.ts`).
   - Self-metered limits: the check runs before a turn, so one in-flight turn can overshoot (~₱5–20); only this app's usage is counted, and a turn that crashes before `onEnd` isn't recorded. Keep the Anthropic Console spend limit as the hard backstop.
+- Pricing: the static prompt has no prices; each request gets a pricing note (`lib/agent/pricingNote.ts`) with the live and scheduled prices from `pricing_schedules`.
 - To add a tool: add it to `agentTools`, add a `case 'tool-<name>'` + label in `AgentMessage.tsx`, and mention it in the prompt only if it needs usage rules.
 
 ### Image Storage

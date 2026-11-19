@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { Booking } from '@/types/booking'
 import { format } from 'date-fns'
 import { CheckCircle2, Calendar, Clock, User, Phone, Mail, CreditCard, X } from 'lucide-react'
-import { calculatePaymentAmount } from '@/lib/paymentConfig'
+import { calculatePaymentAmount, SEED_PRICING_RULES } from '@/lib/pricing'
 
 type Props = {
   open: boolean
@@ -139,8 +139,13 @@ export default function BookingConfirmedModal({ open, onClose, bookings, booking
                               }
                               const timeSlots = bookings.map(b => b.time_slot)
                               const players = bookings[0]?.players ?? 1
-                              const totalCost = calculatePaymentAmount(timeSlots, players)
-                              return `Php${totalCost.toLocaleString()}`
+                              // Legacy rows without a stored amount predate admin pricing
+                              try {
+                                const totalCost = calculatePaymentAmount(SEED_PRICING_RULES, timeSlots, players)
+                                return `Php${totalCost.toLocaleString()}`
+                              } catch {
+                                return '—'
+                              }
                             })()}
                           </p>
                         </div>

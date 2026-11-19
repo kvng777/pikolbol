@@ -11,17 +11,17 @@
 
 import { supabase } from './supabase-server'
 import { Booking } from '@/types/booking'
-import { PaymentStatus, PaymentResult, PendingPaymentBooking } from '@/types/payment'
-import { 
-  calculatePaymentAmount, 
+import { PaymentStatus, PaymentResult, PendingPaymentBooking, PaymentStatusSummary } from '@/types/payment'
+import {
   HELD_PAYMENT_STATUSES,
   PENDING_VERIFICATION_STATUSES,
   CONFIRMED_PAYMENT_STATUSES,
 } from './paymentConfig'
 import { generateUniqueShortId, generateBookingGroupId } from './bookingIdGenerator'
+import type { PricingSnapshot } from '@/types/pricing'
 
 /**
- * Create bookings when user submits payment
+ * Create bookings when user submits payment, at the amount from their verified price quote.
  * This is called when user clicks "I've Completed Payment"
  */
 export async function createBookingWithPendingPayment(
@@ -38,19 +38,13 @@ export async function createBookingWithPendingPayment(
     training_balls?: boolean
     user_id?: string
     gcash_reference?: string
+    payment_amount: number
+    pricing_snapshot: PricingSnapshot
   }
 ): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
   const needsBalls = payload.needs_balls ?? false
   const trainingBalls = payload.training_balls ?? false
-
-  // Total includes equipment rental, charged only for play dates on/after the promo end
-  const amount = calculatePaymentAmount(payload.timeSlots, payload.players, {
-    date: payload.date,
-    paddles: paddlesCount,
-    needsBalls,
-    trainingBalls,
-  })
 
   // Generate IDs once for the entire booking order
   // All time slots share the same short_id and booking_group_id
@@ -72,7 +66,8 @@ export async function createBookingWithPendingPayment(
     short_id: shortId,
     booking_group_id: bookingGroupId,
     payment_status: 'pending' as PaymentStatus,
-    payment_amount: amount,
+    payment_amount: payload.payment_amount,
+    pricing_snapshot: payload.pricing_snapshot,
     gcash_reference: payload.gcash_reference || null,
   }))
 
@@ -169,6 +164,23 @@ export async function getPaymentStatus(bookingIds: string[]): Promise<Booking[]>
   }
 
   return data || []
+}
+
+/**
+ * Status-only lookup for the public payment screen (no personal data).
+ */
+export async function getPaymentStatusSummary(bookingIds: string[]): Promise<PaymentStatusSummary[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('id, payment_status')
+    .in('id', bookingIds)
+
+  if (error) {
+    console.error('Error fetching payment status:', error)
+    return []
+  }
+
+  return (data || []) as PaymentStatusSummary[]
 }
 
 /**

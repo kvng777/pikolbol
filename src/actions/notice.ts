@@ -1,13 +1,15 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { requireAdmin } from '@/lib/actionAuth'
 import { getNotice, updateNotice, isNoticeActive } from '@/lib/noticeService'
 import { Notice, UpdateNoticeData, NoticeResult } from '@/types/notice'
 
 /**
  * Get the full site notice record (admin view).
  */
-export async function getNoticeAction(): Promise<Notice> {
+export async function getNoticeAction(accessToken: string): Promise<Notice> {
+  await requireAdmin(accessToken)
   return getNotice()
 }
 
@@ -23,7 +25,8 @@ export async function getActiveNoticeAction(): Promise<Notice | null> {
 /**
  * Update the site notice (admin only).
  */
-export async function updateNoticeAction(data: UpdateNoticeData): Promise<NoticeResult> {
+export async function updateNoticeAction(accessToken: string, data: UpdateNoticeData): Promise<NoticeResult> {
+  await requireAdmin(accessToken)
   const notice = await updateNotice(data)
 
   if (!notice) {

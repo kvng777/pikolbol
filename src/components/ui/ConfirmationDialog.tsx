@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { Button } from './button'
@@ -60,7 +60,21 @@ export function ConfirmationDialog({
   children,
 }: ConfirmationDialogProps) {
   const isClient = typeof document !== 'undefined'
+  const titleId = useId()
+  const descriptionId = useId()
   const styles = variantStyles[variant]
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Focus: move into the dialog (the safe, non-confirming button) on open; give it back on close.
+  useEffect(() => {
+    if (!open || !isClient) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const cancel = dialogRef.current?.querySelector<HTMLElement>('[data-dialog-cancel]')
+    ;(cancel ?? dialogRef.current)?.focus()
+    return () => {
+      if (previouslyFocused && previouslyFocused.isConnected) previouslyFocused.focus()
+    }
+  }, [open, isClient])
 
   // Handle escape key and body scroll lock
   useEffect(() => {
@@ -92,7 +106,14 @@ export function ConfirmationDialog({
       />
 
       {/* Dialog */}
-      <div className="relative z-10 w-full max-w-md mx-auto bg-white rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        className="relative z-10 w-full max-w-md mx-auto max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white rounded-2xl shadow-xl animate-in fade-in zoom-in-95 duration-200 focus:outline-none">
         {/* Close Button */}
         {!isLoading && (
           <button
@@ -113,10 +134,10 @@ export function ConfirmationDialog({
           </div>
 
           {/* Title & Description */}
-          <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+          <h3 id={titleId} className="text-lg font-semibold text-gray-900 text-center mb-2">
             {title}
           </h3>
-          <p className="text-sm text-gray-600 text-center mb-4">
+          <p id={descriptionId} className="text-sm text-gray-600 text-center mb-4">
             {description}
           </p>
 
@@ -132,6 +153,7 @@ export function ConfirmationDialog({
             <Button
               variant="outline"
               className="flex-1"
+              data-dialog-cancel
               onClick={onClose}
               disabled={isLoading}
             >

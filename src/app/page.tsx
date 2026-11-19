@@ -13,8 +13,6 @@ import { Booking, BulkBookingPayload } from '@/types/booking'
 import { toast } from 'sonner'
 import BookingConfirmedModal from '@/components/ui/BookingConfirmedModal'
 import { PaymentScreen, BookingData } from '@/components/booking/PaymentScreen'
-import { useAuth } from '@/components/AuthProvider'
-import { calculatePaymentAmount } from '@/lib/paymentConfig'
 import RatesPolicies from '@/components/home/RatesPolicies'
 import NoticeToast from '@/components/NoticeToast'
 
@@ -28,7 +26,6 @@ export default function Home() {
   const [confirmedBookings, setConfirmedBookings] = useState<Booking[]>([])
   const bookingCardRef = useRef<HTMLDivElement | null>(null)
 
-  const { user } = useAuth()
   const dateString = format(selectedDate, 'yyyy-MM-dd')
   
   // Use ACTIVE bookings for slot availability (pending + confirmed)
@@ -63,7 +60,6 @@ export default function Home() {
       paddles: data.paddles ?? 0,
       needsBalls: data.needsBalls ?? false,
       trainingBalls: data.trainingBalls ?? false,
-      user_id: user?.id,
     }
 
     setPendingBookingData(bookingData)
@@ -164,16 +160,6 @@ export default function Home() {
     }
   }
 
-  // Calculate payment amount (includes equipment rental for play dates from June 1, 2026)
-  const paymentAmount = pendingBookingData 
-    ? calculatePaymentAmount(pendingBookingData.timeSlots, pendingBookingData.players, {
-        date: pendingBookingData.date,
-        paddles: pendingBookingData.paddles,
-        needsBalls: pendingBookingData.needsBalls,
-        trainingBalls: pendingBookingData.trainingBalls,
-      })
-    : 0
-
   return (
     <div className="min-h-screen relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-teal-50">
       <NoticeToast />
@@ -183,7 +169,6 @@ export default function Home() {
       {bookingState === 'payment' && pendingBookingData && (
         <PaymentScreen
           bookingData={pendingBookingData}
-          amount={paymentAmount}
           onPaymentSubmitted={handlePaymentSubmitted}
           onPaymentConfirmed={handlePaymentConfirmed}
           onCancel={handleCancelPayment}

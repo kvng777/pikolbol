@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { generateTimeSlots } from '@/lib/timeSlotGenerator'
 import { deleteBookingAction } from '@/actions/bookings'
+import { getAccessToken } from '@/lib/accessToken'
 import { useAuth } from '@/components/AuthProvider'
 import {
   useAllBookings,
@@ -56,7 +57,7 @@ export function useAdminPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [filterDate, setFilterDate] = useState<string>('')
 
-  const [activeTab, setActiveTab] = useState<'bookings' | 'slots' | 'closed' | 'payments' | 'settings' | 'refunds' | 'finance' | 'notice'>('bookings')
+  const [activeTab, setActiveTab] = useState<'bookings' | 'slots' | 'closed' | 'payments' | 'settings' | 'refunds' | 'finance' | 'notice' | 'pricing'>('bookings')
   const [selectedDateForSlots, setSelectedDateForSlots] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
   const [closeStartDate, setCloseStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
@@ -168,7 +169,7 @@ export function useAdminPage() {
 
   const handleDeleteBooking = async (id: string) => {
     if (!confirm('Are you sure you want to delete this booking?')) return
-    const result = await deleteBookingAction(id)
+    const result = await deleteBookingAction(await getAccessToken(), id)
     if (result.success) {
       toast.success('Booking deleted')
       refetch()
@@ -185,9 +186,10 @@ export function useAdminPage() {
 
     if (!confirm(message)) return
 
+    const token = await getAccessToken()
     let successCount = 0
     for (const id of bookingIds) {
-      const result = await deleteBookingAction(id)
+      const result = await deleteBookingAction(token, id)
       if (result.success) successCount++
     }
 

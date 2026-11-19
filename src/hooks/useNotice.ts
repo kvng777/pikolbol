@@ -6,6 +6,7 @@ import {
   getActiveNoticeAction,
   updateNoticeAction,
 } from '@/actions/notice'
+import { getAccessToken } from '@/lib/accessToken'
 import { Notice, UpdateNoticeData } from '@/types/notice'
 
 const NOTICE_KEY = ['notice'] as const
@@ -17,7 +18,7 @@ const ACTIVE_NOTICE_KEY = ['activeNotice'] as const
 export function useNoticeSettings() {
   return useQuery<Notice>({
     queryKey: NOTICE_KEY,
-    queryFn: getNoticeAction,
+    queryFn: async () => getNoticeAction(await getAccessToken()),
     staleTime: 60 * 1000,
   })
 }
@@ -40,7 +41,7 @@ export function useUpdateNotice() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (data: UpdateNoticeData) => updateNoticeAction(data),
+    mutationFn: async (data: UpdateNoticeData) => updateNoticeAction(await getAccessToken(), data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: NOTICE_KEY })
       queryClient.invalidateQueries({ queryKey: ACTIVE_NOTICE_KEY })

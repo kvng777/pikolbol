@@ -9,13 +9,16 @@ import {
   RescheduleBookingResult,
   RescheduleRequest,
   AdminBookingPayload,
+  SlotOccupancy,
 } from '@/types/booking'
-import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from './constants'
 import {
   HELD_PAYMENT_STATUSES,
   CONFIRMED_PAYMENT_STATUSES,
-  calculatePaymentAmount,
 } from './paymentConfig'
+import { calculatePaymentAmount, isSamePricedSelection, calculateCancellationFee, rulesFromSnapshot } from './pricing'
+import { getPricingForDate } from './pricingService'
+import { parseBookingDateTime } from './manilaTime'
+import type { PricingSnapshot, PricingVersion } from '@/types/pricing'
 import { generateUniqueShortId, generateBookingGroupId } from './bookingIdGenerator'
 import {
   sendAdminRefundAlertEmail,
@@ -25,9 +28,6 @@ import {
   sendRescheduleRejectedEmail,
 } from './emailService'
 import { getPaymentSettings } from './paymentSettingsService'
-
-// Re-export constants for backwards compatibility with server-side code
-export { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT }
 
 // Payment statuses that indicate a slot is occupied (pending or confirmed)
 const ACTIVE_PAYMENT_STATUSES = [...HELD_PAYMENT_STATUSES, ...CONFIRMED_PAYMENT_STATUSES]
@@ -69,6 +69,25 @@ export async function getActiveBookingsByDate(date: string): Promise<Booking[]> 
   }
 
   return data || []
+}
+
+/**
+ * Active slot occupancy for a date (public availability; no personal data).
+ */
+export async function getActiveSlotOccupancyByDate(date: string): Promise<SlotOccupancy[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('date, time_slot, court_number, booking_group_id')
+    .eq('date', date)
+    .in('payment_status', ACTIVE_PAYMENT_STATUSES)
+    .order('time_slot', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching slot occupancy:', error)
+    return []
+  }
+
+  return (data || []) as SlotOccupancy[]
 }
 
 /**
@@ -211,6 +230,26 @@ export async function createBookings(payload: { name: string; phone: string; ema
 const MANUAL_COURT_NUMBER = 1
 const MANUAL_DEFAULT_PLAYERS = 2
 
+const PRICING_UNAVAILABLE = 'Prices are unavailable right now. Please try again in a moment.'
+const NO_PRICES_FOR_DATE = 'No prices are set for this date.'
+
+/**
+ * Version for a play date, or an error message for the caller to return.
+ * "No version covers the date" is told apart from read failures by error name
+ * (NoPricesForDateError), so callers fail the booking with the right message.
+ */
+async function loadPricing(
+  date: string
+): Promise<{ version: PricingVersion; error?: undefined } | { version: null; error: string }> {
+  try {
+    return { version: await getPricingForDate(date) }
+  } catch (error) {
+    console.error('Failed to load pricing:', error)
+    const noCover = error instanceof Error && error.name === 'NoPricesForDateError'
+    return { version: null, error: noCover ? NO_PRICES_FOR_DATE : PRICING_UNAVAILABLE }
+  }
+}
+
 /**
  * Create a manual booking on behalf of a player (admin only).
  * Created as a single confirmed group, flagged is_manual, with no emails sent.
@@ -229,12 +268,16 @@ export async function createAdminBooking(
   const needsBalls = payload.needsBalls ?? false
   const trainingBalls = payload.trainingBalls ?? false
 
-  const amount = calculatePaymentAmount(payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
+  const { version, error: pricingError } = await loadPricing(payload.date)
+  if (!version) return { success: false, error: pricingError }
+
+  const amount = calculatePaymentAmount(version.rules, payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
     date: payload.date,
     paddles: paddlesCount,
     needsBalls,
     trainingBalls,
   })
+  const pricingSnapshot: PricingSnapshot = { version_id: version.id, rules: version.rules }
 
   const shortId = await generateUniqueShortId()
   const bookingGroupId = generateBookingGroupId()
@@ -256,6 +299,7 @@ export async function createAdminBooking(
     booking_group_id: bookingGroupId,
     payment_status: 'confirmed' as const,
     payment_amount: amount,
+    ...(pricingSnapshot ? { pricing_snapshot: pricingSnapshot } : {}),
     payment_confirmed_at: nowIso,
     is_manual: true,
   }))
@@ -317,12 +361,38 @@ export async function updateAdminBooking(
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
   const needsBalls = payload.needsBalls ?? false
   const trainingBalls = payload.trainingBalls ?? false
-  const amount = calculatePaymentAmount(payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
-    date: payload.date,
-    paddles: paddlesCount,
-    needsBalls,
-    trainingBalls,
-  })
+
+  // Keep the original price unless something that affects it changed
+  const first = existing[0]
+  const unchanged =
+    typeof first.payment_amount === 'number' &&
+    isSamePricedSelection(
+      {
+        date: first.date,
+        timeSlots: existing.map((b) => b.time_slot),
+        paddles: first.paddles_count ?? 0,
+        needsBalls: !!first.needs_balls,
+        trainingBalls: !!first.training_balls,
+      },
+      { date: payload.date, timeSlots: payload.timeSlots, paddles: paddlesCount, needsBalls, trainingBalls }
+    )
+
+  let amount: number
+  let pricingSnapshot: PricingSnapshot | null
+  if (unchanged) {
+    amount = first.payment_amount as number
+    pricingSnapshot = first.pricing_snapshot ?? null
+  } else {
+    const { version, error: pricingError } = await loadPricing(payload.date)
+    if (!version) return { success: false, error: pricingError }
+    amount = calculatePaymentAmount(version.rules, payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
+      date: payload.date,
+      paddles: paddlesCount,
+      needsBalls,
+      trainingBalls,
+    })
+    pricingSnapshot = { version_id: version.id, rules: version.rules }
+  }
 
   // Replace the group's rows
   const { error: deleteError } = await supabase
@@ -351,6 +421,7 @@ export async function updateAdminBooking(
     booking_group_id: bookingGroupId,
     payment_status: 'confirmed' as const,
     payment_amount: amount,
+    ...(pricingSnapshot ? { pricing_snapshot: pricingSnapshot } : {}),
     payment_confirmed_at: existing[0].payment_confirmed_at || nowIso,
     is_manual: true,
   }))
@@ -620,11 +691,15 @@ export async function approveRescheduleRequest(
     players: first.players,
     paddles_count: first.paddles_count ?? 0,
     needs_balls: first.needs_balls ?? false,
+    training_balls: first.training_balls ?? false,
     user_id: first.user_id,
     short_id: shortId,
     booking_group_id: effectiveGroupId,
     payment_status: 'confirmed' as const,
+    // Deliberately keeps the original amount and snapshot: a booking keeps the price it was made under,
+    // even if the new date crosses equipment_charge_start_date.
     payment_amount: first.payment_amount,
+    ...(first.pricing_snapshot ? { pricing_snapshot: first.pricing_snapshot } : {}),
     payment_confirmed_at: first.payment_confirmed_at,
     gcash_reference: first.gcash_reference,
     is_manual: first.is_manual ?? false,
@@ -731,6 +806,25 @@ export async function getPendingRescheduleRequests(): Promise<RescheduleRequest[
 
   if (error) {
     console.error('Error fetching pending reschedule requests:', error)
+    return []
+  }
+
+  return data || []
+}
+
+/**
+ * Pending reschedule requests for one user (profile page).
+ */
+export async function getPendingRescheduleRequestsByUser(userId: string): Promise<RescheduleRequest[]> {
+  const { data, error } = await supabase
+    .from('reschedule_requests')
+    .select('*')
+    .eq('status', 'pending')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching user reschedule requests:', error)
     return []
   }
 
@@ -920,103 +1014,6 @@ export async function getBookingsByUserId(userId: string): Promise<Booking[]> {
 }
 
 /**
- * Check if a booking can be cancelled based on the 24-hour policy
- * Returns true if the booking is more than CANCELLATION_HOURS_BEFORE hours away
- */
-export function canCancelBooking(booking: Booking): boolean {
-  const bookingDateTime = parseBookingDateTime(booking.date, booking.time_slot)
-  const now = new Date()
-  const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
-  
-  return hoursUntilBooking >= CANCELLATION_HOURS_BEFORE
-}
-
-/**
- * Parse booking date and time_slot into a Date object in Philippines timezone (UTC+8)
- * Handles both formats:
- *   - 24-hour: "17:00-18:00" or "17:00 - 18:00"
- *   - 12-hour: "6:00 AM - 7:00 AM" or "6:00 PM - 7:00 PM"
- */
-function parseBookingDateTime(date: string, timeSlot: string): Date {
-  // Extract the start time from the time_slot (split on '-' with optional spaces)
-  const startTime = timeSlot.split('-')[0].trim()
-  
-  let hours = 0
-  let minutes = 0
-  
-  // Try to parse 24-hour format first (e.g., "17:00")
-  const match24h = startTime.match(/^(\d{1,2}):(\d{2})$/)
-  if (match24h) {
-    hours = parseInt(match24h[1], 10)
-    minutes = parseInt(match24h[2], 10)
-  } else {
-    // Try to parse 12-hour format (e.g., "6:00 PM")
-    const match12h = startTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
-    if (match12h) {
-      hours = parseInt(match12h[1], 10)
-      minutes = parseInt(match12h[2], 10)
-      const period = match12h[3].toUpperCase()
-      
-      if (period === 'PM' && hours !== 12) {
-        hours += 12
-      } else if (period === 'AM' && hours === 12) {
-        hours = 0
-      }
-    } else {
-      // Fallback: return start of the booking date in PH timezone (midnight)
-      // Parse as Philippines time by constructing explicit ISO string
-      return new Date(`${date}T00:00:00+08:00`)
-    }
-  }
-
-  // Construct the datetime explicitly in Philippines timezone (UTC+8)
-  // Format: YYYY-MM-DDTHH:MM:SS+08:00
-  const paddedHours = hours.toString().padStart(2, '0')
-  const paddedMinutes = minutes.toString().padStart(2, '0')
-  const isoString = `${date}T${paddedHours}:${paddedMinutes}:00+08:00`
-  
-  return new Date(isoString)
-}
-
-/**
- * Cancel a booking by ID
- * Only allows cancellation if the user owns the booking and it's more than 24 hours away
- */
-export async function cancelBooking(bookingId: string, userId: string): Promise<CancelBookingResult> {
-  // First, fetch the booking to verify ownership and check cancellation policy
-  const booking = await getBookingById(bookingId)
-  
-  if (!booking) {
-    return { success: false, error: 'Booking not found' }
-  }
-
-  if (booking.user_id !== userId) {
-    return { success: false, error: 'You can only cancel your own bookings' }
-  }
-
-  if (!canCancelBooking(booking)) {
-    return { 
-      success: false, 
-      error: `Bookings can only be cancelled at least ${CANCELLATION_HOURS_BEFORE} hours before the scheduled time` 
-    }
-  }
-
-  // Delete the booking
-  const { error } = await supabase
-    .from('bookings')
-    .delete()
-    .eq('id', bookingId)
-    .eq('user_id', userId) // Extra safety check
-
-  if (error) {
-    console.error('Error cancelling booking:', error)
-    return { success: false, error: 'Failed to cancel booking' }
-  }
-
-  return { success: true }
-}
-
-/**
  * Calculate hours until the earliest booking in a group
  */
 export function calculateHoursUntilBooking(bookings: Booking[]): number {
@@ -1031,27 +1028,6 @@ export function calculateHoursUntilBooking(bookings: Booking[]): number {
   const bookingDateTime = parseBookingDateTime(earliest.date, earliest.time_slot)
   const now = new Date()
   return (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
-}
-
-/**
- * Calculate cancellation fee and refund amount based on timing
- * - Free cancellation: > 24 hours before booking (full refund)
- * - P100/slot fee: <= 24 hours before booking (partial refund)
- */
-export function calculateCancellationFee(
-  totalAmount: number,
-  numberOfSlots: number,
-  hoursUntilBooking: number
-): { cancellationFee: number; refundAmount: number } {
-  if (hoursUntilBooking > CANCELLATION_HOURS_BEFORE) {
-    // Free cancellation - full refund
-    return { cancellationFee: 0, refundAmount: totalAmount }
-  } else {
-    // Fee applies: P100 per slot
-    const fee = numberOfSlots * CANCELLATION_FEE_PER_SLOT
-    const refund = Math.max(0, totalAmount - fee)
-    return { cancellationFee: fee, refundAmount: refund }
-  }
 }
 
 /**
@@ -1115,14 +1091,26 @@ export async function cancelBookingGroup(
     return { success: false, error: 'Cannot cancel past bookings' }
   }
 
-  // Calculate cancellation fee and refund
+  // Calculate cancellation fee and refund with the prices this booking was made under.
+  // A malformed snapshot fails closed: nothing is cancelled and no fee is guessed.
   const totalAmount = firstBooking.payment_amount || 0
   const numberOfSlots = bookings.length
-  const { cancellationFee, refundAmount } = calculateCancellationFee(
-    totalAmount,
-    numberOfSlots,
-    hoursUntilBooking
-  )
+  let cancellationFee: number
+  let refundAmount: number
+  try {
+    ;({ cancellationFee, refundAmount } = calculateCancellationFee(
+      rulesFromSnapshot(firstBooking.pricing_snapshot),
+      totalAmount,
+      numberOfSlots,
+      hoursUntilBooking
+    ))
+  } catch (err) {
+    console.error('Cannot calculate cancellation fee (bad pricing snapshot):', err)
+    return {
+      success: false,
+      error: 'We could not read the pricing for this booking. Please call or text us at 0906 451 4819 to cancel it.',
+    }
+  }
 
   // Determine refund status (only 'pending' if there's actually a refund to process)
   const refundStatus = refundAmount > 0 ? 'pending' : null

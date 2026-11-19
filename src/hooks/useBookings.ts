@@ -1,10 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Booking, DisabledSlot, ClosedDate, AdminBookingPayload, RescheduleRequest } from '@/types/booking'
+import { Booking, DisabledSlot, ClosedDate, AdminBookingPayload, RescheduleRequest, SlotOccupancy } from '@/types/booking'
 import { 
-  getBookingsByDateAction,
   getActiveBookingsByDateAction,
   getAllBookingsAction,
-  getConfirmedBookingsAction,
   getDisabledSlotsByDateAction,
   addDisabledSlotAction,
   removeDisabledSlotAction,
@@ -13,8 +11,8 @@ import {
   addClosedDateAction,
   removeClosedDateAction,
   deleteBookingAction,
-  getBookingsByUserIdAction,
-  cancelBookingAction,
+  getMyBookingsAction,
+  getMyPendingRescheduleRequestsAction,
   cancelBookingGroupAction,
   createAdminBookingAction,
   updateAdminBookingAction,
@@ -24,28 +22,16 @@ import {
   getPendingRescheduleRequestsAction,
   getHeldRescheduleSlotsByDateAction,
 } from '@/actions/bookings'
+import { getAccessToken } from '@/lib/accessToken'
 
 const CACHE_TIME = 5 * 60 * 1000 // 5 minutes
-
-/**
- * Get ALL bookings by date (regardless of payment status)
- */
-export function useBookingsByDate(date: string) {
-  return useQuery<Booking[]>({
-    queryKey: ['bookings', date],
-    queryFn: () => getBookingsByDateAction(date),
-    enabled: !!date,
-    staleTime: CACHE_TIME,
-    gcTime: CACHE_TIME,
-  })
-}
 
 /**
  * Get ACTIVE bookings by date - only bookings that occupy slots
  * Use this for slot availability checking
  */
 export function useActiveBookingsByDate(date: string) {
-  return useQuery<Booking[]>({
+  return useQuery<SlotOccupancy[]>({
     queryKey: ['activeBookings', date],
     queryFn: () => getActiveBookingsByDateAction(date),
     enabled: !!date,
@@ -61,22 +47,10 @@ export function useActiveBookingsByDate(date: string) {
 export function useAllBookings() {
   return useQuery<Booking[]>({
     queryKey: ['allBookings'],
-    queryFn: getAllBookingsAction,
+    queryFn: async () => getAllBookingsAction(await getAccessToken()),
     staleTime: 0,
     gcTime: CACHE_TIME,
     refetchOnWindowFocus: true,
-  })
-}
-
-/**
- * Get only CONFIRMED bookings (for admin booking list)
- */
-export function useConfirmedBookings() {
-  return useQuery<Booking[]>({
-    queryKey: ['confirmedBookings'],
-    queryFn: getConfirmedBookingsAction,
-    staleTime: CACHE_TIME,
-    gcTime: CACHE_TIME,
   })
 }
 
@@ -93,7 +67,7 @@ export function useDisabledSlotsByDate(date: string) {
 export function useAllDisabledSlots() {
   return useQuery<DisabledSlot[]>({
     queryKey: ['allDisabledSlots'],
-    queryFn: getAllDisabledSlotsAction,
+    queryFn: async () => getAllDisabledSlotsAction(await getAccessToken()),
     staleTime: CACHE_TIME,
     gcTime: CACHE_TIME,
   })
@@ -103,8 +77,8 @@ export function useAddDisabledSlot() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: ({ date, timeSlot }: { date: string; timeSlot: string }) => 
-      addDisabledSlotAction(date, timeSlot),
+    mutationFn: async ({ date, timeSlot }: { date: string; timeSlot: string }) =>
+      addDisabledSlotAction(await getAccessToken(), date, timeSlot),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['disabledSlots'] })
       queryClient.invalidateQueries({ queryKey: ['allDisabledSlots'] })
@@ -117,7 +91,7 @@ export function useRemoveDisabledSlot() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: (id: string) => removeDisabledSlotAction(id),
+    mutationFn: async (id: string) => removeDisabledSlotAction(await getAccessToken(), id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['disabledSlots'] })
       queryClient.invalidateQueries({ queryKey: ['allDisabledSlots'] })
@@ -139,8 +113,8 @@ export function useAddClosedDate() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: ({ startDate, endDate, reason }: { startDate: string; endDate: string; reason: string }) => 
-      addClosedDateAction(startDate, endDate, reason),
+    mutationFn: async ({ startDate, endDate, reason }: { startDate: string; endDate: string; reason: string }) =>
+      addClosedDateAction(await getAccessToken(), startDate, endDate, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['closedDates'] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
@@ -152,7 +126,7 @@ export function useRemoveClosedDate() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: (id: string) => removeClosedDateAction(id),
+    mutationFn: async (id: string) => removeClosedDateAction(await getAccessToken(), id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['closedDates'] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
@@ -164,7 +138,7 @@ export function useDeleteBooking() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (id: string) => deleteBookingAction(id),
+    mutationFn: async (id: string) => deleteBookingAction(await getAccessToken(), id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allBookings'] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
@@ -179,7 +153,7 @@ export function useCreateAdminBooking() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (payload: AdminBookingPayload) => createAdminBookingAction(payload),
+    mutationFn: async (payload: AdminBookingPayload) => createAdminBookingAction(await getAccessToken(), payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allBookings'] })
       queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
@@ -195,8 +169,8 @@ export function useUpdateAdminBooking() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ bookingGroupId, payload }: { bookingGroupId: string; payload: AdminBookingPayload }) =>
-      updateAdminBookingAction(bookingGroupId, payload),
+    mutationFn: async ({ bookingGroupId, payload }: { bookingGroupId: string; payload: AdminBookingPayload }) =>
+      updateAdminBookingAction(await getAccessToken(), bookingGroupId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allBookings'] })
       queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
@@ -211,7 +185,7 @@ export function useUpdateAdminBooking() {
 export function useUserBookings(userId: string | undefined) {
   return useQuery<Booking[]>({
     queryKey: ['userBookings', userId],
-    queryFn: () => getBookingsByUserIdAction(userId!),
+    queryFn: async () => getMyBookingsAction(await getAccessToken()),
     enabled: !!userId,
     staleTime: CACHE_TIME,
     gcTime: CACHE_TIME,
@@ -219,48 +193,29 @@ export function useUserBookings(userId: string | undefined) {
 }
 
 /**
- * Hook to cancel a user's booking (24-hour policy applies)
- * @deprecated Use useCancelBookingGroup instead for proper grouped booking cancellation
- */
-export function useCancelBooking() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ bookingId, userId }: { bookingId: string; userId: string }) => 
-      cancelBookingAction(bookingId, userId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userBookings'] })
-      queryClient.invalidateQueries({ queryKey: ['allBookings'] })
-      queryClient.invalidateQueries({ queryKey: ['bookings'] })
-    },
-  })
-}
-
-/**
  * Hook to cancel a booking group (all slots in the same order)
  * Calculates cancellation fee based on timing:
- * - Free cancellation: > 24 hours before booking
- * - P100/slot fee: <= 24 hours before booking
+ * - Free cancellation: more than the booking's saved window before the slot
+ * - Otherwise the booking's saved per-slot fee applies (capped at the amount paid)
  */
 export function useCancelBookingGroup() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ 
-      bookingGroupId, 
-      legacyBookingId, 
-      userId 
-    }: { 
+    mutationFn: async ({
+      bookingGroupId,
+      legacyBookingId,
+    }: {
       bookingGroupId: string | null
       legacyBookingId: string | null
-      userId: string 
-    }) => cancelBookingGroupAction(bookingGroupId, legacyBookingId, userId),
+    }) => cancelBookingGroupAction(await getAccessToken(), bookingGroupId, legacyBookingId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userBookings'] })
       queryClient.invalidateQueries({ queryKey: ['allBookings'] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
       queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
       queryClient.invalidateQueries({ queryKey: ['pendingRefunds'] })
+      queryClient.invalidateQueries({ queryKey: ['pendingRescheduleRequests'] })
     },
   })
 }
@@ -273,19 +228,17 @@ export function useCreateRescheduleRequest() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       bookingGroupId,
       legacyBookingId,
-      userId,
       newDate,
       newTimeSlots,
     }: {
       bookingGroupId: string | null
       legacyBookingId: string | null
-      userId: string
       newDate: string
       newTimeSlots: string[]
-    }) => createRescheduleRequestAction(bookingGroupId, legacyBookingId, userId, newDate, newTimeSlots),
+    }) => createRescheduleRequestAction(await getAccessToken(), bookingGroupId, legacyBookingId, newDate, newTimeSlots),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userBookings'] })
       queryClient.invalidateQueries({ queryKey: ['pendingRescheduleRequests'] })
@@ -301,7 +254,7 @@ export function useApproveRescheduleRequest() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (requestId: string) => approveRescheduleRequestAction(requestId),
+    mutationFn: async (requestId: string) => approveRescheduleRequestAction(await getAccessToken(), requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingRescheduleRequests'] })
       queryClient.invalidateQueries({ queryKey: ['allBookings'] })
@@ -320,7 +273,7 @@ export function useRejectRescheduleRequest() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (requestId: string) => rejectRescheduleRequestAction(requestId),
+    mutationFn: async (requestId: string) => rejectRescheduleRequestAction(await getAccessToken(), requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingRescheduleRequests'] })
       queryClient.invalidateQueries({ queryKey: ['heldRescheduleSlots'] })
@@ -334,10 +287,23 @@ export function useRejectRescheduleRequest() {
 export function usePendingRescheduleRequests() {
   return useQuery<RescheduleRequest[]>({
     queryKey: ['pendingRescheduleRequests'],
-    queryFn: getPendingRescheduleRequestsAction,
+    queryFn: async () => getPendingRescheduleRequestsAction(await getAccessToken()),
     staleTime: 30 * 1000,
     gcTime: 30 * 1000,
     refetchInterval: 10000,
+  })
+}
+
+/**
+ * Hook to fetch the signed-in user's pending reschedule requests (profile page).
+ */
+export function useMyPendingRescheduleRequests(userId: string | undefined) {
+  return useQuery<RescheduleRequest[]>({
+    queryKey: ['pendingRescheduleRequests', 'mine', userId],
+    queryFn: async () => getMyPendingRescheduleRequestsAction(await getAccessToken()),
+    enabled: !!userId,
+    staleTime: 30 * 1000,
+    gcTime: 30 * 1000,
   })
 }
 

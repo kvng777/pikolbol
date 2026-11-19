@@ -1,9 +1,9 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase, SupabaseClient } from '@/lib/supabase'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import { User, Session } from '@supabase/supabase-js'
-import { isUserAdminAction } from '@/actions/profile'
+import { isCurrentUserAdminAction } from '@/actions/profile'
 import { UserRole } from '@/types/profile'
 
 interface AuthContextType {
@@ -35,46 +35,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [role, setRole] = useState<UserRole | null>(null)
 
-  // Check admin status when user changes
-  const checkAdminStatus = async (userId: string | undefined) => {
-    if (!userId) {
+  // Only the latest check may update state; a sign-out or newer session wins over an older in-flight check
+  const checkIdRef = useRef(0)
+
+  // Check admin status when the session changes.
+  // Only the latest check clears `loading`, so a stale check can't end loading while isAdmin is still unset.
+  const checkAdminStatus = async (session: Session | null) => {
+    const checkId = ++checkIdRef.current
+
+    if (!session?.user) {
       setIsAdmin(false)
       setRole(null)
+      setLoading(false)
       return
     }
 
     try {
-      const result = await isUserAdminAction(userId)
+      const result = await isCurrentUserAdminAction(session.access_token)
+      if (checkId !== checkIdRef.current) return
       setIsAdmin(result.isAdmin)
       setRole(result.role)
     } catch (error) {
       console.error('Error checking admin status:', error)
+      if (checkId !== checkIdRef.current) return
       setIsAdmin(false)
       setRole(null)
     }
+    setLoading(false)
   }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
-      checkAdminStatus(session?.user?.id).then(() => {
-        setLoading(false)
-      })
+      checkAdminStatus(session)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
-      checkAdminStatus(session?.user?.id).then(() => {
-        setLoading(false)
-      })
+      checkAdminStatus(session)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
   const signOut = async () => {
+    checkIdRef.current++
     await supabase.auth.signOut()
     setUser(null)
     setSession(null)
