@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { requireAdmin } from '@/lib/actionAuth'
 import {
   getPaymentSettings,
   updatePaymentSettings,
@@ -19,8 +20,10 @@ export async function getPaymentSettingsAction(): Promise<PaymentSettings | null
  * Update payment settings (admin only)
  */
 export async function updatePaymentSettingsAction(
+  accessToken: string,
   data: UpdatePaymentSettingsData
 ): Promise<PaymentSettingsResult> {
+  await requireAdmin(accessToken)
   const settings = await updatePaymentSettings(data)
 
   if (!settings) {
@@ -37,8 +40,10 @@ export async function updatePaymentSettingsAction(
  * Upload GCash QR code image and update settings
  */
 export async function uploadQRCodeAction(
+  accessToken: string,
   formData: FormData
 ): Promise<PaymentSettingsResult> {
+  await requireAdmin(accessToken)
   const file = formData.get('file') as File
   
   if (!file) {

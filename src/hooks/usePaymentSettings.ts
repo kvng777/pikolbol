@@ -5,6 +5,7 @@ import {
   updatePaymentSettingsAction,
   uploadQRCodeAction,
 } from '@/actions/paymentSettings'
+import { getAccessToken } from '@/lib/accessToken'
 import { UpdatePaymentSettingsData } from '@/types/payment'
 
 // Re-export usePaymentSettings from usePayment for convenience
@@ -17,7 +18,7 @@ export function useUpdatePaymentSettings() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (data: UpdatePaymentSettingsData) => updatePaymentSettingsAction(data),
+    mutationFn: async (data: UpdatePaymentSettingsData) => updatePaymentSettingsAction(await getAccessToken(), data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['paymentSettings'] })
     },
@@ -31,10 +32,10 @@ export function useUploadQRCode() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (file: File) => {
+    mutationFn: async (file: File) => {
       const formData = new FormData()
       formData.append('file', file)
-      return uploadQRCodeAction(formData)
+      return uploadQRCodeAction(await getAccessToken(), formData)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['paymentSettings'] })

@@ -23,6 +23,8 @@ import * as bookings from './bookings'
 import * as bookingService from '@/lib/bookingService'
 import * as payment from './payment'
 import * as paymentService from '@/lib/paymentService'
+import * as paymentSettings from './paymentSettings'
+import * as notice from './notice'
 
 type Call = [name: string, call: (token: string) => Promise<unknown>]
 
@@ -46,6 +48,10 @@ const ADMIN_ACTIONS: Call[] = [
   ['confirmPaymentAction', (t) => payment.confirmPaymentAction(t, ['b1'])],
   ['rejectPaymentAction', (t) => payment.rejectPaymentAction(t, ['b1'], 'r')],
   ['getPendingPaymentsAction', (t) => payment.getPendingPaymentsAction(t)],
+  ['updatePaymentSettingsAction', (t) => paymentSettings.updatePaymentSettingsAction(t, { gcash_name: 'x' })],
+  ['uploadQRCodeAction', (t) => paymentSettings.uploadQRCodeAction(t, new FormData())],
+  ['getNoticeAction', (t) => notice.getNoticeAction(t)],
+  ['updateNoticeAction', (t) => notice.updateNoticeAction(t, {})],
 ]
 
 describe('admin actions', () => {
