@@ -10,7 +10,8 @@ import { EquipmentSelector } from '@/components/booking/EquipmentSelector'
 import { useActiveBookingsByDate, useDisabledSlotsByDate, useClosedDates } from '@/hooks/useBookings'
 import { useCreateAdminBooking, useUpdateAdminBooking } from '@/hooks/useBookings'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
-import { calculatePaymentAmount, isEquipmentChargeable } from '@/lib/paymentConfig'
+import { calculatePaymentAmount, isEquipmentChargeable, isSamePricedSelection } from '@/lib/pricing'
+import { usePricingForDate } from '@/hooks/usePricing'
 import { toast } from 'sonner'
 
 const COURT_NUMBER = 1
@@ -23,6 +24,7 @@ export interface AdminBookingInitialValues {
   paddles: number
   needsBalls: boolean
   trainingBalls: boolean
+  amount: number | null // Stored payment_amount; kept if the priced selection doesn't change
 }
 
 interface AdminBookingFormProps {
@@ -66,14 +68,29 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
     return getAvailableSlotsForCourt(others, date, COURT_NUMBER, disabledSlots, true)
   }, [activeBookings, disabledSlots, date, initialValues])
 
-  const equipmentChargeable = isEquipmentChargeable(date)
-  const total = useMemo(
-    () =>
-      selectedSlots.length > 0
-        ? calculatePaymentAmount(selectedSlots, 2, { date, paddles, needsBalls, trainingBalls })
-        : 0,
-    [selectedSlots, date, paddles, needsBalls, trainingBalls]
-  )
+  const { rules, error: pricingError } = usePricingForDate(date)
+  const equipmentChargeable = rules ? isEquipmentChargeable(rules, date) : false
+
+  const keepsStoredPrice =
+    !!initialValues &&
+    initialValues.amount !== null &&
+    isSamePricedSelection(
+      {
+        date: initialValues.date,
+        timeSlots: initialValues.timeSlots,
+        paddles: initialValues.paddles,
+        needsBalls: initialValues.needsBalls,
+        trainingBalls: initialValues.trainingBalls,
+      },
+      { date, timeSlots: selectedSlots, paddles, needsBalls, trainingBalls }
+    )
+
+  const total = useMemo(() => {
+    if (selectedSlots.length === 0) return 0
+    if (keepsStoredPrice) return initialValues!.amount as number
+    if (!rules) return null
+    return calculatePaymentAmount(rules, selectedSlots, 2, { date, paddles, needsBalls, trainingBalls })
+  }, [selectedSlots, date, paddles, needsBalls, trainingBalls, rules, keepsStoredPrice, initialValues])
 
   const toggleSlot = (slot: string) => {
     setSelectedSlots((prev) =>
@@ -209,8 +226,13 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
 
           {/* Total */}
           <div className="flex items-center justify-between rounded-lg bg-indigo-50 px-4 py-3">
-            <span className="text-sm font-medium text-gray-700">Total</span>
-            <span className="text-xl font-bold text-indigo-700">₱{total.toLocaleString()}</span>
+            <span className="text-sm font-medium text-gray-700">
+              Total
+              {keepsStoredPrice && <span className="block text-xs text-gray-500">Original price kept</span>}
+            </span>
+            <span className="text-xl font-bold text-indigo-700">
+              {total === null ? (pricingError ? 'Prices unavailable' : '…') : `₱${total.toLocaleString()}`}
+            </span>
           </div>
 
           {/* Actions */}
@@ -220,7 +242,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
             </Button>
             <Button
               onClick={handleSave}
-              disabled={isSubmitting}
+              disabled={isSubmitting || total === null}
               className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white"
             >
               {isSubmitting ? (

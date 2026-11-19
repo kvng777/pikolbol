@@ -15,8 +15,10 @@ import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from './constant
 import {
   HELD_PAYMENT_STATUSES,
   CONFIRMED_PAYMENT_STATUSES,
-  calculatePaymentAmount,
 } from './paymentConfig'
+import { calculatePaymentAmount, isSamePricedSelection } from './pricing'
+import { getPricingForDate } from './pricingService'
+import type { PricingSnapshot, PricingVersion } from '@/types/pricing'
 import { generateUniqueShortId, generateBookingGroupId } from './bookingIdGenerator'
 import {
   sendAdminRefundAlertEmail,
@@ -231,6 +233,18 @@ export async function createBookings(payload: { name: string; phone: string; ema
 const MANUAL_COURT_NUMBER = 1
 const MANUAL_DEFAULT_PLAYERS = 2
 
+const PRICING_UNAVAILABLE = 'Prices are unavailable right now. Please try again in a moment.'
+
+/** Version for a play date, or null when prices can't be loaded (callers fail the booking). */
+async function loadPricingOrNull(date: string): Promise<PricingVersion | null> {
+  try {
+    return await getPricingForDate(date)
+  } catch (error) {
+    console.error('Failed to load pricing:', error)
+    return null
+  }
+}
+
 /**
  * Create a manual booking on behalf of a player (admin only).
  * Created as a single confirmed group, flagged is_manual, with no emails sent.
@@ -249,12 +263,16 @@ export async function createAdminBooking(
   const needsBalls = payload.needsBalls ?? false
   const trainingBalls = payload.trainingBalls ?? false
 
-  const amount = calculatePaymentAmount(payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
+  const version = await loadPricingOrNull(payload.date)
+  if (!version) return { success: false, error: PRICING_UNAVAILABLE }
+
+  const amount = calculatePaymentAmount(version.rules, payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
     date: payload.date,
     paddles: paddlesCount,
     needsBalls,
     trainingBalls,
   })
+  const pricingSnapshot: PricingSnapshot = { version_id: version.id, rules: version.rules }
 
   const shortId = await generateUniqueShortId()
   const bookingGroupId = generateBookingGroupId()
@@ -276,6 +294,7 @@ export async function createAdminBooking(
     booking_group_id: bookingGroupId,
     payment_status: 'confirmed' as const,
     payment_amount: amount,
+    pricing_snapshot: pricingSnapshot,
     payment_confirmed_at: nowIso,
     is_manual: true,
   }))
@@ -337,12 +356,38 @@ export async function updateAdminBooking(
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
   const needsBalls = payload.needsBalls ?? false
   const trainingBalls = payload.trainingBalls ?? false
-  const amount = calculatePaymentAmount(payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
-    date: payload.date,
-    paddles: paddlesCount,
-    needsBalls,
-    trainingBalls,
-  })
+
+  // Keep the original price unless something that affects it changed
+  const first = existing[0]
+  const unchanged =
+    typeof first.payment_amount === 'number' &&
+    isSamePricedSelection(
+      {
+        date: first.date,
+        timeSlots: existing.map((b) => b.time_slot),
+        paddles: first.paddles_count ?? 0,
+        needsBalls: !!first.needs_balls,
+        trainingBalls: !!first.training_balls,
+      },
+      { date: payload.date, timeSlots: payload.timeSlots, paddles: paddlesCount, needsBalls, trainingBalls }
+    )
+
+  let amount: number
+  let pricingSnapshot: PricingSnapshot | null
+  if (unchanged) {
+    amount = first.payment_amount as number
+    pricingSnapshot = first.pricing_snapshot ?? null
+  } else {
+    const version = await loadPricingOrNull(payload.date)
+    if (!version) return { success: false, error: PRICING_UNAVAILABLE }
+    amount = calculatePaymentAmount(version.rules, payload.timeSlots, MANUAL_DEFAULT_PLAYERS, {
+      date: payload.date,
+      paddles: paddlesCount,
+      needsBalls,
+      trainingBalls,
+    })
+    pricingSnapshot = { version_id: version.id, rules: version.rules }
+  }
 
   // Replace the group's rows
   const { error: deleteError } = await supabase
@@ -371,6 +416,7 @@ export async function updateAdminBooking(
     booking_group_id: bookingGroupId,
     payment_status: 'confirmed' as const,
     payment_amount: amount,
+    pricing_snapshot: pricingSnapshot,
     payment_confirmed_at: existing[0].payment_confirmed_at || nowIso,
     is_manual: true,
   }))
@@ -640,11 +686,13 @@ export async function approveRescheduleRequest(
     players: first.players,
     paddles_count: first.paddles_count ?? 0,
     needs_balls: first.needs_balls ?? false,
+    training_balls: first.training_balls ?? false,
     user_id: first.user_id,
     short_id: shortId,
     booking_group_id: effectiveGroupId,
     payment_status: 'confirmed' as const,
     payment_amount: first.payment_amount,
+    pricing_snapshot: first.pricing_snapshot ?? null,
     payment_confirmed_at: first.payment_confirmed_at,
     gcash_reference: first.gcash_reference,
     is_manual: first.is_manual ?? false,

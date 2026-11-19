@@ -78,6 +78,7 @@ export default function AdminPage() {
       paddles: group.paddles_count ?? 0,
       needsBalls: group.needs_balls ?? false,
       trainingBalls: group.training_balls ?? false,
+      amount: group.payment_amount ?? null,
     })
     setBookingModalOpen(true)
   }
