@@ -1,5 +1,4 @@
-import { supabase } from '@/lib/supabase-server'
-import { getProfileByUserId } from '@/lib/profileService'
+import { requireAdmin as requireAdminToken, ActionAuthError } from '@/lib/actionAuth'
 
 /**
  * Verify the caller is a signed-in admin.
@@ -11,13 +10,15 @@ export async function requireAdmin(req: Request): Promise<{ userId: string } | R
   const header = req.headers.get('authorization') ?? ''
   const match = header.match(/^Bearer\s+(.+)$/i)
   const token = match?.[1].trim() ?? ''
-  if (!token) return new Response('Unauthorized', { status: 401 })
 
-  const { data, error } = await supabase.auth.getUser(token)
-  if (error || !data.user) return new Response('Unauthorized', { status: 401 })
-
-  const profile = await getProfileByUserId(data.user.id)
-  if (profile?.role !== 'admin') return new Response('Forbidden', { status: 403 })
-
-  return { userId: data.user.id }
+  try {
+    return { userId: await requireAdminToken(token) }
+  } catch (err) {
+    if (err instanceof ActionAuthError) {
+      return err.code === 'forbidden'
+        ? new Response('Forbidden', { status: 403 })
+        : new Response('Unauthorized', { status: 401 })
+    }
+    throw err
+  }
 }

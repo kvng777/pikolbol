@@ -8,6 +8,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     // The existing src/lib/__tests__/bookingService.test.ts is a tsx script, not a vitest suite.
-    include: ['src/lib/agent/**/*.test.ts'],
+    include: ['src/lib/agent/**/*.test.ts', 'src/lib/*.test.ts', 'src/actions/**/*.test.ts'],
   },
 })
