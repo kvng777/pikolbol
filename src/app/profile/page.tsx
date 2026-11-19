@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { User, CalendarDays, Loader2, ArrowLeft } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useProfile, useUpsertProfile } from '@/hooks/useProfile'
-import { useUserBookings, useCancelBookingGroup, useCreateRescheduleRequest, usePendingRescheduleRequests } from '@/hooks/useBookings'
+import { useUserBookings, useCancelBookingGroup, useCreateRescheduleRequest, useMyPendingRescheduleRequests } from '@/hooks/useBookings'
 import { ProfileForm } from '@/components/profile/ProfileForm'
 import { BookingHistory } from '@/components/profile/BookingHistory'
 import NavBar from '@/components/NavBar'
@@ -20,19 +20,18 @@ export default function ProfilePage() {
   const upsertProfile = useUpsertProfile()
   const cancelBookingGroup = useCancelBookingGroup()
   const createRescheduleRequest = useCreateRescheduleRequest()
-  const { data: pendingRescheduleRequests = [] } = usePendingRescheduleRequests()
+  const { data: pendingRescheduleRequests = [] } = useMyPendingRescheduleRequests(user?.id)
 
   // Build set of group IDs with pending reschedule requests (for the current user)
   const pendingRescheduleGroupIds = useMemo(() => {
     const ids = new Set<string>()
     pendingRescheduleRequests
-      .filter((r) => r.user_id === user?.id)
       .forEach((r) => {
         const key = r.booking_group_id || (r.legacy_booking_id ? `legacy-${r.legacy_booking_id}` : '')
         if (key) ids.add(key)
       })
     return ids
-  }, [pendingRescheduleRequests, user?.id])
+  }, [pendingRescheduleRequests])
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -58,7 +57,6 @@ export default function ProfilePage() {
       const result = await cancelBookingGroup.mutateAsync({ 
         bookingGroupId, 
         legacyBookingId,
-        userId: user.id 
       })
       if (result.success) {
         if (result.refundAmount && result.refundAmount > 0) {
@@ -87,7 +85,6 @@ export default function ProfilePage() {
       const result = await createRescheduleRequest.mutateAsync({
         bookingGroupId,
         legacyBookingId,
-        userId: user.id,
         newDate,
         newTimeSlots,
       })

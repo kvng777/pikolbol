@@ -738,6 +738,25 @@ export async function getPendingRescheduleRequests(): Promise<RescheduleRequest[
 }
 
 /**
+ * Pending reschedule requests for one user (profile page).
+ */
+export async function getPendingRescheduleRequestsByUser(userId: string): Promise<RescheduleRequest[]> {
+  const { data, error } = await supabase
+    .from('reschedule_requests')
+    .select('*')
+    .eq('status', 'pending')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching user reschedule requests:', error)
+    return []
+  }
+
+  return data || []
+}
+
+/**
  * Get time slots held by pending reschedule requests for a given date.
  * These slots should show as "booked" in the time slot picker.
  */

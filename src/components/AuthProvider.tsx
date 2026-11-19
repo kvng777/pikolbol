@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, SupabaseClient } from '@/lib/supabase'
 import { User, Session } from '@supabase/supabase-js'
-import { isUserAdminAction } from '@/actions/profile'
+import { isCurrentUserAdminAction } from '@/actions/profile'
 import { UserRole } from '@/types/profile'
 
 interface AuthContextType {
@@ -35,16 +35,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [role, setRole] = useState<UserRole | null>(null)
 
-  // Check admin status when user changes
-  const checkAdminStatus = async (userId: string | undefined) => {
-    if (!userId) {
+  // Check admin status when the session changes
+  const checkAdminStatus = async (session: Session | null) => {
+    if (!session?.user) {
       setIsAdmin(false)
       setRole(null)
       return
     }
 
     try {
-      const result = await isUserAdminAction(userId)
+      const result = await isCurrentUserAdminAction(session.access_token)
       setIsAdmin(result.isAdmin)
       setRole(result.role)
     } catch (error) {
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
-      checkAdminStatus(session?.user?.id).then(() => {
+      checkAdminStatus(session).then(() => {
         setLoading(false)
       })
     })
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
-      checkAdminStatus(session?.user?.id).then(() => {
+      checkAdminStatus(session).then(() => {
         setLoading(false)
       })
     })

@@ -25,6 +25,8 @@ import * as payment from './payment'
 import * as paymentService from '@/lib/paymentService'
 import * as paymentSettings from './paymentSettings'
 import * as notice from './notice'
+import * as profile from './profile'
+import * as profileService from '@/lib/profileService'
 
 type Call = [name: string, call: (token: string) => Promise<unknown>]
 
@@ -117,5 +119,60 @@ describe('getPaymentStatusAction', () => {
   it('returns only id and status', async () => {
     vi.mocked(paymentService.getPaymentStatusSummary).mockResolvedValue([{ id: 'b1', payment_status: 'pending' }])
     await expect(payment.getPaymentStatusAction(['b1'])).resolves.toEqual([{ id: 'b1', payment_status: 'pending' }])
+  })
+})
+
+type UserCall = [name: string, call: (token: string) => Promise<unknown>]
+
+const USER_ACTIONS: UserCall[] = [
+  ['getMyBookingsAction', (t) => bookings.getMyBookingsAction(t)],
+  ['cancelBookingGroupAction', (t) => bookings.cancelBookingGroupAction(t, 'g1', null)],
+  ['createRescheduleRequestAction', (t) => bookings.createRescheduleRequestAction(t, 'g1', null, '2026-12-01', ['08:00 - 09:00'])],
+  ['getMyPendingRescheduleRequestsAction', (t) => bookings.getMyPendingRescheduleRequestsAction(t)],
+  ['getMyProfileAction', (t) => profile.getMyProfileAction(t)],
+  ['upsertMyProfileAction', (t) => profile.upsertMyProfileAction(t, {})],
+]
+
+describe('customer actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getUser.mockReset()
+    getProfileByUserId.mockReset()
+    vi.mocked(bookingService.isDateClosed).mockResolvedValue(false)
+  })
+
+  it.each(USER_ACTIONS)('%s rejects a missing token', async (_name, call) => {
+    await expect(call('')).rejects.toMatchObject({ code: 'unauthorized' })
+  })
+
+  it('uses the user id from the token, not an argument', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    vi.mocked(bookingService.cancelBookingGroup).mockResolvedValue({ success: false, error: 'x' })
+    await bookings.cancelBookingGroupAction('tok', 'g1', null)
+    expect(bookingService.cancelBookingGroup).toHaveBeenCalledWith('g1', null, 'u1')
+  })
+
+  it("getMyBookingsAction reads the caller's bookings", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    vi.mocked(bookingService.getBookingsByUserId).mockResolvedValue([])
+    await bookings.getMyBookingsAction('tok')
+    expect(bookingService.getBookingsByUserId).toHaveBeenCalledWith('u1')
+  })
+
+  it('isCurrentUserAdminAction is false when signed out', async () => {
+    await expect(profile.isCurrentUserAdminAction('')).resolves.toEqual({ isAdmin: false, role: null })
+  })
+
+  it("isCurrentUserAdminAction reports the caller's role", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'a1' } }, error: null })
+    getProfileByUserId.mockResolvedValue({ role: 'admin' })
+    await expect(profile.isCurrentUserAdminAction('tok')).resolves.toEqual({ isAdmin: true, role: 'admin' })
+  })
+
+  it("upsertMyProfileAction writes to the caller's profile", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    vi.mocked(profileService.upsertProfile).mockResolvedValue({ user_id: 'u1' } as never)
+    await profile.upsertMyProfileAction('tok', { name: 'N' } as never)
+    expect(profileService.upsertProfile).toHaveBeenCalledWith('u1', { name: 'N' })
   })
 })

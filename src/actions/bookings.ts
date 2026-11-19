@@ -22,6 +22,7 @@ import {
   approveRescheduleRequest,
   rejectRescheduleRequest,
   getPendingRescheduleRequests,
+  getPendingRescheduleRequestsByUser,
   getHeldRescheduleSlotsByDate,
 } from '@/lib/bookingService'
 import {
@@ -33,7 +34,7 @@ import {
   RescheduleRequest,
   AdminBookingPayload,
 } from '@/types/booking'
-import { requireAdmin } from '@/lib/actionAuth'
+import { requireAdmin, requireUser } from '@/lib/actionAuth'
 import { revalidatePath } from 'next/cache'
 
 /**
@@ -169,23 +170,25 @@ export async function removeClosedDateAction(accessToken: string, id: string): P
 }
 
 /**
- * Get all bookings for a specific user
+ * Get the signed-in user's bookings
  */
-export async function getBookingsByUserIdAction(userId: string): Promise<Booking[]> {
+export async function getMyBookingsAction(accessToken: string): Promise<Booking[]> {
+  const userId = await requireUser(accessToken)
   return getBookingsByUserId(userId)
 }
 
 /**
- * Cancel a booking group (all slots in the same order)
+ * Cancel a booking group (all slots in the same order) owned by the signed-in user
  * Calculates cancellation fee based on timing:
  * - Free cancellation: > 24 hours before booking
  * - P100/slot fee: <= 24 hours before booking
  */
 export async function cancelBookingGroupAction(
+  accessToken: string,
   bookingGroupId: string | null,
-  legacyBookingId: string | null,
-  userId: string
+  legacyBookingId: string | null
 ): Promise<CancelBookingResult> {
+  const userId = await requireUser(accessToken)
   const result = await cancelBookingGroup(bookingGroupId, legacyBookingId, userId)
 
   if (result.success) {
@@ -224,16 +227,18 @@ export async function markRefundCompletedAction(
 }
 
 /**
- * Create a reschedule request (user action).
+ * Create a reschedule request for the signed-in user's booking.
  * Does NOT move the booking — admin must approve or reject.
  */
 export async function createRescheduleRequestAction(
+  accessToken: string,
   bookingGroupId: string | null,
   legacyBookingId: string | null,
-  userId: string,
   newDate: string,
   newTimeSlots: string[]
 ): Promise<RescheduleBookingResult> {
+  const userId = await requireUser(accessToken)
+
   const isClosed = await isDateClosed(newDate)
   if (isClosed) {
     return { success: false, error: 'The court is closed on that date. Please select another date.' }
@@ -248,6 +253,14 @@ export async function createRescheduleRequestAction(
   }
 
   return result
+}
+
+/**
+ * The signed-in user's pending reschedule requests (profile page).
+ */
+export async function getMyPendingRescheduleRequestsAction(accessToken: string): Promise<RescheduleRequest[]> {
+  const userId = await requireUser(accessToken)
+  return getPendingRescheduleRequestsByUser(userId)
 }
 
 /**
