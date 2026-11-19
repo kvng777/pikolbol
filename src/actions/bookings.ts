@@ -1,12 +1,8 @@
 'use server'
 
-import { 
-  createBooking, 
-  createBookings,
-  getBookingsByDate,
+import {
   getActiveBookingsByDate,
   getAllBookings,
-  getConfirmedBookings,
   deleteBooking,
   getDisabledSlotsByDate,
   addDisabledSlot,
@@ -17,7 +13,6 @@ import {
   removeClosedDate,
   isDateClosed,
   getBookingsByUserId,
-  cancelBooking,
   cancelBookingGroup,
   getPendingRefunds,
   markRefundCompleted,
@@ -30,9 +25,7 @@ import {
   getHeldRescheduleSlotsByDate,
 } from '@/lib/bookingService'
 import {
-  BookingFormData,
   Booking,
-  CreateBookingResult,
   DisabledSlot,
   ClosedDate,
   CancelBookingResult,
@@ -40,59 +33,19 @@ import {
   RescheduleRequest,
   AdminBookingPayload,
 } from '@/types/booking'
+import { requireAdmin } from '@/lib/actionAuth'
 import { revalidatePath } from 'next/cache'
-
-export async function createBookingAction(data: BookingFormData): Promise<CreateBookingResult> {
-  const isClosed = await isDateClosed(data.date)
-  if (isClosed) {
-    return {
-      success: false,
-      error: 'The court is closed on this date. Please select another date.',
-    }
-  }
-
-  const result = await createBooking(data)
-
-  if (result.success) {
-    revalidatePath('/')
-    revalidatePath('/admin')
-  }
-
-  return result
-}
-
-export async function createBookingsAction(data: { name: string; phone: string; email: string; date: string; timeSlots: string[]; courtNumber: number; players?: number; user_id?: string }): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
-  const isClosed = await isDateClosed(data.date)
-  if (isClosed) {
-    return { success: false, error: 'The court is closed on this date. Please select another date.' }
-  }
-
-  const result = await createBookings({
-    name: data.name,
-    phone: data.phone,
-    email: data.email,
-    date: data.date,
-    timeSlots: data.timeSlots,
-    court_number: data.courtNumber,
-    players: data.players,
-    user_id: data.user_id,
-  })
-
-  if (result.success) {
-    revalidatePath('/')
-    revalidatePath('/admin')
-  }
-
-  return result
-}
 
 /**
  * Create a manual booking on behalf of a player (admin only).
  * Confirmed immediately, flagged manual, no emails. Blocks closed dates.
  */
 export async function createAdminBookingAction(
+  accessToken: string,
   payload: AdminBookingPayload
 ): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+  await requireAdmin(accessToken)
+
   const isClosed = await isDateClosed(payload.date)
   if (isClosed) {
     return { success: false, error: 'The court is closed on this date. Please select another date.' }
@@ -112,9 +65,12 @@ export async function createAdminBookingAction(
  * Update an existing manual booking group (admin only). Editable anytime.
  */
 export async function updateAdminBookingAction(
+  accessToken: string,
   bookingGroupId: string,
   payload: AdminBookingPayload
 ): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+  await requireAdmin(accessToken)
+
   const isClosed = await isDateClosed(payload.date)
   if (isClosed) {
     return { success: false, error: 'The court is closed on this date. Please select another date.' }
@@ -131,14 +87,6 @@ export async function updateAdminBookingAction(
 }
 
 /**
- * Get bookings by date - ALL bookings regardless of payment status
- * Use getActiveBookingsByDateAction for slot availability checking
- */
-export async function getBookingsByDateAction(date: string): Promise<Booking[]> {
-  return getBookingsByDate(date)
-}
-
-/**
  * Get ACTIVE bookings by date - only bookings that occupy slots
  * (pending payment, awaiting confirmation, or confirmed)
  * Use this for slot availability checking
@@ -150,18 +98,13 @@ export async function getActiveBookingsByDateAction(date: string): Promise<Booki
 /**
  * Get ALL bookings - for admin view
  */
-export async function getAllBookingsAction(): Promise<Booking[]> {
+export async function getAllBookingsAction(accessToken: string): Promise<Booking[]> {
+  await requireAdmin(accessToken)
   return getAllBookings()
 }
 
-/**
- * Get only CONFIRMED bookings - for admin booking list
- */
-export async function getConfirmedBookingsAction(): Promise<Booking[]> {
-  return getConfirmedBookings()
-}
-
-export async function deleteBookingAction(id: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteBookingAction(accessToken: string, id: string): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin(accessToken)
   const result = await deleteBooking(id)
 
   if (result.success) {
@@ -176,7 +119,8 @@ export async function getDisabledSlotsByDateAction(date: string): Promise<Disabl
   return getDisabledSlotsByDate(date)
 }
 
-export async function addDisabledSlotAction(date: string, timeSlot: string): Promise<{ success: boolean; error?: string }> {
+export async function addDisabledSlotAction(accessToken: string, date: string, timeSlot: string): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin(accessToken)
   const result = await addDisabledSlot(date, timeSlot)
   if (result.success) {
     revalidatePath('/')
@@ -185,7 +129,8 @@ export async function addDisabledSlotAction(date: string, timeSlot: string): Pro
   return result
 }
 
-export async function removeDisabledSlotAction(id: string): Promise<{ success: boolean; error?: string }> {
+export async function removeDisabledSlotAction(accessToken: string, id: string): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin(accessToken)
   const result = await removeDisabledSlot(id)
   if (result.success) {
     revalidatePath('/')
@@ -194,7 +139,8 @@ export async function removeDisabledSlotAction(id: string): Promise<{ success: b
   return result
 }
 
-export async function getAllDisabledSlotsAction(): Promise<DisabledSlot[]> {
+export async function getAllDisabledSlotsAction(accessToken: string): Promise<DisabledSlot[]> {
+  await requireAdmin(accessToken)
   return getAllDisabledSlots()
 }
 
@@ -202,7 +148,8 @@ export async function getClosedDatesAction(): Promise<ClosedDate[]> {
   return getClosedDates()
 }
 
-export async function addClosedDateAction(startDate: string, endDate: string, reason: string): Promise<{ success: boolean; error?: string }> {
+export async function addClosedDateAction(accessToken: string, startDate: string, endDate: string, reason: string): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin(accessToken)
   const result = await addClosedDate(startDate, endDate, reason)
   if (result.success) {
     revalidatePath('/')
@@ -211,7 +158,8 @@ export async function addClosedDateAction(startDate: string, endDate: string, re
   return result
 }
 
-export async function removeClosedDateAction(id: string): Promise<{ success: boolean; error?: string }> {
+export async function removeClosedDateAction(accessToken: string, id: string): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin(accessToken)
   const result = await removeClosedDate(id)
   if (result.success) {
     revalidatePath('/')
@@ -225,22 +173,6 @@ export async function removeClosedDateAction(id: string): Promise<{ success: boo
  */
 export async function getBookingsByUserIdAction(userId: string): Promise<Booking[]> {
   return getBookingsByUserId(userId)
-}
-
-/**
- * Cancel a booking (user can only cancel their own bookings, 24h policy applies)
- * @deprecated Use cancelBookingGroupAction instead for proper grouped booking cancellation
- */
-export async function cancelBookingAction(bookingId: string, userId: string): Promise<CancelBookingResult> {
-  const result = await cancelBooking(bookingId, userId)
-
-  if (result.success) {
-    revalidatePath('/')
-    revalidatePath('/admin')
-    revalidatePath('/profile')
-  }
-
-  return result
 }
 
 /**
@@ -268,7 +200,8 @@ export async function cancelBookingGroupAction(
 /**
  * Get all bookings with pending refunds (admin only)
  */
-export async function getPendingRefundsAction(): Promise<Booking[]> {
+export async function getPendingRefundsAction(accessToken: string): Promise<Booking[]> {
+  await requireAdmin(accessToken)
   return getPendingRefunds()
 }
 
@@ -276,9 +209,11 @@ export async function getPendingRefundsAction(): Promise<Booking[]> {
  * Mark a refund as completed (admin action after processing via GCash)
  */
 export async function markRefundCompletedAction(
+  accessToken: string,
   bookingGroupId: string | null,
   legacyBookingId: string | null
 ): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin(accessToken)
   const result = await markRefundCompleted(bookingGroupId, legacyBookingId)
 
   if (result.success) {
@@ -319,8 +254,10 @@ export async function createRescheduleRequestAction(
  * Approve a pending reschedule request (admin action).
  */
 export async function approveRescheduleRequestAction(
+  accessToken: string,
   requestId: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin(accessToken)
   const result = await approveRescheduleRequest(requestId)
 
   if (result.success) {
@@ -336,8 +273,10 @@ export async function approveRescheduleRequestAction(
  * Reject a pending reschedule request (admin action).
  */
 export async function rejectRescheduleRequestAction(
+  accessToken: string,
   requestId: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin(accessToken)
   const result = await rejectRescheduleRequest(requestId)
 
   if (result.success) {
@@ -352,7 +291,8 @@ export async function rejectRescheduleRequestAction(
 /**
  * Get pending reschedule requests (for admin view).
  */
-export async function getPendingRescheduleRequestsAction(): Promise<RescheduleRequest[]> {
+export async function getPendingRescheduleRequestsAction(accessToken: string): Promise<RescheduleRequest[]> {
+  await requireAdmin(accessToken)
   return getPendingRescheduleRequests()
 }
 

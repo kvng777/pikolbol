@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { generateTimeSlots } from '@/lib/timeSlotGenerator'
 import { deleteBookingAction } from '@/actions/bookings'
+import { getAccessToken } from '@/lib/accessToken'
 import { useAuth } from '@/components/AuthProvider'
 import {
   useAllBookings,
@@ -168,7 +169,7 @@ export function useAdminPage() {
 
   const handleDeleteBooking = async (id: string) => {
     if (!confirm('Are you sure you want to delete this booking?')) return
-    const result = await deleteBookingAction(id)
+    const result = await deleteBookingAction(await getAccessToken(), id)
     if (result.success) {
       toast.success('Booking deleted')
       refetch()
@@ -187,7 +188,7 @@ export function useAdminPage() {
 
     let successCount = 0
     for (const id of bookingIds) {
-      const result = await deleteBookingAction(id)
+      const result = await deleteBookingAction(await getAccessToken(), id)
       if (result.success) successCount++
     }
 
