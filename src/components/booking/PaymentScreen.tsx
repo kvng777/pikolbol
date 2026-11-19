@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Image from 'next/image'
 import { format } from 'date-fns'
 import { QrCode, CheckCircle, Loader2, Copy, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSubmitPayment, usePaymentStatus, usePaymentSettings } from '@/hooks/usePayment'
-import { isEquipmentChargeable, formatEquipmentSummary } from '@/lib/paymentConfig'
+import { formatEquipmentSummary } from '@/lib/paymentConfig'
+import { isEquipmentChargeable } from '@/lib/pricing'
+import { usePriceQuote, usePricingForDate } from '@/hooks/usePricing'
+import type { QuoteInput } from '@/types/pricing'
 import { Booking } from '@/types/booking'
 import { PaymentStatus } from '@/types/payment'
 import { toast } from 'sonner'
@@ -27,7 +30,6 @@ export interface BookingData {
 
 interface PaymentScreenProps {
   bookingData: BookingData
-  amount: number
   onPaymentSubmitted: (bookings: Booking[]) => void
   onPaymentConfirmed: () => void
   onCancel: () => void
@@ -35,7 +37,6 @@ interface PaymentScreenProps {
 
 export function PaymentScreen({
   bookingData,
-  amount,
   onPaymentSubmitted,
   onPaymentConfirmed,
   onCancel,
@@ -46,6 +47,21 @@ export function PaymentScreen({
   
   const { data: settings, isLoading: settingsLoading } = usePaymentSettings()
   const submitPayment = useSubmitPayment()
+
+  // Server-signed price: the amount shown here is exactly what gets saved
+  const quoteInput = useMemo<QuoteInput>(
+    () => ({
+      date: bookingData.date,
+      timeSlots: bookingData.timeSlots,
+      players: bookingData.players,
+      paddles: bookingData.paddles,
+      needsBalls: bookingData.needsBalls,
+      trainingBalls: bookingData.trainingBalls,
+    }),
+    [bookingData]
+  )
+  const { data: quote, isLoading: quoteLoading, error: quoteError, refetch: refetchQuote } = usePriceQuote(quoteInput)
+  const { rules } = usePricingForDate(bookingData.date)
   
   // Only poll for status after payment is submitted
   const bookingIds = submittedBookings?.map(b => b.id) || []
@@ -62,25 +78,32 @@ export function PaymentScreen({
   }, [paymentStatus, onPaymentConfirmed])
 
   const handleSubmitPayment = async () => {
+    if (!quote) return
     try {
       const result = await submitPayment.mutateAsync({
-        name: bookingData.name,
-        phone: bookingData.phone,
-        email: bookingData.email,
-        date: bookingData.date,
-        timeSlots: bookingData.timeSlots,
-        courtNumber: bookingData.courtNumber,
-        players: bookingData.players,
-        paddles: bookingData.paddles,
-        needsBalls: bookingData.needsBalls,
-        trainingBalls: bookingData.trainingBalls,
-        gcashReference: gcashReference.trim(),
+        payload: {
+          name: bookingData.name,
+          phone: bookingData.phone,
+          email: bookingData.email,
+          date: bookingData.date,
+          timeSlots: bookingData.timeSlots,
+          courtNumber: bookingData.courtNumber,
+          players: bookingData.players,
+          paddles: bookingData.paddles,
+          needsBalls: bookingData.needsBalls,
+          trainingBalls: bookingData.trainingBalls,
+          gcashReference: gcashReference.trim(),
+        },
+        quote,
       })
 
       if (result.success && result.bookings) {
         setSubmittedBookings(result.bookings)
         onPaymentSubmitted(result.bookings)
         toast.success('Payment submitted! Waiting for confirmation.')
+      } else if (result.code === 'quote_invalid') {
+        toast.error(result.error)
+        await refetchQuote()
       } else {
         toast.error(result.error || 'Failed to submit payment')
       }
@@ -98,8 +121,8 @@ export function PaymentScreen({
   const formattedDate = format(new Date(bookingData.date), 'EEEE, MMMM d, yyyy')
   const timeSlots = bookingData.timeSlots.join(', ')
 
-  // Equipment rental summary (charge only applies from June 1, 2026)
-  const equipmentChargeable = isEquipmentChargeable(bookingData.date)
+  // Equipment rental summary (charged only from the price version's equipment start date)
+  const equipmentChargeable = rules ? isEquipmentChargeable(rules, bookingData.date) : false
   const equipmentSummary = formatEquipmentSummary(bookingData.paddles, bookingData.needsBalls, bookingData.trainingBalls)
 
   // Show "Awaiting Verification" after payment is submitted
@@ -121,7 +144,7 @@ export function PaymentScreen({
               <h3 className="text-sm font-medium text-gray-500 mb-2">Booking Summary</h3>
               <p className="text-gray-900 font-medium">{formattedDate}</p>
               <p className="text-gray-600 text-sm">{timeSlots}</p>
-              <p className="text-emerald-600 font-semibold mt-2">₱{amount.toLocaleString()}</p>
+              <p className="text-emerald-600 font-semibold mt-2">₱{(submittedBookings[0]?.payment_amount ?? 0).toLocaleString()}</p>
             </div>
 
             <p className="text-sm text-gray-500">
@@ -152,7 +175,18 @@ export function PaymentScreen({
           {/* Amount */}
           <div className="text-center mb-3">
             <p className="text-sm text-gray-500">Amount to Pay</p>
-            <p className="text-2xl font-bold text-gray-900">₱{amount.toLocaleString()}</p>
+            {quoteLoading ? (
+              <Loader2 className="w-6 h-6 text-emerald-600 animate-spin mx-auto my-1" />
+            ) : quote ? (
+              <p className="text-2xl font-bold text-gray-900">₱{quote.amount.toLocaleString()}</p>
+            ) : (
+              <div className="text-sm text-red-600">
+                <p>{quoteError instanceof Error ? quoteError.message : 'Prices are unavailable right now.'}</p>
+                <button type="button" onClick={() => refetchQuote()} className="underline mt-1">
+                  Try again
+                </button>
+              </div>
+            )}
           </div>
 
           {/* QR Code */}
@@ -232,7 +266,7 @@ export function PaymentScreen({
             {equipmentSummary && (
               <p className="text-gray-600 text-sm mt-1">
                 Equipment: {equipmentSummary}
-                {!equipmentChargeable && <span className="text-emerald-600 font-medium"> (FREE)</span>}
+                {rules && !equipmentChargeable && <span className="text-emerald-600 font-medium"> (FREE)</span>}
               </p>
             )}
           </div>
@@ -256,7 +290,7 @@ export function PaymentScreen({
             </div>
             <Button
               onClick={handleSubmitPayment}
-              disabled={submitPayment.isPending || !gcashReference.trim()}
+              disabled={submitPayment.isPending || !gcashReference.trim() || !quote}
               className="w-full h-12 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium"
             >
               {submitPayment.isPending ? (

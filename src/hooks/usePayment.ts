@@ -11,6 +11,7 @@ import {
 import { getPaymentSettingsAction } from '@/actions/paymentSettings'
 import { getAccessToken } from '@/lib/accessToken'
 import { PendingPaymentBooking, PaymentSettings, PaymentStatusSummary } from '@/types/payment'
+import type { PriceQuote } from '@/types/pricing'
 
 const CACHE_TIME = 30 * 1000 // 30 seconds for payment-related data
 
@@ -22,8 +23,13 @@ export function useSubmitPayment() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (payload: Parameters<typeof submitPaymentAction>[1]) =>
-      submitPaymentAction((await getAccessToken()) || null, payload),
+    mutationFn: async ({
+      payload,
+      quote,
+    }: {
+      payload: Parameters<typeof submitPaymentAction>[1]
+      quote: PriceQuote
+    }) => submitPaymentAction((await getAccessToken()) || null, payload, quote),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
       queryClient.invalidateQueries({ queryKey: ['activeBookings'] })

@@ -15,10 +15,19 @@ import { PaymentResult, PendingPaymentBooking, PaymentStatusSummary } from '@/ty
 import { requireAdmin, getUserIdFromToken } from '@/lib/actionAuth'
 import { sendPaymentConfirmationEmail, sendPaymentRejectionEmail, sendAdminPaymentAlertEmail } from '@/lib/emailService'
 import { generateConfirmToken } from '@/lib/adminTokens'
+import { verifyPriceQuote } from '@/lib/priceQuote'
+import { getPricingVersionById } from '@/lib/pricingService'
+import { quoteInputSchema } from '@/lib/pricingSchema'
+import type { PriceQuote, PricingSnapshot } from '@/types/pricing'
+
+const PRICES_CHANGED = 'Prices were updated. Please review the new total before paying.'
+const QUOTE_EXPIRED = 'Your price quote expired. Please review the total before paying.'
 
 /**
  * Submit payment - creates booking with pending status
- * Called when user clicks "I've Completed Payment"
+ * Called when user clicks "I've Completed Payment".
+ * Saves exactly the amount from the signed price quote the customer was shown;
+ * an invalid or expired quote returns code 'quote_invalid' (never silently re-priced).
  */
 export async function submitPaymentAction(
   accessToken: string | null,
@@ -34,12 +43,42 @@ export async function submitPaymentAction(
     needsBalls?: boolean
     trainingBalls?: boolean
     gcashReference?: string
+  },
+  quote: PriceQuote
+): Promise<{ success: boolean; bookings?: Booking[]; error?: string; code?: 'quote_invalid' }> {
+  const parsed = quoteInputSchema.safeParse({
+    date: payload.date,
+    timeSlots: payload.timeSlots,
+    players: payload.players,
+    paddles: payload.paddles ?? 0,
+    needsBalls: payload.needsBalls ?? false,
+    trainingBalls: payload.trainingBalls ?? false,
+  })
+  if (!parsed.success) {
+    return { success: false, error: 'Invalid booking details.' }
   }
-): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
+
   // Check if date is closed
   const isClosed = await isDateClosed(payload.date)
   if (isClosed) {
     return { success: false, error: 'The court is closed on this date.' }
+  }
+
+  // Honour the price the customer was shown (signed quote), or ask them to review
+  let snapshot: PricingSnapshot
+  try {
+    const check = verifyPriceQuote(quote, parsed.data)
+    if (!check.ok) {
+      return { success: false, code: 'quote_invalid', error: check.reason === 'expired' ? QUOTE_EXPIRED : PRICES_CHANGED }
+    }
+    const version = await getPricingVersionById(quote.versionId)
+    if (!version) {
+      return { success: false, code: 'quote_invalid', error: PRICES_CHANGED }
+    }
+    snapshot = { version_id: version.id, rules: version.rules }
+  } catch (error) {
+    console.error('Price quote check failed:', error)
+    return { success: false, error: 'Prices are unavailable right now. Please try again in a moment.' }
   }
 
   // Link the booking to the signed-in user (verified), or book as a guest
@@ -52,15 +91,17 @@ export async function submitPaymentAction(
     name: payload.name,
     phone: payload.phone,
     email: payload.email,
-    date: payload.date,
-    timeSlots: payload.timeSlots,
+    date: parsed.data.date,
+    timeSlots: parsed.data.timeSlots,
     court_number: payload.courtNumber,
-    players: payload.players,
-    paddles: payload.paddles,
-    needs_balls: payload.needsBalls,
-    training_balls: payload.trainingBalls,
+    players: parsed.data.players,
+    paddles: parsed.data.paddles,
+    needs_balls: parsed.data.needsBalls,
+    training_balls: parsed.data.trainingBalls,
     user_id: userId,
     gcash_reference: payload.gcashReference,
+    payment_amount: quote.amount,
+    pricing_snapshot: snapshot,
   })
 
   if (result.success && result.bookings && result.bookings.length > 0) {

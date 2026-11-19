@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const { getUser, getProfileByUserId } = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -37,6 +37,9 @@ import * as pricingService from '@/lib/pricingService'
 import * as priceQuote from '@/lib/priceQuote'
 import { SEED_PRICING_RULES } from '@/lib/pricing'
 import type { Profile } from '@/types/profile'
+
+// Real quote signing for the submitPaymentAction tests (the module is automocked above).
+const realPriceQuote = await vi.importActual<typeof import('@/lib/priceQuote')>('@/lib/priceQuote')
 
 type Call = [name: string, call: (token: string) => Promise<unknown>]
 
@@ -113,43 +116,139 @@ describe('admin actions', () => {
 })
 
 describe('submitPaymentAction', () => {
-  beforeEach(() => {
-    vi.resetAllMocks()
-    vi.mocked(bookingService.isDateClosed).mockResolvedValue(false)
-    vi.mocked(paymentService.createBookingWithPendingPayment).mockResolvedValue({ success: false, error: 'x' })
-  })
-
   const body = {
     name: 'X', phone: '0917', email: 'x@y.z', date: '2026-12-01',
-    timeSlots: ['08:00 - 09:00'], courtNumber: 1, players: 4,
+    timeSlots: ['08:00-09:00'], courtNumber: 1, players: 2,
+    paddles: 0, needsBalls: false, trainingBalls: false,
   }
+  const quoteInput = { date: body.date, timeSlots: body.timeSlots, players: 2, paddles: 0, needsBalls: false, trainingBalls: false }
+  const version = { id: 'v1', effective_from: '2000-01-01', rules: SEED_PRICING_RULES, created_by: null, created_at: 'x', cancelled_at: null }
 
-  it('saves the user id from the verified token', async () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.stubEnv('PRICE_QUOTE_SECRET', 'q'.repeat(64))
+    // priceQuote is automocked for the guard tests; use the real signing here.
+    vi.mocked(priceQuote.createPriceQuote).mockImplementation(realPriceQuote.createPriceQuote)
+    vi.mocked(priceQuote.verifyPriceQuote).mockImplementation(realPriceQuote.verifyPriceQuote)
+    vi.mocked(bookingService.isDateClosed).mockResolvedValue(false)
+    vi.mocked(pricingService.getPricingVersionById).mockResolvedValue(version)
+    vi.mocked(paymentService.createBookingWithPendingPayment).mockResolvedValue({ success: false, error: 'x' })
+  })
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('saves the quoted amount and snapshot, linked to the verified user', async () => {
     getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
-    await payment.submitPaymentAction('tok', body)
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    await payment.submitPaymentAction('tok', body, quote)
+    expect(pricingService.getPricingVersionById).toHaveBeenCalledWith('v1')
     expect(paymentService.createBookingWithPendingPayment).toHaveBeenCalledWith(
-      expect.objectContaining({ user_id: 'u1' })
+      expect.objectContaining({
+        user_id: 'u1',
+        payment_amount: quote.amount,
+        pricing_snapshot: { version_id: 'v1', rules: SEED_PRICING_RULES },
+      })
+    )
+  })
+
+  it('saves the quoted amount even if the version now prices differently', async () => {
+    // Prices changed after the quote was issued: the customer still pays what they were shown.
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const changed = { ...SEED_PRICING_RULES, tier_prices: { daytime: 999, offpeak: 999, latenight: 999 } }
+    vi.mocked(pricingService.getPricingVersionById).mockResolvedValue({ ...version, rules: changed })
+    await payment.submitPaymentAction(null, body, quote)
+    expect(paymentService.createBookingWithPendingPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ payment_amount: quote.amount })
+    )
+  })
+
+  it('accepts the quote when slots arrive in a different order', async () => {
+    const twoSlots = ['09:00-10:00', '08:00-09:00']
+    const quote = priceQuote.createPriceQuote({ ...quoteInput, timeSlots: [...twoSlots].reverse() }, SEED_PRICING_RULES, 'v1')
+    await payment.submitPaymentAction(null, { ...body, timeSlots: twoSlots }, quote)
+    expect(paymentService.createBookingWithPendingPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ payment_amount: quote.amount, timeSlots: twoSlots })
     )
   })
 
   it('books as a guest when there is no token', async () => {
-    await payment.submitPaymentAction(null, body)
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    await payment.submitPaymentAction(null, body, quote)
     expect(getUser).not.toHaveBeenCalled()
     expect(paymentService.createBookingWithPendingPayment).toHaveBeenCalledWith(
-      expect.objectContaining({ user_id: undefined })
+      expect.objectContaining({ user_id: undefined, payment_amount: quote.amount })
     )
   })
 
   it('books as a guest when the token fails verification', async () => {
     getUser.mockResolvedValue({ data: { user: null }, error: new Error('expired') })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await payment.submitPaymentAction('bad-token', body)
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    await payment.submitPaymentAction('bad-token', body, quote)
     expect(paymentService.createBookingWithPendingPayment).toHaveBeenCalledWith(
       expect.objectContaining({ user_id: undefined })
     )
     expect(warn).toHaveBeenCalledWith('submitPayment: access token rejected, booking as guest')
     expect(warn.mock.calls.flat().join(' ')).not.toContain('bad-token')
     warn.mockRestore()
+  })
+
+  it('rejects a tampered quote with quote_invalid and creates nothing', async () => {
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const result = await payment.submitPaymentAction(null, body, { ...quote, amount: 1 })
+    expect(result).toMatchObject({ success: false, code: 'quote_invalid' })
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('rejects an expired quote with quote_invalid and creates nothing', async () => {
+    const issuedAt = Date.now() - realPriceQuote.QUOTE_TTL_MS - 1000
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1', issuedAt)
+    const result = await payment.submitPaymentAction(null, body, quote)
+    expect(result).toMatchObject({ success: false, code: 'quote_invalid', error: expect.stringMatching(/expired/i) })
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('rejects a quote for different booking details', async () => {
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const result = await payment.submitPaymentAction(null, { ...body, paddles: 2 }, quote)
+    expect(result).toMatchObject({ success: false, code: 'quote_invalid' })
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('rejects a quote whose price version no longer exists', async () => {
+    vi.mocked(pricingService.getPricingVersionById).mockResolvedValue(null)
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const result = await payment.submitPaymentAction(null, body, quote)
+    expect(result).toMatchObject({ success: false, code: 'quote_invalid' })
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid booking details before checking anything', async () => {
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const result = await payment.submitPaymentAction(null, { ...body, timeSlots: ['nope'] }, quote)
+    expect(result.success).toBe(false)
+    expect(bookingService.isDateClosed).not.toHaveBeenCalled()
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the secret is missing', async () => {
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    vi.stubEnv('PRICE_QUOTE_SECRET', '')
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const result = await payment.submitPaymentAction(null, body, quote)
+    expect(result.success).toBe(false)
+    expect(result).not.toHaveProperty('code')
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+    err.mockRestore()
+  })
+
+  it('fails closed when prices cannot be loaded', async () => {
+    vi.mocked(pricingService.getPricingVersionById).mockRejectedValue(new Error('down'))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const result = await payment.submitPaymentAction(null, body, quote)
+    expect(result.success).toBe(false)
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+    err.mockRestore()
   })
 })
 

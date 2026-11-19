@@ -1,4 +1,5 @@
 import { PaymentStatus } from './payment'
+import type { PricingSnapshot } from './pricing'
 
 export type RefundStatus = 'pending' | 'completed'
 
@@ -25,6 +26,7 @@ export interface Booking {
   payment_deadline?: string | null
   payment_confirmed_at?: string | null
   payment_amount?: number | null
+  pricing_snapshot?: PricingSnapshot | null // Prices this booking was charged with (null on legacy rows)
   // Payment reference
   gcash_reference?: string | null
   // Cancellation & refund fields
