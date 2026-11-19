@@ -20,6 +20,7 @@ import { getPricingVersionById } from '@/lib/pricingService'
 import { quoteInputSchema } from '@/lib/pricingSchema'
 import type { PriceQuote, PricingSnapshot } from '@/types/pricing'
 
+const COURT_NUMBER = 1
 const PRICES_CHANGED = 'Prices were updated. Please review the new total before paying.'
 const QUOTE_EXPIRED = 'Your price quote expired. Please review the total before paying.'
 
@@ -54,7 +55,8 @@ export async function submitPaymentAction(
     needsBalls: payload.needsBalls ?? false,
     trainingBalls: payload.trainingBalls ?? false,
   })
-  if (!parsed.success) {
+  // Single court: any other court number would let one quote hold the same slots twice
+  if (!parsed.success || payload.courtNumber !== COURT_NUMBER) {
     return { success: false, error: 'Invalid booking details.' }
   }
 
@@ -93,7 +95,7 @@ export async function submitPaymentAction(
     email: payload.email,
     date: parsed.data.date,
     timeSlots: parsed.data.timeSlots,
-    court_number: payload.courtNumber,
+    court_number: COURT_NUMBER,
     players: parsed.data.players,
     paddles: parsed.data.paddles,
     needs_balls: parsed.data.needsBalls,

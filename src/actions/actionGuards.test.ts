@@ -241,6 +241,82 @@ describe('submitPaymentAction', () => {
     err.mockRestore()
   })
 
+  it('rejects a court other than court 1 before any lookup and creates nothing', async () => {
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const result = await payment.submitPaymentAction(null, { ...body, courtNumber: 2 }, quote)
+    expect(result).toEqual({ success: false, error: 'Invalid booking details.' })
+    expect(bookingService.isDateClosed).not.toHaveBeenCalled()
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('always saves court 1', async () => {
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    await payment.submitPaymentAction(null, body, quote)
+    expect(paymentService.createBookingWithPendingPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ court_number: 1 })
+    )
+  })
+
+  it.each([
+    ['players', { players: 3 }],
+    ['date', { date: '2026-12-02' }],
+    ['trainingBalls', { trainingBalls: true }],
+  ])('rejects a quote reused with a different %s', async (_field, change) => {
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const result = await payment.submitPaymentAction(null, { ...body, ...change }, quote)
+    expect(result).toMatchObject({ success: false, code: 'quote_invalid' })
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('rejects the same token with a changed versionId', async () => {
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const result = await payment.submitPaymentAction(null, body, { ...quote, versionId: 'v2' })
+    expect(result).toMatchObject({ success: false, code: 'quote_invalid' })
+    expect(pricingService.getPricingVersionById).not.toHaveBeenCalled()
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('rejects duplicate slots and creates nothing', async () => {
+    const dup = ['08:00-09:00', '08:00-09:00']
+    const quote = priceQuote.createPriceQuote({ ...quoteInput, timeSlots: dup }, SEED_PRICING_RULES, 'v1')
+    const result = await payment.submitPaymentAction(null, { ...body, timeSlots: dup }, quote)
+    expect(result).toEqual({ success: false, error: 'Invalid booking details.' })
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('checks a closed date before the quote', async () => {
+    vi.mocked(bookingService.isDateClosed).mockResolvedValue(true)
+    const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const result = await payment.submitPaymentAction(null, body, quote)
+    expect(result).toMatchObject({ success: false, error: expect.stringMatching(/closed/i) })
+    expect(priceQuote.verifyPriceQuote).not.toHaveBeenCalled()
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('round trip: a quote from getPriceQuoteAction is accepted and saved at exactly that amount', async () => {
+    vi.mocked(pricingService.getPricingForDate).mockResolvedValue(version)
+    const issued = await pricingActions.getPriceQuoteAction(quoteInput)
+    if (!issued.success) throw new Error('expected a quote')
+    expect(issued.quote.amount).toBeGreaterThan(0)
+    expect(issued.quote.versionId).toBe('v1')
+    const result = await payment.submitPaymentAction(null, body, issued.quote)
+    expect(result).not.toHaveProperty('code')
+    expect(paymentService.createBookingWithPendingPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ payment_amount: issued.quote.amount, court_number: 1 })
+    )
+  })
+
+  it('getPriceQuoteAction returns the unavailable result when the secret is missing', async () => {
+    vi.stubEnv('PRICE_QUOTE_SECRET', '')
+    vi.mocked(pricingService.getPricingForDate).mockResolvedValue(version)
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await expect(pricingActions.getPriceQuoteAction(quoteInput)).resolves.toEqual({
+      success: false,
+      error: 'Prices are unavailable right now. Please try again in a moment.',
+    })
+    err.mockRestore()
+  })
+
   it('fails closed when prices cannot be loaded', async () => {
     vi.mocked(pricingService.getPricingVersionById).mockRejectedValue(new Error('down'))
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
