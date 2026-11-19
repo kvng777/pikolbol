@@ -75,7 +75,6 @@ export function PaymentScreen({
         paddles: bookingData.paddles,
         needsBalls: bookingData.needsBalls,
         trainingBalls: bookingData.trainingBalls,
-        user_id: bookingData.user_id,
         gcashReference: gcashReference.trim(),
       })
 

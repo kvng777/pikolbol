@@ -9,8 +9,8 @@ import {
   rejectPaymentAction,
 } from '@/actions/payment'
 import { getPaymentSettingsAction } from '@/actions/paymentSettings'
-import { Booking } from '@/types/booking'
-import { PendingPaymentBooking, PaymentSettings } from '@/types/payment'
+import { getAccessToken } from '@/lib/accessToken'
+import { PendingPaymentBooking, PaymentSettings, PaymentStatusSummary } from '@/types/payment'
 
 const CACHE_TIME = 30 * 1000 // 30 seconds for payment-related data
 
@@ -22,7 +22,8 @@ export function useSubmitPayment() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: submitPaymentAction,
+    mutationFn: async (payload: Parameters<typeof submitPaymentAction>[1]) =>
+      submitPaymentAction((await getAccessToken()) || null, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
       queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
@@ -35,7 +36,7 @@ export function useSubmitPayment() {
  * Hook to get payment status for multiple bookings
  */
 export function usePaymentStatus(bookingIds: string[]) {
-  return useQuery<Booking[]>({
+  return useQuery<PaymentStatusSummary[]>({
     queryKey: ['paymentStatus', bookingIds],
     queryFn: () => getPaymentStatusAction(bookingIds),
     enabled: bookingIds.length > 0,
@@ -50,7 +51,7 @@ export function usePaymentStatus(bookingIds: string[]) {
 export function usePendingPayments() {
   return useQuery<PendingPaymentBooking[]>({
     queryKey: ['pendingPayments'],
-    queryFn: getPendingPaymentsAction,
+    queryFn: async () => getPendingPaymentsAction(await getAccessToken()),
     staleTime: CACHE_TIME,
     refetchInterval: 10000, // Auto-refresh every 10 seconds
   })
@@ -63,7 +64,7 @@ export function useConfirmPayment() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: confirmPaymentAction,
+    mutationFn: async (bookingIds: string[]) => confirmPaymentAction(await getAccessToken(), bookingIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingPayments'] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
@@ -80,8 +81,8 @@ export function useRejectPayment() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ bookingIds, reason }: { bookingIds: string[]; reason?: string }) =>
-      rejectPaymentAction(bookingIds, reason),
+    mutationFn: async ({ bookingIds, reason }: { bookingIds: string[]; reason?: string }) =>
+      rejectPaymentAction(await getAccessToken(), bookingIds, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingPayments'] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })

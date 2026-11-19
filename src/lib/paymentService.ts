@@ -11,7 +11,7 @@
 
 import { supabase } from './supabase-server'
 import { Booking } from '@/types/booking'
-import { PaymentStatus, PaymentResult, PendingPaymentBooking } from '@/types/payment'
+import { PaymentStatus, PaymentResult, PendingPaymentBooking, PaymentStatusSummary } from '@/types/payment'
 import { 
   calculatePaymentAmount, 
   HELD_PAYMENT_STATUSES,
@@ -169,6 +169,23 @@ export async function getPaymentStatus(bookingIds: string[]): Promise<Booking[]>
   }
 
   return data || []
+}
+
+/**
+ * Status-only lookup for the public payment screen (no personal data).
+ */
+export async function getPaymentStatusSummary(bookingIds: string[]): Promise<PaymentStatusSummary[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('id, payment_status')
+    .in('id', bookingIds)
+
+  if (error) {
+    console.error('Error fetching payment status:', error)
+    return []
+  }
+
+  return (data || []) as PaymentStatusSummary[]
 }
 
 /**

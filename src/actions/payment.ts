@@ -7,12 +7,12 @@ import {
   rejectPayment,
   getPendingPayments,
   getPaymentStatus,
-  getBookingWithPayment,
+  getPaymentStatusSummary,
 } from '@/lib/paymentService'
-import { getPaymentSettings } from '@/lib/paymentSettingsService'
 import { isDateClosed } from '@/lib/bookingService'
 import { Booking } from '@/types/booking'
-import { PaymentResult, PendingPaymentBooking, PaymentInfo } from '@/types/payment'
+import { PaymentResult, PendingPaymentBooking, PaymentStatusSummary } from '@/types/payment'
+import { requireAdmin, getUserIdFromToken } from '@/lib/actionAuth'
 import { sendPaymentConfirmationEmail, sendPaymentRejectionEmail, sendAdminPaymentAlertEmail } from '@/lib/emailService'
 import { generateConfirmToken } from '@/lib/adminTokens'
 
@@ -21,6 +21,7 @@ import { generateConfirmToken } from '@/lib/adminTokens'
  * Called when user clicks "I've Completed Payment"
  */
 export async function submitPaymentAction(
+  accessToken: string | null,
   payload: {
     name: string
     phone: string
@@ -32,7 +33,6 @@ export async function submitPaymentAction(
     paddles?: number
     needsBalls?: boolean
     trainingBalls?: boolean
-    user_id?: string
     gcashReference?: string
   }
 ): Promise<{ success: boolean; bookings?: Booking[]; error?: string }> {
@@ -41,6 +41,9 @@ export async function submitPaymentAction(
   if (isClosed) {
     return { success: false, error: 'The court is closed on this date.' }
   }
+
+  // Link the booking to the signed-in user (verified), or book as a guest
+  const userId = (await getUserIdFromToken(accessToken)) ?? undefined
 
   const result = await createBookingWithPendingPayment({
     name: payload.name,
@@ -53,7 +56,7 @@ export async function submitPaymentAction(
     paddles: payload.paddles,
     needs_balls: payload.needsBalls,
     training_balls: payload.trainingBalls,
-    user_id: payload.user_id,
+    user_id: userId,
     gcash_reference: payload.gcashReference,
   })
 
@@ -99,7 +102,8 @@ export async function submitPaymentAction(
 /**
  * Confirm payment (admin action)
  */
-export async function confirmPaymentAction(bookingIds: string[]): Promise<PaymentResult> {
+export async function confirmPaymentAction(accessToken: string, bookingIds: string[]): Promise<PaymentResult> {
+  await requireAdmin(accessToken)
   // Get booking info before confirming (for email)
   const bookings = await getPaymentStatus(bookingIds)
   
@@ -135,7 +139,8 @@ export async function confirmPaymentAction(bookingIds: string[]): Promise<Paymen
 /**
  * Reject payment (admin action)
  */
-export async function rejectPaymentAction(bookingIds: string[], reason?: string): Promise<PaymentResult> {
+export async function rejectPaymentAction(accessToken: string, bookingIds: string[], reason?: string): Promise<PaymentResult> {
+  await requireAdmin(accessToken)
   // Get booking info before rejecting (for email)
   const bookings = await getPaymentStatus(bookingIds)
   
@@ -172,36 +177,14 @@ export async function rejectPaymentAction(bookingIds: string[], reason?: string)
 /**
  * Get pending payments for admin view
  */
-export async function getPendingPaymentsAction(): Promise<PendingPaymentBooking[]> {
+export async function getPendingPaymentsAction(accessToken: string): Promise<PendingPaymentBooking[]> {
+  await requireAdmin(accessToken)
   return getPendingPayments()
 }
 
 /**
- * Get payment status for specific bookings
+ * Get payment status for specific bookings (public: status only, no personal data)
  */
-export async function getPaymentStatusAction(bookingIds: string[]): Promise<Booking[]> {
-  return getPaymentStatus(bookingIds)
-}
-
-/**
- * Get payment info for display on payment screen
- */
-export async function getPaymentInfoAction(bookingId: string): Promise<PaymentInfo | null> {
-  const [booking, settings] = await Promise.all([
-    getBookingWithPayment(bookingId),
-    getPaymentSettings(),
-  ])
-
-  if (!booking) {
-    return null
-  }
-
-  return {
-    amount: booking.payment_amount || 0,
-    qrCodeUrl: settings?.gcash_qr_url || null,
-    gcashName: settings?.gcash_name || null,
-    gcashNumber: settings?.gcash_number || null,
-    bookingId: booking.id,
-    status: booking.payment_status || 'pending',
-  }
+export async function getPaymentStatusAction(bookingIds: string[]): Promise<PaymentStatusSummary[]> {
+  return getPaymentStatusSummary(bookingIds)
 }
