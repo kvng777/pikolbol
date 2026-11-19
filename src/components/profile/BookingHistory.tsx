@@ -7,7 +7,8 @@ import { PaymentStatus } from '@/types/payment'
 import { Calendar, Clock, AlertTriangle, Loader2, CreditCard, Package, RefreshCw, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatEquipmentSummary } from '@/lib/paymentConfig'
-import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from '@/lib/constants'
+import { calculateCancellationFee, rulesFromSnapshot } from '@/lib/pricing'
+import type { PricingRules } from '@/types/pricing'
 import { RescheduleModal } from './RescheduleModal'
 
 // ============================================================================
@@ -31,6 +32,10 @@ interface BookingGroup {
   hoursUntilBooking: number
   cancellationFee: number
   refundAmount: number
+  cancellationWindowHours: number
+  cancellationFeePerSlot: number
+  /** True when the booking's saved pricing is unreadable: no fee shown, no online cancel. */
+  cancellationTermsUnavailable: boolean
 }
 
 // ============================================================================
@@ -112,20 +117,6 @@ function calculateHoursUntilBooking(bookings: Booking[]): number {
   return (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
 }
 
-function calculateCancellationFee(
-  totalAmount: number,
-  numberOfSlots: number,
-  hoursUntilBooking: number
-): { cancellationFee: number; refundAmount: number } {
-  if (hoursUntilBooking > CANCELLATION_HOURS_BEFORE) {
-    return { cancellationFee: 0, refundAmount: totalAmount }
-  } else {
-    const fee = numberOfSlots * CANCELLATION_FEE_PER_SLOT
-    const refund = Math.max(0, totalAmount - fee)
-    return { cancellationFee: fee, refundAmount: refund }
-  }
-}
-
 function groupBookings(bookings: Booking[]): BookingGroup[] {
   const groups = new Map<string, Booking[]>()
   
@@ -150,13 +141,24 @@ function groupBookings(bookings: Booking[]): BookingGroup[] {
     // Calculate hours until booking
     const hoursUntilBooking = calculateHoursUntilBooking(sorted)
     
-    // Calculate cancellation fee
+    // Cancellation terms this booking was made under (same math as the server).
+    // A malformed snapshot must not show a wrong number: flag it instead.
     const totalAmount = first.payment_amount || 0
-    const { cancellationFee, refundAmount } = calculateCancellationFee(
-      totalAmount,
-      sorted.length,
-      hoursUntilBooking
-    )
+    let rules: PricingRules | null = null
+    let cancellationFee = 0
+    let refundAmount = 0
+    try {
+      rules = rulesFromSnapshot(first.pricing_snapshot)
+      ;({ cancellationFee, refundAmount } = calculateCancellationFee(
+        rules,
+        totalAmount,
+        sorted.length,
+        hoursUntilBooking
+      ))
+    } catch (err) {
+      console.error('Invalid pricing snapshot for booking group', groupKey, err)
+      rules = null
+    }
     
     return {
       groupKey,
@@ -172,6 +174,9 @@ function groupBookings(bookings: Booking[]): BookingGroup[] {
       hoursUntilBooking,
       cancellationFee,
       refundAmount,
+      cancellationWindowHours: rules?.cancellation_window_hours ?? 0,
+      cancellationFeePerSlot: rules?.cancellation_fee_per_slot ?? 0,
+      cancellationTermsUnavailable: rules === null,
     }
   })
 }
@@ -218,7 +223,7 @@ interface CancelConfirmModalProps {
 }
 
 function CancelConfirmModal({ group, onConfirm, onCancel, isLoading }: CancelConfirmModalProps) {
-  const isFreeCancel = group.hoursUntilBooking > CANCELLATION_HOURS_BEFORE
+  const isFreeCancel = group.hoursUntilBooking > group.cancellationWindowHours
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -249,8 +254,15 @@ function CancelConfirmModal({ group, onConfirm, onCancel, isLoading }: CancelCon
         </div>
 
         {/* Cancellation fee info */}
-        <div className={`rounded-lg p-4 mb-6 ${isFreeCancel ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
-          {isFreeCancel ? (
+        <div className={`rounded-lg p-4 mb-6 ${group.cancellationTermsUnavailable ? 'bg-gray-50 border border-gray-200' : isFreeCancel ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+          {group.cancellationTermsUnavailable ? (
+            <>
+              <p className="font-medium text-gray-800">Cancellation terms unavailable</p>
+              <p className="text-sm text-gray-600 mt-1">
+                We could not read the pricing saved with this booking, so we cannot show the fee. Please contact support to cancel.
+              </p>
+            </>
+          ) : isFreeCancel ? (
             <>
               <p className="font-medium text-green-800">Free Cancellation</p>
               <p className="text-sm text-green-600 mt-1">
@@ -263,7 +275,7 @@ function CancelConfirmModal({ group, onConfirm, onCancel, isLoading }: CancelCon
               <div className="text-sm text-amber-700 mt-1 space-y-1">
                 <p>
                   Cancellation fee: <span className="font-semibold">P{group.cancellationFee.toLocaleString()}</span>
-                  <span className="text-amber-600"> ({group.timeSlots.length} slot{group.timeSlots.length > 1 ? 's' : ''} x P{CANCELLATION_FEE_PER_SLOT})</span>
+                  <span className="text-amber-600"> ({group.timeSlots.length} slot{group.timeSlots.length > 1 ? 's' : ''} x P{group.cancellationFeePerSlot})</span>
                 </p>
                 <p className="font-semibold text-amber-800">
                   Refund amount: P{group.refundAmount.toLocaleString()}
@@ -284,7 +296,7 @@ function CancelConfirmModal({ group, onConfirm, onCancel, isLoading }: CancelCon
           </Button>
           <Button
             onClick={onConfirm}
-            disabled={isLoading}
+            disabled={isLoading || group.cancellationTermsUnavailable}
             className="flex-1 bg-red-600 hover:bg-red-700 text-white"
           >
             {isLoading ? (

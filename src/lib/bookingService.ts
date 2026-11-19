@@ -11,12 +11,11 @@ import {
   AdminBookingPayload,
   SlotOccupancy,
 } from '@/types/booking'
-import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from './constants'
 import {
   HELD_PAYMENT_STATUSES,
   CONFIRMED_PAYMENT_STATUSES,
 } from './paymentConfig'
-import { calculatePaymentAmount, isSamePricedSelection } from './pricing'
+import { calculatePaymentAmount, isSamePricedSelection, calculateCancellationFee, rulesFromSnapshot } from './pricing'
 import { getPricingForDate } from './pricingService'
 import type { PricingSnapshot, PricingVersion } from '@/types/pricing'
 import { generateUniqueShortId, generateBookingGroupId } from './bookingIdGenerator'
@@ -28,9 +27,6 @@ import {
   sendRescheduleRejectedEmail,
 } from './emailService'
 import { getPaymentSettings } from './paymentSettingsService'
-
-// Re-export constants for backwards compatibility with server-side code
-export { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT }
 
 // Payment statuses that indicate a slot is occupied (pending or confirmed)
 const ACTIVE_PAYMENT_STATUSES = [...HELD_PAYMENT_STATUSES, ...CONFIRMED_PAYMENT_STATUSES]
@@ -1007,18 +1003,6 @@ export async function getBookingsByUserId(userId: string): Promise<Booking[]> {
 }
 
 /**
- * Check if a booking can be cancelled based on the 24-hour policy
- * Returns true if the booking is more than CANCELLATION_HOURS_BEFORE hours away
- */
-export function canCancelBooking(booking: Booking): boolean {
-  const bookingDateTime = parseBookingDateTime(booking.date, booking.time_slot)
-  const now = new Date()
-  const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
-  
-  return hoursUntilBooking >= CANCELLATION_HOURS_BEFORE
-}
-
-/**
  * Parse booking date and time_slot into a Date object in Philippines timezone (UTC+8)
  * Handles both formats:
  *   - 24-hour: "17:00-18:00" or "17:00 - 18:00"
@@ -1066,44 +1050,6 @@ function parseBookingDateTime(date: string, timeSlot: string): Date {
 }
 
 /**
- * Cancel a booking by ID
- * Only allows cancellation if the user owns the booking and it's more than 24 hours away
- */
-export async function cancelBooking(bookingId: string, userId: string): Promise<CancelBookingResult> {
-  // First, fetch the booking to verify ownership and check cancellation policy
-  const booking = await getBookingById(bookingId)
-  
-  if (!booking) {
-    return { success: false, error: 'Booking not found' }
-  }
-
-  if (booking.user_id !== userId) {
-    return { success: false, error: 'You can only cancel your own bookings' }
-  }
-
-  if (!canCancelBooking(booking)) {
-    return { 
-      success: false, 
-      error: `Bookings can only be cancelled at least ${CANCELLATION_HOURS_BEFORE} hours before the scheduled time` 
-    }
-  }
-
-  // Delete the booking
-  const { error } = await supabase
-    .from('bookings')
-    .delete()
-    .eq('id', bookingId)
-    .eq('user_id', userId) // Extra safety check
-
-  if (error) {
-    console.error('Error cancelling booking:', error)
-    return { success: false, error: 'Failed to cancel booking' }
-  }
-
-  return { success: true }
-}
-
-/**
  * Calculate hours until the earliest booking in a group
  */
 export function calculateHoursUntilBooking(bookings: Booking[]): number {
@@ -1118,27 +1064,6 @@ export function calculateHoursUntilBooking(bookings: Booking[]): number {
   const bookingDateTime = parseBookingDateTime(earliest.date, earliest.time_slot)
   const now = new Date()
   return (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
-}
-
-/**
- * Calculate cancellation fee and refund amount based on timing
- * - Free cancellation: > 24 hours before booking (full refund)
- * - P100/slot fee: <= 24 hours before booking (partial refund)
- */
-export function calculateCancellationFee(
-  totalAmount: number,
-  numberOfSlots: number,
-  hoursUntilBooking: number
-): { cancellationFee: number; refundAmount: number } {
-  if (hoursUntilBooking > CANCELLATION_HOURS_BEFORE) {
-    // Free cancellation - full refund
-    return { cancellationFee: 0, refundAmount: totalAmount }
-  } else {
-    // Fee applies: P100 per slot
-    const fee = numberOfSlots * CANCELLATION_FEE_PER_SLOT
-    const refund = Math.max(0, totalAmount - fee)
-    return { cancellationFee: fee, refundAmount: refund }
-  }
 }
 
 /**
@@ -1202,14 +1127,26 @@ export async function cancelBookingGroup(
     return { success: false, error: 'Cannot cancel past bookings' }
   }
 
-  // Calculate cancellation fee and refund
+  // Calculate cancellation fee and refund with the prices this booking was made under.
+  // A malformed snapshot fails closed: nothing is cancelled and no fee is guessed.
   const totalAmount = firstBooking.payment_amount || 0
   const numberOfSlots = bookings.length
-  const { cancellationFee, refundAmount } = calculateCancellationFee(
-    totalAmount,
-    numberOfSlots,
-    hoursUntilBooking
-  )
+  let cancellationFee: number
+  let refundAmount: number
+  try {
+    ;({ cancellationFee, refundAmount } = calculateCancellationFee(
+      rulesFromSnapshot(firstBooking.pricing_snapshot),
+      totalAmount,
+      numberOfSlots,
+      hoursUntilBooking
+    ))
+  } catch (err) {
+    console.error('Cannot calculate cancellation fee (bad pricing snapshot):', err)
+    return {
+      success: false,
+      error: 'We could not read the pricing for this booking. Please contact support to cancel it.',
+    }
+  }
 
   // Determine refund status (only 'pending' if there's actually a refund to process)
   const refundStatus = refundAmount > 0 ? 'pending' : null

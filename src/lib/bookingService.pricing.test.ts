@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SEED_PRICING_RULES, calculatePaymentAmount } from './pricing'
 import type { PricingRules } from '@/types/pricing'
 
@@ -19,7 +19,7 @@ vi.mock('./emailService', () => ({
 }))
 vi.mock('./paymentSettingsService', () => ({ getPaymentSettings: vi.fn() }))
 
-import { createAdminBooking, updateAdminBooking, approveRescheduleRequest } from './bookingService'
+import { createAdminBooking, updateAdminBooking, approveRescheduleRequest, cancelBookingGroup } from './bookingService'
 
 const DATE = '2026-12-01'
 const RULES: PricingRules = { ...SEED_PRICING_RULES, tier_prices: { ...SEED_PRICING_RULES.tier_prices, daytime: 999 } }
@@ -122,5 +122,69 @@ describe('admin bookings pricing', () => {
     expect(ops.inserted[0].pricing_snapshot).toEqual(OLD_SNAPSHOT)
     expect(ops.inserted[0].payment_amount).toBe(123)
     expect(ops.inserted[0].training_balls).toBe(true)
+  })
+})
+
+describe('cancelBookingGroup uses the booking snapshot', () => {
+  // Play date 2026-12-01 10:00 Manila; "now" is set relative to it per test.
+  const PLAY = new Date('2026-12-01T10:00:00+08:00').getTime()
+  const hoursBefore = (h: number) => new Date(PLAY - h * 3600_000)
+  const CUSTOM = { version_id: 'v9', rules: { ...SEED_PRICING_RULES, cancellation_fee_per_slot: 150, cancellation_window_hours: 48 } }
+
+  function setupCancel(rows: Record<string, unknown>[]) {
+    const updates: Record<string, unknown>[] = []
+    from.mockImplementation(() => {
+      const q: Record<string, any> = {} // eslint-disable-line @typescript-eslint/no-explicit-any
+      let isUpdate = false
+      for (const m of ['select', 'eq', 'in', 'order']) q[m] = vi.fn(() => q)
+      q.update = vi.fn((v: Record<string, unknown>) => { isUpdate = true; updates.push(v); return q })
+      q.single = vi.fn(() => Promise.resolve({ data: null, error: null }))
+      q.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+        Promise.resolve(isUpdate ? { error: null } : { data: rows, error: null }).then(res, rej)
+      return q
+    })
+    return updates
+  }
+  const rows = (snap: unknown) => [existingRow({ user_id: 'u1', pricing_snapshot: snap, payment_amount: 450, time_slot: '10:00' })]
+
+  beforeEach(() => { from.mockReset(); vi.useFakeTimers() })
+  afterEach(() => vi.useRealTimers())
+
+  it('applies the snapshot fee inside its window (30h out, 48h window)', async () => {
+    vi.setSystemTime(hoursBefore(30))
+    const updates = setupCancel(rows(CUSTOM))
+    const res = await cancelBookingGroup('g1', null, 'u1')
+    expect(res.success).toBe(true)
+    expect(updates[0]).toMatchObject({ cancellation_fee: 150, refund_amount: 300 })
+  })
+
+  it('is free when strictly beyond the snapshot window', async () => {
+    vi.setSystemTime(hoursBefore(49))
+    const updates = setupCancel(rows(CUSTOM))
+    await cancelBookingGroup('g1', null, 'u1')
+    expect(updates[0]).toMatchObject({ cancellation_fee: 0, refund_amount: 450 })
+  })
+
+  it('charges the fee at exactly the window boundary', async () => {
+    vi.setSystemTime(hoursBefore(48))
+    const updates = setupCancel(rows(CUSTOM))
+    await cancelBookingGroup('g1', null, 'u1')
+    expect(updates[0]).toMatchObject({ cancellation_fee: 150 })
+  })
+
+  it('uses the seed rules (100 / 24h) when there is no snapshot', async () => {
+    vi.setSystemTime(hoursBefore(10))
+    const updates = setupCancel(rows(null))
+    await cancelBookingGroup('g1', null, 'u1')
+    expect(updates[0]).toMatchObject({ cancellation_fee: 100, refund_amount: 350 })
+  })
+
+  it('fails closed on a malformed snapshot and cancels nothing', async () => {
+    vi.setSystemTime(hoursBefore(10))
+    const updates = setupCancel(rows({ version_id: 'x', rules: { nope: 1 } }))
+    const res = await cancelBookingGroup('g1', null, 'u1')
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/pricing/i)
+    expect(updates).toHaveLength(0)
   })
 })

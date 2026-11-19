@@ -3,7 +3,10 @@
  * Run with: npx tsx src/lib/__tests__/bookingService.test.ts
  */
 
-import { CANCELLATION_HOURS_BEFORE, CANCELLATION_FEE_PER_SLOT } from '../constants'
+import { SEED_PRICING_RULES } from '../pricing'
+
+const CANCELLATION_HOURS_BEFORE = SEED_PRICING_RULES.cancellation_window_hours
+const CANCELLATION_FEE_PER_SLOT = SEED_PRICING_RULES.cancellation_fee_per_slot
 
 // Re-implement parseBookingDateTime locally for testing (mirrors bookingService.ts)
 function parseBookingDateTime(date: string, timeSlot: string): Date {
