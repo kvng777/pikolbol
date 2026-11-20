@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyConfirmToken } from '@/lib/adminTokens'
+import { escapeHtml } from '@/lib/html'
 import { supabase } from '@/lib/supabase-server'
 import { confirmPayment } from '@/lib/paymentService'
 import { sendPaymentConfirmationEmail } from '@/lib/emailService'
@@ -11,15 +12,15 @@ function htmlPage(title: string, message: string, color: string) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
+  <title>${escapeHtml(title)}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f3f4f6; margin: 0; padding: 40px 20px; display: flex; align-items: center; justify-content: center; min-height: 100vh; box-sizing: border-box;">
   <div style="max-width: 420px; width: 100%; background: white; border-radius: 16px; padding: 32px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-    <div style="width: 56px; height: 56px; border-radius: 50%; background-color: ${color}1a; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+    <div style="width: 56px; height: 56px; border-radius: 50%; background-color: ${escapeHtml(color)}1a; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
       <span style="font-size: 28px;">${color === '#10b981' ? '✓' : color === '#f59e0b' ? 'ℹ' : '✕'}</span>
     </div>
-    <h1 style="color: #111827; font-size: 20px; margin: 0 0 8px 0;">${title}</h1>
-    <p style="color: #6b7280; font-size: 15px; margin: 0;">${message}</p>
+    <h1 style="color: #111827; font-size: 20px; margin: 0 0 8px 0;">${escapeHtml(title)}</h1>
+    <p style="color: #6b7280; font-size: 15px; margin: 0;">${escapeHtml(message)}</p>
   </div>
 </body>
 </html>`,

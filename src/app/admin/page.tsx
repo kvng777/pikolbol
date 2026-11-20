@@ -16,6 +16,7 @@ import { PendingPayments } from '@/components/admin/PendingPayments'
 import { PendingRefunds } from '@/components/admin/PendingRefunds'
 import { PaymentSettings } from '@/components/admin/PaymentSettings'
 import { PricingSettings } from '@/components/admin/PricingSettings'
+import { SlotRulesSection } from '@/components/admin/SlotRulesSection'
 import { FinanceTab } from '@/components/admin/FinanceTab'
 import { NoticeSettings } from '@/components/admin/NoticeSettings'
 import { AgentDrawer } from '@/components/admin/agent/AgentDrawer'
@@ -255,78 +256,81 @@ export default function AdminPage() {
           )}
 
           {table.activeTab === 'slots' && (
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Disable Time Slots</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 mb-2 block">Select Date</label>
-                    <input
-                      type="date"
-                      value={table.selectedDateForSlots}
-                      onChange={(e) => table.setSelectedDateForSlots(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 mb-2 block">Select Time Slots</label>
-                    <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-                      {table.allTimeSlots.map((slot) => {
-                        const isDisabled = table.disabledSlotsForDate.some(s => s.time_slot === slot)
-                        const isSelected = table.selectedSlots.includes(slot)
-                        return (
-                          <button
-                            key={slot}
-                            onClick={() => !isDisabled && table.toggleSlotSelection(slot)}
-                            disabled={isDisabled}
-                            className={`p-2 rounded-lg text-sm font-medium transition-colors ${
-                              isDisabled 
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : isSelected 
-                                  ? 'bg-red-100 text-red-700 border border-red-300'
-                                  : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-400'
-                            }`}
-                          >
-                            {slot}
-                          </button>
-                        )
-                      })}
+            <div className="space-y-6">
+              <SlotRulesSection />
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Block a single date</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">Select Date</label>
+                      <input
+                        type="date"
+                        value={table.selectedDateForSlots}
+                        onChange={(e) => table.setSelectedDateForSlots(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900"
+                      />
                     </div>
-                  </div>
 
-                  {table.selectedSlots.length > 0 && (
-                    <div className="p-3 bg-red-50 rounded-lg">
-                      <p className="text-sm text-red-700">{table.selectedSlots.length} slot(s) will be disabled: {table.selectedSlots.join(', ')}</p>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">Select Time Slots</label>
+                      <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                        {table.allTimeSlots.map((slot) => {
+                          const isDisabled = table.disabledSlotsForDate.some(s => s.time_slot === slot)
+                          const isSelected = table.selectedSlots.includes(slot)
+                          return (
+                            <button
+                              key={slot}
+                              onClick={() => !isDisabled && table.toggleSlotSelection(slot)}
+                              disabled={isDisabled}
+                              className={`p-2 rounded-lg text-sm font-medium transition-colors ${
+                                isDisabled 
+                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                  : isSelected 
+                                    ? 'bg-red-100 text-red-700 border border-red-300'
+                                    : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-400'
+                              }`}
+                            >
+                              {slot}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {table.selectedSlots.length > 0 && (
+                      <div className="p-3 bg-red-50 rounded-lg">
+                        <p className="text-sm text-red-700">{table.selectedSlots.length} slot(s) will be disabled: {table.selectedSlots.join(', ')}</p>
+                      </div>
+                    )}
+
+                    <Button onClick={table.handleAddDisabledSlots} disabled={table.selectedSlots.length === 0 || table.addDisabledSlot.isPending} className="w-full bg-red-500 hover:bg-red-600">
+                      <Ban className="w-4 h-4 mr-2" />
+                      {table.addDisabledSlot.isPending ? 'Disabling...' : 'Disable Selected Slots'}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Currently Disabled Slots</h3>
+                  {table.allDisabledSlots.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">No disabled slots</p>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {table.allDisabledSlots.map((slot) => (
+                        <div key={slot.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div>
+                            <p className="font-medium text-gray-900">{slot.date}</p>
+                            <p className="text-sm text-gray-500">{slot.time_slot}</p>
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => table.handleRemoveDisabledSlot(slot.id)} className="text-emerald-600 hover:bg-emerald-50">
+                            <Plus className="w-4 h-4 rotate-45" />
+                          </Button>
+                        </div>
+                      ))}
                     </div>
                   )}
-
-                  <Button onClick={table.handleAddDisabledSlots} disabled={table.selectedSlots.length === 0 || table.addDisabledSlot.isPending} className="w-full bg-red-500 hover:bg-red-600">
-                    <Ban className="w-4 h-4 mr-2" />
-                    {table.addDisabledSlot.isPending ? 'Disabling...' : 'Disable Selected Slots'}
-                  </Button>
                 </div>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Currently Disabled Slots</h3>
-                {table.allDisabledSlots.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No disabled slots</p>
-                ) : (
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {table.allDisabledSlots.map((slot) => (
-                      <div key={slot.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-gray-900">{slot.date}</p>
-                          <p className="text-sm text-gray-500">{slot.time_slot}</p>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => table.handleRemoveDisabledSlot(slot.id)} className="text-emerald-600 hover:bg-emerald-50">
-                          <Plus className="w-4 h-4 rotate-45" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           )}

@@ -4,15 +4,19 @@ import React from 'react'
 import { Clock, Lock, Ban } from 'lucide-react'
 import { TimeSlot } from '@/types/booking'
 import { Button } from '@/components/ui/button'
+import { customerVisibleSlots } from '@/lib/timeSlotGenerator'
 
+/** Customer-only picker (booking page, reschedule modal): slots hidden by a rule are not rendered. */
 interface TimeSlotPickerProps {
   slots: TimeSlot[]
   selectedSlots: string[]
   onSelectSlots: (slots: string[]) => void
   isLoading?: boolean
+  /** When set, shows this message instead of slots (availability could not be loaded). */
+  loadError?: string | null
 }
 
-export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoading = false }: TimeSlotPickerProps) {
+export function TimeSlotPicker({ slots: allSlots, selectedSlots = [], onSelectSlots, isLoading = false, loadError = null }: TimeSlotPickerProps) {
   const toggleSlot = (slot: string) => {
     const current = selectedSlots
     if (current.includes(slot)) {
@@ -42,13 +46,22 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
     )
   }
 
+  if (loadError) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-700 font-medium">{loadError}</p>
+      </div>
+    )
+  }
+
+  const slots = customerVisibleSlots(allSlots)
   const availableCount = slots.filter(s => s.available).length
 
   return (
     <div>
       {availableCount === 0 ? (
         <div className="text-center py-8">
-          <p className="text-gray-500">No available slots for this date</p>
+          <p className="text-gray-500">No times available for this date</p>
           <p className="text-sm text-gray-400 mt-1">Please select a different date</p>
         </div>
       ) : (
@@ -68,7 +81,7 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
                   unavailableClass = 'bg-orange-50 text-orange-300 cursor-not-allowed border border-orange-100'
                   icon = <Lock className="w-3.5 h-3.5 shrink-0" />
                 } else {
-                  unavailableClass = 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                  unavailableClass = `bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200${slot.reason === 'rule' ? ' h-auto min-h-11 max-w-full py-1 whitespace-normal break-words text-center disabled:opacity-100 text-gray-500' : ''}`
                   icon = <Ban className="w-3.5 h-3.5 shrink-0" />
                 }
               }
@@ -90,9 +103,14 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
                   `}
                 >
                   {icon ? (
-                    <span className="flex items-center justify-center gap-1.5">
-                      {icon}
-                      {slot.time}
+                    <span className="flex max-w-full flex-col items-center text-center leading-tight">
+                      <span className="flex items-center justify-center gap-1.5">
+                        {icon}
+                        {slot.time}
+                      </span>
+                      {slot.reason === 'rule' && slot.label && (
+                        <span className="max-w-full whitespace-normal break-words text-center text-[11px] font-medium text-gray-700">{slot.label}</span>
+                      )}
                     </span>
                   ) : slot.time}
                 </Button>

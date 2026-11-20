@@ -12,6 +12,10 @@ import { useCreateAdminBooking, useUpdateAdminBooking } from '@/hooks/useBooking
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { calculatePaymentAmount, isEquipmentChargeable, isSamePricedSelection } from '@/lib/pricing'
 import { usePricingForDate } from '@/hooks/usePricing'
+import { useSlotRules, SLOT_RULES_QUERY_KEY } from '@/hooks/useSlotRules'
+import { isSameSlotSelection, DEFAULT_RULE_LABEL } from '@/lib/slotRules'
+import { useQueryClient } from '@tanstack/react-query'
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { toast } from 'sonner'
 
 const COURT_NUMBER = 1
@@ -47,6 +51,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
   const [needsBalls, setNeedsBalls] = useState(initialValues?.needsBalls ?? false)
   const [trainingBalls, setTrainingBalls] = useState(initialValues?.trainingBalls ?? false)
 
+  const queryClient = useQueryClient()
   const createBooking = useCreateAdminBooking()
   const updateBooking = useUpdateAdminBooking()
   const isSubmitting = createBooking.isPending || updateBooking.isPending
@@ -54,6 +59,8 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
   const { data: activeBookings = [] } = useActiveBookingsByDate(date)
   const { data: disabledSlots = [] } = useDisabledSlotsByDate(date)
   const { data: closedDates = [] } = useClosedDates()
+  const { data: slotRules, isError: slotRulesError, isLoading: slotRulesLoading } = useSlotRules()
+  const [confirmOverride, setConfirmOverride] = useState(false)
 
   const isDateClosed = useMemo(
     () => closedDates.some((cd) => date >= cd.start_date && date <= cd.end_date),
@@ -65,8 +72,21 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
     const others = initialValues
       ? activeBookings.filter((b) => b.booking_group_id !== initialValues.bookingGroupId)
       : activeBookings
-    return getAvailableSlotsForCourt(others, date, COURT_NUMBER, disabledSlots, true)
-  }, [activeBookings, disabledSlots, date, initialValues])
+    return getAvailableSlotsForCourt(others, date, COURT_NUMBER, disabledSlots, {
+      ignorePast: true,
+      bufferMinutes: 0,
+      rules: slotRules ?? [],
+    })
+  }, [activeBookings, disabledSlots, date, initialValues, slotRules])
+
+  // Admins may book slots blocked by a rule or a one-day block, after confirming
+  const isOverridable = (reason?: string) => reason === 'rule' || reason === 'disabled'
+  // Editing with the same date and slots never needs an override (the server skips the check too)
+  const slotsUnchanged =
+    !!initialValues && isSameSlotSelection(initialValues.date, initialValues.timeSlots, date, selectedSlots)
+  const blockedSelected = slotsUnchanged
+    ? []
+    : availableSlots.filter((s) => selectedSlots.includes(s.time) && isOverridable(s.reason))
 
   const { rules, error: pricingError, isLoading: pricingLoading } = usePricingForDate(date)
   const noPricesForDate = !pricingLoading && !pricingError && !rules
@@ -104,6 +124,30 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
     setSelectedSlots([]) // slots are date-specific
   }
 
+  const save = async (overrideBlocks: boolean) => {
+    const payload = { name: name.trim(), date, timeSlots: selectedSlots, paddles, needsBalls, trainingBalls, overrideBlocks }
+
+    try {
+      const result = initialValues
+        ? await updateBooking.mutateAsync({ bookingGroupId: initialValues.bookingGroupId, payload })
+        : await createBooking.mutateAsync(payload)
+
+      if (result.success) {
+        const saved = result.bookings?.[0]?.payment_amount
+        const amountText = typeof saved === 'number' ? ` (₱${saved.toLocaleString('en-US')})` : ''
+        toast.success(`${isEdit ? 'Booking updated' : 'Booking created'}${amountText}`)
+        onClose()
+      } else {
+        // A rejection may mean our rules or one-day blocks are stale: refetch them for this date.
+        queryClient.invalidateQueries({ queryKey: SLOT_RULES_QUERY_KEY })
+        queryClient.invalidateQueries({ queryKey: ['disabledSlots', date] })
+        toast.error(result.error || 'Failed to save booking')
+      }
+    } catch {
+      toast.error('Failed to save booking')
+    }
+  }
+
   const handleSave = async () => {
     if (!name.trim()) {
       toast.error('Please enter the player name')
@@ -118,24 +162,15 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
       return
     }
 
-    const payload = { name: name.trim(), date, timeSlots: selectedSlots, paddles, needsBalls, trainingBalls }
-
-    try {
-      const result = initialValues
-        ? await updateBooking.mutateAsync({ bookingGroupId: initialValues.bookingGroupId, payload })
-        : await createBooking.mutateAsync(payload)
-
-      if (result.success) {
-        const saved = result.bookings?.[0]?.payment_amount
-        const amountText = typeof saved === 'number' ? ` (₱${saved.toLocaleString('en-US')})` : ''
-        toast.success(`${isEdit ? 'Booking updated' : 'Booking created'}${amountText}`)
-        onClose()
-      } else {
-        toast.error(result.error || 'Failed to save booking')
-      }
-    } catch {
-      toast.error('Failed to save booking')
+    if (slotRulesError || !slotRules) {
+      toast.error("Couldn't load slot rules. Try again in a moment.")
+      return
     }
+    if (blockedSelected.length > 0) {
+      setConfirmOverride(true)
+      return
+    }
+    await save(false)
   }
 
   return (
@@ -189,26 +224,37 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
             <div className="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto">
               {availableSlots.map((slot) => {
                 const isSelected = selectedSlots.includes(slot.time)
-                const disabled = !slot.available && !isSelected
+                const blocked = isOverridable(slot.reason)
+                const disabled = !slot.available && !blocked && !isSelected
                 return (
                   <button
                     key={slot.time}
                     type="button"
-                    onClick={() => slot.available && toggleSlot(slot.time)}
+                    onClick={() => (slot.available || blocked || isSelected) && toggleSlot(slot.time)}
                     disabled={disabled}
                     className={`p-2 rounded-lg text-sm font-medium transition-colors ${
                       disabled
                         ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         : isSelected
                           ? 'bg-indigo-100 text-indigo-700 border border-indigo-300'
-                          : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-400'
+                          : blocked
+                            ? 'bg-amber-50 border border-amber-200 text-amber-700 hover:border-amber-400'
+                            : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-400'
                     }`}
                   >
-                    {slot.time}
+                    <span className="flex flex-col items-center leading-tight">
+                      {slot.time}
+                      {blocked && <span className="text-[11px] font-normal">{slot.label ?? DEFAULT_RULE_LABEL}</span>}
+                    </span>
                   </button>
                 )
               })}
             </div>
+            {slotRulesError && (
+              <p className="text-sm text-red-500">
+                Couldn&apos;t load slot rules, so saving is disabled. Close and reopen this form to retry.
+              </p>
+            )}
             {selectedSlots.length > 0 && (
               <p className="text-xs text-gray-500">
                 {selectedSlots.length} slot{selectedSlots.length > 1 ? 's' : ''} selected
@@ -247,7 +293,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
             </Button>
             <Button
               onClick={handleSave}
-              disabled={isSubmitting || total === null}
+              disabled={isSubmitting || total === null || slotRulesError || slotRulesLoading}
               className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white"
             >
               {isSubmitting ? (
@@ -264,6 +310,28 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
           </div>
         </div>
       </div>
+
+      <ConfirmationDialog
+        open={confirmOverride}
+        onClose={() => setConfirmOverride(false)}
+        onConfirm={async () => {
+          setConfirmOverride(false)
+          await save(true)
+        }}
+        title="Book blocked slots?"
+        description="These slots are blocked for customers. Book them anyway for this player?"
+        confirmText="Book anyway"
+        variant="warning"
+        isLoading={isSubmitting}
+      >
+        <ul className="text-sm text-gray-700 space-y-1">
+          {blockedSelected.map((s) => (
+            <li key={s.time}>
+              {s.time}: {s.label && s.label !== DEFAULT_RULE_LABEL ? `blocked by "${s.label}"` : DEFAULT_RULE_LABEL}
+            </li>
+          ))}
+        </ul>
+      </ConfirmationDialog>
     </div>
   )
 }

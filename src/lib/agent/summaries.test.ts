@@ -87,7 +87,7 @@ describe('summarizeAvailability', () => {
   ]
 
   it('splits slots into available / booked / disabled', () => {
-    const result = summarizeAvailability('2026-10-20', [booking()], disabled, [], FUTURE)
+    const result = summarizeAvailability('2026-10-20', [booking()], disabled, [], [], FUTURE)
     expect(result.closed).toBeNull()
     expect(result.booked).toEqual(['06:00-07:00'])
     expect(result.disabled).toEqual(['07:00-08:00'])
@@ -100,19 +100,38 @@ describe('summarizeAvailability', () => {
     const closed: ClosedDate[] = [
       { id: 'c1', start_date: '2026-10-19', end_date: '2026-10-21', reason: 'Resurfacing', created_at: '' },
     ]
-    const result = summarizeAvailability('2026-10-20', [], [], closed, FUTURE)
+    const result = summarizeAvailability('2026-10-20', [], [], closed, [], FUTURE)
     expect(result.closed).toEqual({ reason: 'Resurfacing' })
     expect(result.available).toEqual([])
   })
 
   it('excludes past and in-progress slots today (Manila time)', () => {
     const now = new Date('2026-10-20T12:30:00Z') // 20:30 Manila
-    const result = summarizeAvailability('2026-10-20', [], [], [], now)
+    const result = summarizeAvailability('2026-10-20', [], [], [], [], now)
     expect(result.available).toEqual(['21:00-22:00', '22:00-23:00', '23:00-00:00'])
+  })
+
+  it('reports slots blocked by a rule with its label', () => {
+    const rule = { label: 'Open Play', start_date: '2026-10-01', end_date: null, weekdays: [1, 2, 3, 4, 5, 6, 7], time_slots: ['07:00-08:00'] }
+    const result = summarizeAvailability('2026-10-20', [], [], [], [rule], FUTURE)
+    expect(result.blockedByRule).toEqual([{ time: '07:00-08:00', label: 'Open Play' }])
+    expect(result.available).not.toContain('07:00-08:00')
+  })
+
+  it('still reports slots of a rule hidden from customers, flagged hidden', () => {
+    const rule = { label: 'Closed', start_date: '2026-10-01', end_date: null, weekdays: [1, 2, 3, 4, 5, 6, 7], time_slots: ['05:00-06:00'], hide_from_customers: true }
+    const result = summarizeAvailability('2026-10-20', [], [], [], [rule], FUTURE)
+    expect(result.blockedByRule).toEqual([{ time: '05:00-06:00', label: 'Closed', hidden: true }])
+    expect(result.available).not.toContain('05:00-06:00')
+  })
+
+  it('labels an unlabelled rule "Blocked"', () => {
+    const rule = { label: null, start_date: '2026-10-01', end_date: null, weekdays: [1, 2, 3, 4, 5, 6, 7], time_slots: ['07:00-08:00'] }
+    expect(summarizeAvailability('2026-10-20', [], [], [], [rule], FUTURE).blockedByRule).toEqual([{ time: '07:00-08:00', label: 'Blocked' }])
   })
 
   it('returns no availability for past dates', () => {
     const now = new Date('2026-10-20T12:30:00Z')
-    expect(summarizeAvailability('2026-10-19', [], [], [], now).available).toEqual([])
+    expect(summarizeAvailability('2026-10-19', [], [], [], [], now).available).toEqual([])
   })
 })

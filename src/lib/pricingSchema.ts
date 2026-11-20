@@ -19,7 +19,7 @@ const pricingRulesBase = z.strictObject({
   tier_prices: z.strictObject({
     daytime: pesos('Daytime rate', 1, 10000),
     offpeak: pesos('Off-peak rate', 1, 10000),
-    latenight: pesos('Late-night rate', 1, 10000),
+    latenight: pesos('Evening rate', 1, 10000),
   }),
   hour_tiers: z.array(rateTier).length(SLOT_COUNT, 'Every hour needs a rate tier'),
   extra_player_charge: pesos('Extra player charge', 0, 2000),

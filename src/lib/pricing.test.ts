@@ -154,6 +154,15 @@ describe('describeTierHours', () => {
       latenight: '10 PM - 12 AM',
     })
   })
+  it('leaves out excluded hours and drops a tier with none left', () => {
+    const hours = describeTierHours(R, new Set([5]))
+    expect(hours.offpeak).toBe('6 PM - 10 PM')
+    expect(hours.daytime).toBe('6 AM - 6 PM')
+    expect(describeTierHours(R, [5, 18, 19, 20, 21]).offpeak).toBe('')
+  })
+  it('splits a range around an excluded hour in the middle', () => {
+    expect(describeTierHours(R, [12]).daytime).toBe('6 AM - 12 PM & 1 PM - 6 PM')
+  })
   it('returns an empty string for an unused tier', () => {
     const rules = { ...R, hour_tiers: R.hour_tiers.map((t) => (t === 'latenight' ? 'offpeak' : t)) }
     expect(describeTierHours(rules).latenight).toBe('')

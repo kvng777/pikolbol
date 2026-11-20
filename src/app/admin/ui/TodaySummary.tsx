@@ -1,8 +1,11 @@
 'use client'
 
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
+import { manilaNow } from '@/lib/agent/dates'
 import { CalendarDays, Activity, ArrowRight, Gauge } from 'lucide-react'
 import { useAllBookings, useDisabledSlotsByDate } from '@/hooks/useBookings'
+import { useSlotRules } from '@/hooks/useSlotRules'
+import { findBlockingRule } from '@/lib/slotRules'
 import { generateTimeSlots } from '@/lib/timeSlotGenerator'
 import type { Booking, ClosedDate } from '@/types/booking'
 
@@ -28,11 +31,12 @@ function endHourOf(slot: string): number {
 export default function TodaySummary({ closedDates }: Props) {
   const { data: allBookings = [] } = useAllBookings()
 
-  const now = new Date()
-  const todayStr = format(now, 'yyyy-MM-dd')
-  const currentHour = now.getHours()
+  const now = manilaNow()
+  const todayStr = now.date
+  const currentHour = parseInt(now.time.slice(0, 2), 10)
 
   const { data: disabledToday = [] } = useDisabledSlotsByDate(todayStr)
+  const { data: slotRules = [] } = useSlotRules()
 
   const isClosedToday = isDateInClosedRange(todayStr, closedDates)
 
@@ -119,7 +123,10 @@ export default function TodaySummary({ closedDates }: Props) {
     }
 
     // Occupancy
-    const disabledSet = new Set(disabledToday.map(d => d.time_slot))
+    const disabledSet = new Set([
+      ...disabledToday.map(d => d.time_slot),
+      ...generateTimeSlots().filter(s => findBlockingRule(slotRules, todayStr, s)),
+    ])
     const total = Math.max(0, generateTimeSlots().length - disabledSet.size)
     const booked = [...bookedSlots].filter(s => !disabledSet.has(s)).length
 
@@ -158,7 +165,7 @@ export default function TodaySummary({ closedDates }: Props) {
       value: todayGroupCount,
       icon: <CalendarDays className="w-4 h-4" />,
       tone: 'text-emerald-700 bg-emerald-50 border-emerald-100',
-      hint: format(now, 'EEE, MMM d'),
+      hint: format(parseISO(todayStr), 'EEE, MMM d'),
     },
     {
       key: 'status',

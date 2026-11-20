@@ -2,8 +2,15 @@
 
 import React from 'react'
 import { MapPin, Clock, Phone, Mail } from 'lucide-react'
+import { useSlotRules } from '@/hooks/useSlotRules'
+import { describeOpeningHours, permanentlyHiddenSlots } from '@/lib/slotRules'
+import { manilaNow } from '@/lib/agent/dates'
 
 export default function ContactSection() {
+  // Hours follow slot rules that hide the same slots every day (e.g. closed 5–6 AM); full window if rules can't load
+  const { data: slotRules } = useSlotRules()
+  const hours = describeOpeningHours(permanentlyHiddenSlots(slotRules ?? [], manilaNow().date))
+
   return (
     <section id="contact" className="mt-12">
       <h3 className="text-lg font-semibold text-gray-900">Contact</h3>
@@ -18,7 +25,7 @@ export default function ContactSection() {
           </div>
           <div>
             <p className="text-xs text-gray-500">Hours</p>
-            <p className="text-sm text-gray-900">Open daily: 5:00 AM — 12:00AM(mid night)</p>
+            <p className="text-sm text-gray-900">{hours}</p>
           </div>
         </div>
 

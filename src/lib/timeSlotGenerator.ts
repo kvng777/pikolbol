@@ -1,5 +1,7 @@
 import { format } from 'date-fns'
 import { Booking, TimeSlot, DisabledSlot } from '@/types/booking'
+import { findBlockingRule, isRuleHidden, ruleLabel } from './slotRules'
+import type { SlotRuleLike } from '@/types/slotRules'
 
 const OPERATING_HOURS = { start: 5, end: 24 }
 const SLOT_DURATION = 1
@@ -23,6 +25,12 @@ export interface SlotAvailabilityOptions {
   bufferMinutes?: number
   /** Additional slots held by pending reschedule requests (shown as "booked"). */
   heldSlots?: string[]
+  /**
+   * Slot rules (active/upcoming). Rule-blocked slots get reason 'rule' and the rule's label, plus
+   * `hidden: true` when the blocking rule has hide_from_customers. If several rules cover a slot, only
+   * the one findBlockingRule picks (the first in list order) decides the label and whether it is hidden.
+   */
+  rules?: SlotRuleLike[]
 }
 
 export function getAvailableSlotsForCourt(
@@ -47,6 +55,7 @@ export function getAvailableSlotsForCourt(
   const ignorePast = opts.ignorePast ?? false
   const bufferMinutes = opts.bufferMinutes ?? BOOKING_BUFFER_MINUTES
   const heldSlots = opts.heldSlots ?? []
+  const rules = opts.rules ?? []
 
   const allSlots = generateTimeSlots()
   const bookedSlots = bookings
@@ -72,16 +81,33 @@ export function getAvailableSlotsForCourt(
     const isPastOrTooSoon = !ignorePast && isToday && slotStartMinutes < cutoffMinutes
 
     let reason: TimeSlot['reason']
+    let label: string | undefined
+    let hidden = false
     if (isPastOrTooSoon) reason = 'past'
     else if (bookedSlots.includes(slot) || heldSlots.includes(slot)) reason = 'booked'
     else if (disabledTimeSlots.includes(slot)) reason = 'disabled'
+    else {
+      const rule = findBlockingRule(rules, date, slot)
+      if (rule) {
+        reason = 'rule'
+        label = ruleLabel(rule)
+        hidden = isRuleHidden(rule)
+      }
+    }
 
     return {
       time: slot,
       available: !reason,
       reason,
+      label,
+      ...(hidden ? { hidden: true } : {}),
     }
   })
+}
+
+/** Customer screens only: drop slots hidden by a rule. Admin screens show every slot. */
+export function customerVisibleSlots(slots: TimeSlot[]): TimeSlot[] {
+  return slots.filter((s) => !s.hidden)
 }
 
 export function getAllCourts(): number[] {

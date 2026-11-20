@@ -45,7 +45,11 @@ export interface Booking {
 export interface TimeSlot {
   time: string
   available: boolean
-  reason?: 'past' | 'booked' | 'disabled'
+  reason?: 'past' | 'booked' | 'disabled' | 'rule'
+  /** For reason 'rule': the rule's label ("Blocked" when the rule has none). */
+  label?: string
+  /** For reason 'rule': the blocking rule hides it, so customer screens don't render it. */
+  hidden?: boolean
 }
 
 export interface BookingFormData {
@@ -136,6 +140,8 @@ export interface AdminBookingPayload {
   paddles?: number
   needsBalls?: boolean
   trainingBalls?: boolean
+  /** Admin confirmed booking slots blocked by a rule or one-day block (never overrides closed dates). */
+  overrideBlocks?: boolean
 }
 
 // Payload for editing an existing manual booking (identified by its group)

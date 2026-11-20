@@ -19,6 +19,8 @@ vi.mock('@/lib/noticeService')
 vi.mock('@/lib/emailService')
 vi.mock('@/lib/pricingService')
 vi.mock('@/lib/priceQuote')
+vi.mock('@/lib/slotAvailability')
+vi.mock('@/lib/slotRulesService')
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
 import * as bookings from './bookings'
@@ -35,6 +37,9 @@ import * as emailService from '@/lib/emailService'
 import * as pricingActions from './pricing'
 import * as pricingService from '@/lib/pricingService'
 import * as priceQuote from '@/lib/priceQuote'
+import * as slotAvailability from '@/lib/slotAvailability'
+import * as slotRulesService from '@/lib/slotRulesService'
+import * as slotRuleActions from './slotRules'
 import { SEED_PRICING_RULES } from '@/lib/pricing'
 import type { Profile } from '@/types/profile'
 
@@ -43,7 +48,7 @@ const realPriceQuote = await vi.importActual<typeof import('@/lib/priceQuote')>(
 
 type Call = [name: string, call: (token: string) => Promise<unknown>]
 
-const automockedModules = [bookingService, paymentService, paymentSettingsService, noticeService, emailService, pricingService, priceQuote]
+const automockedModules = [bookingService, paymentService, paymentSettingsService, noticeService, emailService, pricingService, priceQuote, slotAvailability, slotRulesService]
 
 /** Every function exported by the automocked service modules that was called at least once. */
 function calledServiceFunctions(): string[] {
@@ -55,6 +60,8 @@ function calledServiceFunctions(): string[] {
   }
   return called
 }
+
+const ruleInput = { label: null, startDate: '2026-12-01', endDate: null, weekdays: [1], timeSlots: ['07:00-08:00'] }
 
 const payload = { name: 'X', date: '2026-12-01', timeSlots: ['08:00 - 09:00'] }
 
@@ -82,6 +89,12 @@ const ADMIN_ACTIONS: Call[] = [
   ['updateNoticeAction', (t) => notice.updateNoticeAction(t, {})],
   ['createPricingVersionAction', (t) => pricingActions.createPricingVersionAction(t, { mode: 'scheduled', effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES })],
   ['cancelPricingVersionAction', (t) => pricingActions.cancelPricingVersionAction(t, 'v1')],
+  ['listSlotRulesAction', (t) => slotRuleActions.listSlotRulesAction(t)],
+  ['createSlotRuleAction', (t) => slotRuleActions.createSlotRuleAction(t, ruleInput)],
+  ['updateSlotRuleAction', (t) => slotRuleActions.updateSlotRuleAction(t, 'r1', ruleInput)],
+  ['endSlotRuleAction', (t) => slotRuleActions.endSlotRuleAction(t, 'r1')],
+  ['deleteSlotRuleAction', (t) => slotRuleActions.deleteSlotRuleAction(t, 'r1')],
+  ['previewSlotRuleOverlapAction', (t) => slotRuleActions.previewSlotRuleOverlapAction(t, ruleInput)],
 ]
 
 describe('admin actions', () => {
@@ -133,6 +146,7 @@ describe('submitPaymentAction', () => {
     vi.mocked(bookingService.isDateClosed).mockResolvedValue(false)
     vi.mocked(pricingService.getPricingVersionById).mockResolvedValue(version)
     vi.mocked(paymentService.createBookingWithPendingPayment).mockResolvedValue({ success: false, error: 'x' })
+    vi.mocked(slotAvailability.findBlockedSlots).mockResolvedValue([])
   })
   afterEach(() => vi.unstubAllEnvs())
 
@@ -323,6 +337,26 @@ describe('submitPaymentAction', () => {
     const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
     const result = await payment.submitPaymentAction(null, body, quote)
     expect(result.success).toBe(false)
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+    err.mockRestore()
+  })
+
+  it('rejects a blocked slot before checking the quote and creates nothing', async () => {
+    vi.mocked(slotAvailability.findBlockedSlots).mockResolvedValue([{ slot: '08:00-09:00', source: 'rule', label: 'Open Play' }])
+    const quote = realPriceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const res = await payment.submitPaymentAction(null, body, quote)
+    expect(res).toEqual({ success: false, error: 'One or more selected slots are no longer available.' })
+    expect(slotAvailability.findBlockedSlots).toHaveBeenCalledWith(body.date, body.timeSlots)
+    expect(priceQuote.verifyPriceQuote).not.toHaveBeenCalled()
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when availability cannot be checked', async () => {
+    vi.mocked(slotAvailability.findBlockedSlots).mockRejectedValue(new Error('down'))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const quote = realPriceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const res = await payment.submitPaymentAction(null, body, quote)
+    expect(res).toEqual({ success: false, error: 'Availability is unavailable right now. Please try again in a moment.' })
     expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
     err.mockRestore()
   })
@@ -551,5 +585,54 @@ describe('pricing actions', () => {
         date: '2026-12-01', timeSlots: ['08:00-09:00'], players: 2, paddles: 0, needsBalls: false, trainingBalls: false,
       })
     ).resolves.toEqual({ success: true, quote })
+  })
+})
+
+describe('slot rule actions', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  const publicRule = {
+    id: 'r1', label: null, start_date: '2026-12-01', end_date: null, weekdays: [1], time_slots: ['07:00-08:00'], hide_from_customers: false,
+    created_at: 'x', updated_at: 'x',
+  }
+  const rule = { ...publicRule, created_by: 'admin-1' }
+  const asAdmin = () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'admin-1' } }, error: null })
+    getProfileByUserId.mockResolvedValue({ role: 'admin' })
+  }
+
+  it('the public list returns rules without audit fields', async () => {
+    vi.mocked(slotRulesService.listCurrentSlotRules).mockResolvedValue([publicRule])
+    const res = await slotRuleActions.getCurrentSlotRulesAction()
+    expect(res).toEqual({ success: true, rules: [publicRule] })
+    expect(JSON.stringify(res)).not.toContain('created_by')
+  })
+
+  it('the public list reports unavailability instead of throwing', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(slotRulesService.listCurrentSlotRules).mockRejectedValue(new Error('down'))
+    const res = await slotRuleActions.getCurrentSlotRulesAction()
+    expect(res.success).toBe(false)
+  })
+
+  it('create records the verified admin as creator', async () => {
+    asAdmin()
+    vi.mocked(slotRulesService.createSlotRule).mockResolvedValue({ success: true, rule })
+    await slotRuleActions.createSlotRuleAction('tok', ruleInput)
+    expect(slotRulesService.createSlotRule).toHaveBeenCalledWith(ruleInput, 'admin-1')
+  })
+
+  it('preview validates input before querying', async () => {
+    asAdmin()
+    const res = await slotRuleActions.previewSlotRuleOverlapAction('tok', { ...ruleInput, weekdays: [] })
+    expect(res).toEqual({ success: false, error: 'Pick at least one day' })
+    expect(slotRulesService.findBookingsOverlappingRule).not.toHaveBeenCalled()
+  })
+
+  it('preview passes through the truncated flag', async () => {
+    asAdmin()
+    vi.mocked(slotRulesService.findBookingsOverlappingRule).mockResolvedValue({ bookings: [], truncated: true })
+    const res = await slotRuleActions.previewSlotRuleOverlapAction('tok', ruleInput)
+    expect(res).toEqual({ success: true, bookings: [], truncated: true })
   })
 })

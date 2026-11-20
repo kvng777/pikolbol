@@ -60,7 +60,7 @@ describe('buildPricingNote', () => {
     const note = buildPricingNote([v({ rules: { ...SEED_PRICING_RULES, hour_tiers } })], '2026-11-19')
     expect(note).toContain('daytime ₱200')
     expect(note).not.toContain('off-peak')
-    expect(note).not.toContain('late-night')
+    expect(note).not.toContain('evening')
   })
 
   it('treats a version starting exactly today as current, not upcoming', () => {

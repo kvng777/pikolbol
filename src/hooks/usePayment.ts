@@ -30,10 +30,16 @@ export function useSubmitPayment() {
       payload: Parameters<typeof submitPaymentAction>[1]
       quote: PriceQuote
     }) => submitPaymentAction((await getAccessToken()) || null, payload, quote),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
       queryClient.invalidateQueries({ queryKey: ['activeBookings'] })
       queryClient.invalidateQueries({ queryKey: ['pendingPayments'] })
+      // A rejected submit may mean a slot was blocked after the page loaded: refresh blocks right away
+      if (!result.success) {
+        queryClient.invalidateQueries({ queryKey: ['slotRules'] })
+        queryClient.invalidateQueries({ queryKey: ['disabledSlots'] })
+        queryClient.invalidateQueries({ queryKey: ['closedDates'] })
+      }
     },
   })
 }

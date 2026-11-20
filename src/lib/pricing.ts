@@ -16,7 +16,7 @@ export const RATE_TIERS: readonly RateTier[] = ['daytime', 'offpeak', 'latenight
 export const RATE_TIER_LABELS: Record<RateTier, string> = {
   daytime: 'Daytime',
   offpeak: 'Off-peak',
-  latenight: 'Late-night',
+  latenight: 'Evening', // display name only; the data key stays 'latenight' (stored in rules JSON and booking snapshots)
 }
 
 export const FIRST_SLOT_HOUR = 5
@@ -204,14 +204,26 @@ export function formatHour(hour: number): string {
   return `${display} ${suffix}`
 }
 
-/** Human ranges per tier, e.g. { offpeak: '5 AM - 6 AM & 6 PM - 10 PM' }. '' when a tier has no hours. */
-export function describeTierHours(rules: PricingRules): Record<RateTier, string> {
+/**
+ * Human ranges per tier, e.g. { offpeak: '5 AM - 6 AM & 6 PM - 10 PM' }. '' when a tier has no hours.
+ * `excludedStartHours` (slot start hours, e.g. 5 for 05:00-06:00) are left out, which splits a range
+ * around them. Used to keep permanently hidden hours off the public Rates section.
+ */
+export function describeTierHours(
+  rules: PricingRules,
+  excludedStartHours: ReadonlySet<number> | readonly number[] = []
+): Record<RateTier, string> {
+  const excluded = new Set(excludedStartHours)
   const ranges: Record<RateTier, string[]> = { daytime: [], offpeak: [], latenight: [] }
   let i = 0
   while (i < SLOT_COUNT) {
+    if (excluded.has(FIRST_SLOT_HOUR + i)) {
+      i++
+      continue
+    }
     const tier = rules.hour_tiers[i]
     let j = i
-    while (j + 1 < SLOT_COUNT && rules.hour_tiers[j + 1] === tier) j++
+    while (j + 1 < SLOT_COUNT && rules.hour_tiers[j + 1] === tier && !excluded.has(FIRST_SLOT_HOUR + j + 1)) j++
     ranges[tier].push(`${formatHour(FIRST_SLOT_HOUR + i)} - ${formatHour(FIRST_SLOT_HOUR + j + 1)}`)
     i = j + 1
   }

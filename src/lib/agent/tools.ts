@@ -3,11 +3,13 @@ import { z } from 'zod'
 import {
   getActiveBookingsByDate,
   getBookingsInRange,
-  getClosedDates,
-  getDisabledSlotsByDate,
   getPendingRefunds,
   getPendingRescheduleRequests,
 } from '@/lib/bookingService'
+import { getSlotRulesForDate } from '@/lib/slotRulesService'
+import { findBlockedSlots } from '@/lib/slotAvailability'
+import { generateTimeSlots } from '@/lib/timeSlotGenerator'
+import type { ClosedDate, DisabledSlot } from '@/types/booking'
 import { getPendingPayments } from '@/lib/paymentService'
 import { isRealDate, validateDateRange } from './dates'
 import { MAX_GROUPS, summarizeAvailability, summarizeBookingList, summarizeRevenue } from './summaries'
@@ -59,16 +61,26 @@ export const agentTools = {
 
   getSlotAvailability: tool({
     description:
-      'Which 1-hour slots on a date are available, booked (pending or confirmed), or disabled by an admin, ' +
-      'and whether the whole date is closed.',
+      'Which 1-hour slots on a date are available, booked (pending or confirmed), disabled by an admin for that date, ' +
+      'or blocked by a slot rule (with its label), and whether the whole date is closed. ' +
+      'If this tool errors, availability is unknown: say so and never describe slots as free.',
     inputSchema: z.object({ date: isoDate }),
     execute: async ({ date }) => {
-      const [active, disabled, closed] = await Promise.all([
+      // Fails closed: findBlockedSlots and getSlotRulesForDate throw if closed dates, one-day blocks or
+      // rules can't be read, so the model sees a tool error instead of slots that look free.
+      const [active, blocked, rules] = await Promise.all([
         getActiveBookingsByDate(date),
-        getDisabledSlotsByDate(date),
-        getClosedDates(),
+        findBlockedSlots(date, generateTimeSlots()),
+        getSlotRulesForDate(date),
       ])
-      return summarizeAvailability(date, active, disabled, closed)
+      const closedBlock = blocked.find(b => b.source === 'closed')
+      const closed: ClosedDate[] = closedBlock
+        ? [{ id: '', start_date: date, end_date: date, reason: closedBlock.label, created_at: '' }]
+        : []
+      const disabled: DisabledSlot[] = blocked
+        .filter(b => b.source === 'disabled')
+        .map(b => ({ id: '', date, time_slot: b.slot, created_at: '' }))
+      return summarizeAvailability(date, active, disabled, closed, rules)
     },
   }),
 

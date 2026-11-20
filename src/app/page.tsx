@@ -7,6 +7,7 @@ import HeroSection from '@/components/home/HeroSection'
 import BookSection from '@/components/home/BookSection'
 import ContactSection from '@/components/home/ContactSection'
 import Footer from '@/components/home/Footer'
+import { useSlotRules } from '@/hooks/useSlotRules'
 import { useActiveBookingsByDate, useDisabledSlotsByDate, useClosedDates } from '@/hooks/useBookings'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { Booking, BulkBookingPayload } from '@/types/booking'
@@ -32,6 +33,7 @@ export default function Home() {
   const { data: bookings = [], isLoading, refetch } = useActiveBookingsByDate(dateString)
   const { data: disabledSlots = [] } = useDisabledSlotsByDate(dateString)
   const { data: closedDates = [] } = useClosedDates()
+  const { data: slotRules, isPending: rulesPending, isError: rulesError } = useSlotRules()
 
   const isDateClosed = useMemo(() => {
     return closedDates.some(cd => 
@@ -40,12 +42,21 @@ export default function Home() {
   }, [closedDates, dateString])
 
   const availableSlots = useMemo(() => {
-    return getAvailableSlotsForCourt(bookings, dateString, 1, disabledSlots)
-  }, [bookings, dateString, disabledSlots])
+    return getAvailableSlotsForCourt(bookings, dateString, 1, disabledSlots, { rules: slotRules ?? [] })
+  }, [bookings, dateString, disabledSlots, slotRules])
 
   useEffect(() => {
     setSelectedSlots([])
   }, [dateString])
+
+  // Drop selected slots that are no longer available (e.g. newly blocked after a refetch)
+  useEffect(() => {
+    const open = new Set(availableSlots.filter((s) => s.available).map((s) => s.time))
+    setSelectedSlots((prev) => {
+      const next = prev.filter((s) => open.has(s))
+      return next.length === prev.length ? prev : next
+    })
+  }, [availableSlots])
 
   // When user clicks "Book" button - just open payment screen
   const handleSubmit = async (data: BulkBookingPayload) => {
@@ -195,7 +206,8 @@ export default function Home() {
             setSelectedSlots={setSelectedSlots}
             isDateClosed={isDateClosed}
             availableSlots={availableSlots}
-            isLoading={isLoading}
+            isLoading={isLoading || rulesPending}
+            availabilityError={rulesError ? 'Availability unavailable, please try again' : null}
             dateString={dateString}
             createBookingPending={false}
             onSubmit={handleSubmit}

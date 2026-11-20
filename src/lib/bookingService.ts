@@ -28,6 +28,8 @@ import {
   sendRescheduleRejectedEmail,
 } from './emailService'
 import { getPaymentSettings } from './paymentSettingsService'
+import { isSameSlotSelection } from './slotRules'
+import { findBlockedSlots, blocksForAdmin, describeBlocked, SLOTS_UNAVAILABLE, AVAILABILITY_UNAVAILABLE } from './slotAvailability'
 
 // Payment statuses that indicate a slot is occupied (pending or confirmed)
 const ACTIVE_PAYMENT_STATUSES = [...HELD_PAYMENT_STATUSES, ...CONFIRMED_PAYMENT_STATUSES]
@@ -251,6 +253,28 @@ async function loadPricing(
 }
 
 /**
+ * Error message if any slot can't be booked, or null. Admins may override rules and one-day blocks
+ * (never closed dates). Fails closed when availability can't be read.
+ */
+async function checkSlotsBookable(
+  date: string,
+  slots: string[],
+  overrideBlocks: unknown = false,
+  audience: 'admin' | 'customer' = 'admin'
+): Promise<string | null> {
+  try {
+    const blocked = blocksForAdmin(await findBlockedSlots(date, slots), overrideBlocks)
+    if (blocked.length === 0) return null
+    return audience === 'customer'
+      ? `Some of the slots you picked aren't available: ${describeBlocked(blocked)}.`
+      : `${SLOTS_UNAVAILABLE} Blocked: ${describeBlocked(blocked)}.`
+  } catch (error) {
+    console.error('Availability check failed:', error)
+    return AVAILABILITY_UNAVAILABLE
+  }
+}
+
+/**
  * Create a manual booking on behalf of a player (admin only).
  * Created as a single confirmed group, flagged is_manual, with no emails sent.
  */
@@ -263,6 +287,9 @@ export async function createAdminBooking(
   if (!payload.timeSlots || payload.timeSlots.length === 0) {
     return { success: false, error: 'Please select at least one time slot' }
   }
+
+  const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks)
+  if (blockedError) return { success: false, error: blockedError }
 
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
   const needsBalls = payload.needsBalls ?? false
@@ -356,6 +383,18 @@ export async function updateAdminBooking(
   )
   if (conflict) {
     return { success: false, error: `Time slot ${conflict.time_slot} is already booked.` }
+  }
+
+  // The booking already holds its current slots, so only a changed date or slot set needs the block check
+  const sameSlots = isSameSlotSelection(
+    existing[0].date,
+    existing.map((b) => b.time_slot),
+    payload.date,
+    payload.timeSlots
+  )
+  if (!sameSlots) {
+    const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks)
+    if (blockedError) return { success: false, error: blockedError }
   }
 
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
@@ -555,12 +594,9 @@ export async function createRescheduleRequest(
     return { success: false, error: `Time slot ${conflict} is already booked.` }
   }
 
-  // 8. Check disabled slots
-  const disabledOnNewDate = await getDisabledSlotsByDate(newDate)
-  const disabledConflict = disabledOnNewDate.find((s) => newTimeSlots.includes(s.time_slot))
-  if (disabledConflict) {
-    return { success: false, error: `Time slot ${disabledConflict.time_slot} is disabled by admin.` }
-  }
+  // 8. Check rules, one-day blocks and closed dates
+  const blockedError = await checkSlotsBookable(newDate, newTimeSlots, false, 'customer')
+  if (blockedError) return { success: false, error: blockedError }
 
   // 9. Insert the request
   const first = bookings[0]
@@ -661,6 +697,12 @@ export async function approveRescheduleRequest(
   )
   if (conflict) {
     return { success: false, error: `Time slot ${conflict.time_slot} is no longer available.` }
+  }
+  const blockedError = await checkSlotsBookable(request.new_date, request.new_time_slots)
+  if (blockedError) {
+    // Only a real block gets the guidance; an unreadable-availability error is just a retry
+    const guidance = blockedError === AVAILABILITY_UNAVAILABLE ? '' : ' Remove the block or reject the request.'
+    return { success: false, error: `${blockedError}${guidance}` }
   }
 
   // 4. Replace-group: delete old rows, insert new ones
