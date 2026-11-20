@@ -1,5 +1,6 @@
 import { parseISO } from 'date-fns'
 import type { Booking, ClosedDate, DisabledSlot } from '@/types/booking'
+import type { SlotRuleLike } from '@/types/slotRules'
 import type { PaymentStatus } from '@/types/payment'
 import {
   calculateCancellationFees,
@@ -100,10 +101,11 @@ export function summarizeAvailability(
   activeBookings: Booking[],
   disabledSlots: DisabledSlot[],
   closedDates: ClosedDate[],
+  slotRules: SlotRuleLike[] = [],
   now: Date = new Date()
 ) {
   const closed = closedDates.find(c => c.start_date <= date && date <= c.end_date)
-  const slots = getAvailableSlotsForCourt(activeBookings, date, 1, disabledSlots, { ignorePast: true })
+  const slots = getAvailableSlotsForCourt(activeBookings, date, 1, disabledSlots, { ignorePast: true, rules: slotRules })
   const { date: today, time } = manilaNow(now)
   const nowHour = Number(time.slice(0, 2))
   const isPast = (slot: string) =>
@@ -114,5 +116,6 @@ export function summarizeAvailability(
     available: closed ? [] : slots.filter(s => s.available && !isPast(s.time)).map(s => s.time),
     booked: slots.filter(s => s.reason === 'booked').map(s => s.time),
     disabled: slots.filter(s => s.reason === 'disabled').map(s => s.time),
+    blockedByRule: slots.filter(s => s.reason === 'rule').map(s => ({ time: s.time, label: s.label ?? 'Blocked' })),
   }
 }
