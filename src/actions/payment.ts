@@ -14,7 +14,7 @@ import { Booking } from '@/types/booking'
 import { PaymentResult, PendingPaymentBooking, PaymentStatusSummary } from '@/types/payment'
 import { requireAdmin, getUserIdFromToken } from '@/lib/actionAuth'
 import { sendPaymentConfirmationEmail, sendPaymentRejectionEmail, sendAdminPaymentAlertEmail } from '@/lib/emailService'
-import { generateConfirmToken } from '@/lib/adminTokens'
+import { generateAdminToken } from '@/lib/adminTokens'
 import { verifyPriceQuote } from '@/lib/priceQuote'
 import { getPricingVersionById } from '@/lib/pricingService'
 import { quoteInputSchema } from '@/lib/pricingSchema'
@@ -126,7 +126,7 @@ export async function submitPaymentAction(
       const groupId = booking.booking_group_id
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
       const confirmUrl = groupId
-        ? `${appUrl}/api/admin/confirm-payment?groupId=${groupId}&token=${generateConfirmToken(groupId)}`
+        ? `${appUrl}/api/admin/confirm-payment?groupId=${groupId}&token=${generateAdminToken('confirm-payment', groupId)}`
         : undefined
 
       const emailResult = await sendAdminPaymentAlertEmail({
