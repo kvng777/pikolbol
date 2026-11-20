@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { usePendingPayments, useConfirmPayment, useRejectPayment } from '@/hooks/usePayment'
 import { usePendingRescheduleRequests, useApproveRescheduleRequest, useRejectRescheduleRequest } from '@/hooks/useBookings'
+import { pendingAgeLabel } from '@/lib/pendingAge'
 import { formatEquipmentSummary } from '@/lib/paymentConfig'
 import { PendingPaymentBooking } from '@/types/payment'
 import { RescheduleRequest } from '@/types/booking'
@@ -87,6 +88,8 @@ function BookingGroupCard({ bookings, onConfirmClick, onRejectClick, isProcessin
     ? `${minutesAgo}m ago` 
     : `${Math.floor(minutesAgo / 60)}h ${minutesAgo % 60}m ago`
 
+  const waitingLabel = pendingAgeLabel(createdAt, new Date())
+
   const handleCopyId = async () => {
     if (!shortId) return
     try {
@@ -149,6 +152,12 @@ function BookingGroupCard({ bookings, onConfirmClick, onRejectClick, isProcessin
               <AlertTriangle className="w-3 h-3" />
               Needs Verification
             </span>
+            {waitingLabel && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-200 text-amber-900">
+                <Clock className="w-3 h-3" />
+                {waitingLabel}
+              </span>
+            )}
             <span className="text-xs text-gray-500">
               Submitted {timeAgo}
             </span>

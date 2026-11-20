@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyConfirmToken } from '@/lib/adminTokens'
+import { verifyAdminToken } from '@/lib/adminTokens'
 import { escapeHtml } from '@/lib/html'
 import { supabase } from '@/lib/supabase-server'
 import { confirmPayment } from '@/lib/paymentService'
@@ -37,7 +37,11 @@ export async function GET(request: NextRequest) {
     return htmlPage('Invalid Link', 'This confirmation link is missing required parameters.', '#ef4444')
   }
 
-  if (!verifyConfirmToken(groupId, token)) {
+  const tokenOk = verifyAdminToken('confirm-payment', groupId, token)
+  // Emails sent before purpose tokens carry the legacy token; accept it only while the group is still pending.
+  const legacyTokenOk = !tokenOk && verifyAdminToken('confirm-payment', groupId, token, { allowLegacy: true })
+
+  if (!tokenOk && !legacyTokenOk) {
     return htmlPage('Invalid Link', 'This confirmation link is invalid or has been tampered with.', '#ef4444')
   }
 
@@ -50,6 +54,10 @@ export async function GET(request: NextRequest) {
 
   if (error || !bookings || bookings.length === 0) {
     return htmlPage('Not Found', 'No bookings found for this confirmation link.', '#ef4444')
+  }
+
+  if (legacyTokenOk && !bookings.some(b => b.payment_status === 'pending')) {
+    return htmlPage('Invalid Link', 'This confirmation link is invalid or has been tampered with.', '#ef4444')
   }
 
   // Check if already confirmed

@@ -20,7 +20,12 @@ Supabase email/password auth with `user | admin` roles; every server action that
 4. User-scoped actions call `requireUser(token)` and use that id; they never accept a user id argument. Services also check ownership (cancel/reschedule).
 5. `submitPaymentAction` accepts `token | null`: valid token → booking linked to that user; otherwise a guest booking (logs a warning if a non-empty token was rejected).
 6. API routes (`/api/admin/agent/*`) use `Authorization: Bearer <token>` + `lib/agent/auth.ts`.
-7. Email links (`/api/admin/confirm-payment`, `/api/admin/reschedule`) carry an HMAC of the group/request id instead of a session. Their HTML responses pass user-derived text through `escapeHtml`.
+7. Email links (`/api/admin/confirm-payment`, `/api/admin/reschedule`) carry a purpose-scoped HMAC instead of a session (see below). Their HTML responses pass user-derived text through `escapeHtml`.
+
+### Email-link tokens
+- `HMAC-SHA256(ADMIN_ACTION_SECRET, "<purpose>:<id>")`, purpose = `confirm-payment` (id = booking group id), `reschedule-approve` or `reschedule-reject` (id = request id). Approve and reject links carry different tokens; a token fails for any other purpose or id.
+- `verifyAdminToken` checks length and hex first, compares with `timingSafeEqual`, and returns false if the secret is missing.
+- Legacy window: emails sent before this change carry `HMAC(id)`. Accepted only with `allowLegacy`: confirm-payment while the group still has a pending row; reschedule only if the request's `created_at` is before `LEGACY_TOKEN_CUTOFF` in `adminTokens.ts`. Remove the cutoff and legacy path once old requests are resolved.
 
 ## Data
 - `profiles`: `user_id`, `name`, `phone`, `role`.
@@ -34,6 +39,5 @@ Supabase email/password auth with `user | admin` roles; every server action that
 - In production Next.js hides thrown action error messages; auth failures surface as generic errors (acceptable: only hit by expired sessions or direct calls).
 
 ## Gotchas / known gaps
-- `verifyConfirmToken` compares with `===`, not `timingSafeEqual`.
-- Email-link routes mutate on GET; the reschedule token signs only the request id, so the same token works for approve and reject.
+- Email-link routes mutate on GET (the tokens are purpose-scoped, but a link click still performs the action).
 - `ADMIN_ACTION_SECRET`, `RESEND_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are flagged "Needs Attention" in Vercel (consider the Secret type).

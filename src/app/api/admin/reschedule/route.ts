@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyConfirmToken } from '@/lib/adminTokens'
+import { verifyAdminToken, isBeforeLegacyCutoff, type TokenPurpose } from '@/lib/adminTokens'
+import { supabase } from '@/lib/supabase-server'
 import { escapeHtml } from '@/lib/html'
 import { approveRescheduleRequest, rejectRescheduleRequest } from '@/lib/bookingService'
 
@@ -40,7 +41,21 @@ export async function GET(request: NextRequest) {
     return htmlPage('Invalid Link', 'Unknown action type.', '#ef4444')
   }
 
-  if (!verifyConfirmToken(requestId, token)) {
+  const purpose: TokenPurpose = action === 'approve' ? 'reschedule-approve' : 'reschedule-reject'
+  let tokenOk = verifyAdminToken(purpose, requestId, token)
+  if (!tokenOk) {
+    // Legacy token (emails sent before purpose tokens): only for requests created before the cutoff.
+    const { data: req } = await supabase
+      .from('reschedule_requests')
+      .select('created_at')
+      .eq('id', requestId)
+      .maybeSingle()
+    tokenOk = verifyAdminToken(purpose, requestId, token, {
+      allowLegacy: isBeforeLegacyCutoff(req?.created_at),
+    })
+  }
+
+  if (!tokenOk) {
     return htmlPage('Invalid Link', 'This link is invalid or has been tampered with.', '#ef4444')
   }
 
