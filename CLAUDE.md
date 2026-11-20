@@ -9,7 +9,7 @@ Read the page for the area you're touching before exploring code:
 - `docs/features/booking-and-payment.md` — booking flow, GCash payment, cancellations/refunds, reschedules, manual bookings
 - `docs/features/pricing.md` — versioned prices, signed quotes, snapshots, Pricing tab
 - `docs/features/auth-and-security.md` — roles, token-first server actions, public data rules, HMAC email links
-- `docs/features/slots-and-closures.md` — slot list, availability, one-day blocks, closed dates
+- `docs/features/slots-and-closures.md` — slot list, availability, slot rules, one-day blocks, closed dates
 - `docs/features/finance.md` — Finance tab calculations and data sources
 - `docs/features/admin-assistant.md` — "Ask Pikol" admin AI assistant
 
@@ -58,14 +58,14 @@ docs/features/           # Current-state feature docs
 
 ### Data Flow Pattern
 
-All DB mutations go through **Server Actions** (`/actions`). Client components use **React Query hooks** (`/hooks`) that wrap these actions. Cache is invalidated on mutations. Each feature doc lists its query keys; common ones: `['activeBookings', date]` (drives availability), `['allBookings']` (admin + Finance), `['disabledSlots', date]`, `['closedDates']`, `['pricing']`.
+All DB mutations go through **Server Actions** (`/actions`). Client components use **React Query hooks** (`/hooks`) that wrap these actions. Cache is invalidated on mutations. Each feature doc lists its query keys; common ones: `['activeBookings', date]` (drives availability), `['allBookings']` (admin + Finance), `['disabledSlots', date]`, `['closedDates']`, `['slotRules']` / `['slotRules','admin']`, `['pricing']`.
 
 ### Booking System (summary — see booking-and-payment.md)
 
 - **State machine:** idle → payment → pending → confirmed. **Payment statuses:** `pending | confirmed | rejected | cancelled`.
 - **Slots:** 1-hour slots, 5:00 AM–12:00 AM (19 slots/day), single court (`court_number = 1`).
 - **Groups:** consecutive slots share `booking_group_id` + `short_id`; one row per slot; `payment_amount` is the group total.
-- **Availability:** only `pending`/`confirmed` block slots; admins can also block single slots or close date ranges.
+- **Availability:** only `pending`/`confirmed` block slots; admins can also block single slots, add slot rules, or close date ranges. Every booking write path re-checks blocks on the server (`lib/slotAvailability.ts`).
 - Customer pays exactly a server-signed price quote; admin confirms after the GCash claim.
 
 ### Pricing (summary — see pricing.md)
@@ -92,6 +92,7 @@ All DB mutations go through **Server Actions** (`/actions`). Client components u
 - `auth.users` — Supabase managed; `profiles` — user_id, name, phone, role
 - `bookings` — core booking data with payment fields, short_id, booking_group_id, pricing_snapshot
 - `payment_settings` — GCash QR URL, name, number, timeout_minutes
+- `slot_rules` — reusable slot blocks (recurring, ranges, opening hours); see `docs/features/slots-and-closures.md`
 - `disabled_slots` — admin-blocked individual slots; `closed_dates` — blocked date ranges with reason
 - `reschedule_requests` — customer reschedule requests awaiting admin
 - `pricing_schedules` — versioned prices by effective play date

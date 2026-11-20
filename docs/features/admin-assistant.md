@@ -15,7 +15,7 @@ Read-only chat drawer on `/admin` that answers questions about bookings, revenue
 1. Client sends `{ id, text, regenerate? }`; server builds the user message (server-generated id) and replays history from `agent_messages`. Retry (`regenerate`) reuses the stored question and replaces the failed answer (`planTurn`).
 2. Token budget: last 20 messages replayed; tool outputs older than the last 2 assistant turns become a stub.
 3. System = cached static prompt (no prices) + uncached context note and pricing note (live + scheduled versions from `pricing_schedules`).
-4. Tools (all read-only, reuse `financeUtils` so numbers match Finance): `listBookings`, `getRevenueSummary`, `getSlotAvailability`, `getActionQueue`.
+4. Tools (all read-only, reuse `financeUtils` so numbers match Finance): `listBookings`, `getRevenueSummary`, `getSlotAvailability` (also reports slots blocked by slot rules, `blockedByRule` with label), `getActionQueue`.
 5. Replies are saved on stream end even if the tab closes (`consumeSseStream`); after Stop the full answer is still saved, so the next turn may include text the admin didn't see (acceptable).
 6. "Previous chats": the admin's own threads (up to 50, newest `updated_at` first), titled from the first user message, empty threads skipped, no delete, admins never see each other's chats. Fetched only while that view is open; invalidated after every answer.
 7. Budget meter: `onEnd` converts `totalUsage` to USD (Sonnet 5.5 prices in `usage.ts`; update if the model/prices change) and inserts into `agent_usage`. `GET /usage` returns this Manila month's spend across admins vs budget; bar is amber at 80%, red at 100%.

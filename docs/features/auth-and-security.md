@@ -9,7 +9,8 @@ Supabase email/password auth with `user | admin` roles; every server action that
 - `src/lib/accessToken.ts` — client `getAccessToken()` for hooks
 - `src/lib/agent/auth.ts` — `requireAdmin(req)` for API routes (Bearer token → 401/403)
 - `src/lib/adminTokens.ts` — HMAC tokens for email links (`ADMIN_ACTION_SECRET`)
-- `src/actions/actionGuards.test.ts` — lists every protected action
+- `src/actions/actionGuards.test.ts` — lists every protected action (incl. admin slot-rule actions in `src/actions/slotRules.ts`)
+- `src/lib/html.ts` — `escapeHtml` for the HTML pages returned by email-link routes
 - `src/actions/profile.ts` — `getMyProfileAction`, `upsertMyProfileAction` (name/phone only)
 
 ## How it works
@@ -19,7 +20,7 @@ Supabase email/password auth with `user | admin` roles; every server action that
 4. User-scoped actions call `requireUser(token)` and use that id; they never accept a user id argument. Services also check ownership (cancel/reschedule).
 5. `submitPaymentAction` accepts `token | null`: valid token → booking linked to that user; otherwise a guest booking (logs a warning if a non-empty token was rejected).
 6. API routes (`/api/admin/agent/*`) use `Authorization: Bearer <token>` + `lib/agent/auth.ts`.
-7. Email links (`/api/admin/confirm-payment`, `/api/admin/reschedule`) carry an HMAC of the group/request id instead of a session.
+7. Email links (`/api/admin/confirm-payment`, `/api/admin/reschedule`) carry an HMAC of the group/request id instead of a session. Their HTML responses pass user-derived text through `escapeHtml`.
 
 ## Data
 - `profiles`: `user_id`, `name`, `phone`, `role`.
