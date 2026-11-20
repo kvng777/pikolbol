@@ -61,7 +61,8 @@ export function describeTimeSlots(slots: string[]): string {
   return ranges.join(', ')
 }
 
-function formatRuleDate(date: string): string {
+/** '2026-11-20' → 'Nov 20, 2026'. Date must be a valid zero-padded YYYY-MM-DD. */
+export function formatRuleDate(date: string): string {
   const [y, m, d] = date.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
     month: 'short',
