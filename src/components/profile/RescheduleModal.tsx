@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { CalendarPicker } from '@/components/booking/CalendarPicker'
+import { useSlotRules } from '@/hooks/useSlotRules'
 import { TimeSlotPicker } from '@/components/booking/TimeSlotPicker'
 import { useActiveBookingsByDate, useDisabledSlotsByDate, useClosedDates, useHeldRescheduleSlotsByDate } from '@/hooks/useBookings'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
@@ -47,6 +48,7 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
   const { data: disabledSlots = [], isLoading: slotsLoading } = useDisabledSlotsByDate(dateStr)
   const { data: closedDates = [] } = useClosedDates()
   const { data: heldSlots = [], isLoading: heldLoading } = useHeldRescheduleSlotsByDate(dateStr)
+  const { data: slotRules, isLoading: rulesLoading, isError: rulesError } = useSlotRules()
 
   // On the same date as the original booking, keep own group's slots as "booked"
   // so the user can't re-select the same time. On a different date, exclude them.
@@ -62,11 +64,12 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
       ignorePast: false,
       bufferMinutes: 0,
       heldSlots,
+      rules: slotRules ?? [],
     }),
-    [filteredBookings, dateStr, disabledSlots, heldSlots]
+    [filteredBookings, dateStr, disabledSlots, heldSlots, slotRules]
   )
 
-  const isLoadingSlots = bookingsLoading || slotsLoading || heldLoading
+  const isLoadingSlots = bookingsLoading || slotsLoading || heldLoading || rulesLoading
 
   // Free-flow slot selection: auto-replace oldest when at max count
   const handleSelectSlots = (slots: string[]) => {
@@ -174,6 +177,7 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
               selectedSlots={selectedSlots}
               onSelectSlots={handleSelectSlots}
               isLoading={isLoadingSlots}
+              loadError={rulesError ? 'Availability unavailable, please try again' : null}
             />
             {requiredSlotCount > 1 && selectedSlots.length > 0 && selectedSlots.length < requiredSlotCount && (
               <p className="text-sm text-amber-600 mt-2">
@@ -219,7 +223,7 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!canConfirm || isSameAsOriginal || isSubmitting}
+            disabled={!canConfirm || isSameAsOriginal || isSubmitting || rulesError}
             className="flex-1 bg-teal-600 hover:bg-teal-700 text-white"
           >
             {isSubmitting ? (

@@ -7,6 +7,7 @@ import HeroSection from '@/components/home/HeroSection'
 import BookSection from '@/components/home/BookSection'
 import ContactSection from '@/components/home/ContactSection'
 import Footer from '@/components/home/Footer'
+import { useSlotRules } from '@/hooks/useSlotRules'
 import { useActiveBookingsByDate, useDisabledSlotsByDate, useClosedDates } from '@/hooks/useBookings'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { Booking, BulkBookingPayload } from '@/types/booking'
@@ -32,6 +33,7 @@ export default function Home() {
   const { data: bookings = [], isLoading, refetch } = useActiveBookingsByDate(dateString)
   const { data: disabledSlots = [] } = useDisabledSlotsByDate(dateString)
   const { data: closedDates = [] } = useClosedDates()
+  const { data: slotRules, isLoading: rulesLoading, isError: rulesError } = useSlotRules()
 
   const isDateClosed = useMemo(() => {
     return closedDates.some(cd => 
@@ -40,8 +42,8 @@ export default function Home() {
   }, [closedDates, dateString])
 
   const availableSlots = useMemo(() => {
-    return getAvailableSlotsForCourt(bookings, dateString, 1, disabledSlots)
-  }, [bookings, dateString, disabledSlots])
+    return getAvailableSlotsForCourt(bookings, dateString, 1, disabledSlots, { rules: slotRules ?? [] })
+  }, [bookings, dateString, disabledSlots, slotRules])
 
   useEffect(() => {
     setSelectedSlots([])
@@ -195,7 +197,8 @@ export default function Home() {
             setSelectedSlots={setSelectedSlots}
             isDateClosed={isDateClosed}
             availableSlots={availableSlots}
-            isLoading={isLoading}
+            isLoading={isLoading || rulesLoading}
+            availabilityError={rulesError ? 'Availability unavailable, please try again' : null}
             dateString={dateString}
             createBookingPending={false}
             onSubmit={handleSubmit}

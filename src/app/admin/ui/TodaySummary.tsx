@@ -3,6 +3,8 @@
 import { format } from 'date-fns'
 import { CalendarDays, Activity, ArrowRight, Gauge } from 'lucide-react'
 import { useAllBookings, useDisabledSlotsByDate } from '@/hooks/useBookings'
+import { useSlotRules } from '@/hooks/useSlotRules'
+import { findBlockingRule } from '@/lib/slotRules'
 import { generateTimeSlots } from '@/lib/timeSlotGenerator'
 import type { Booking, ClosedDate } from '@/types/booking'
 
@@ -33,6 +35,7 @@ export default function TodaySummary({ closedDates }: Props) {
   const currentHour = now.getHours()
 
   const { data: disabledToday = [] } = useDisabledSlotsByDate(todayStr)
+  const { data: slotRules = [] } = useSlotRules()
 
   const isClosedToday = isDateInClosedRange(todayStr, closedDates)
 
@@ -119,7 +122,10 @@ export default function TodaySummary({ closedDates }: Props) {
     }
 
     // Occupancy
-    const disabledSet = new Set(disabledToday.map(d => d.time_slot))
+    const disabledSet = new Set([
+      ...disabledToday.map(d => d.time_slot),
+      ...generateTimeSlots().filter(s => findBlockingRule(slotRules, todayStr, s)),
+    ])
     const total = Math.max(0, generateTimeSlots().length - disabledSet.size)
     const booked = [...bookedSlots].filter(s => !disabledSet.has(s)).length
 

@@ -18,6 +18,7 @@ type BookSectionProps = {
   isDateClosed: boolean
   availableSlots: TimeSlot[]
   isLoading: boolean
+  availabilityError: string | null
   dateString: string
   createBookingPending: boolean
   onSubmit: (data: BulkBookingPayload) => Promise<void>
@@ -32,6 +33,7 @@ export default function BookSection({
   isDateClosed,
   availableSlots,
   isLoading,
+  availabilityError,
   dateString,
   createBookingPending,
   onSubmit,
@@ -115,10 +117,11 @@ export default function BookSection({
                 selectedSlots={selectedSlots}
                 onSelectSlots={setSelectedSlots}
                 isLoading={isLoading}
+                loadError={availabilityError}
               />
             )}
 
-            {selectedSlots.length > 0 && !isDateClosed && (
+            {selectedSlots.length > 0 && !isDateClosed && !availabilityError && (
               <div className="mt-8 pt-6 border-t border-gray-100">
                 <h3 className="text-gray-900 font-semibold mb-4">Complete your booking</h3>
                 

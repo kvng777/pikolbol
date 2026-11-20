@@ -10,9 +10,11 @@ interface TimeSlotPickerProps {
   selectedSlots: string[]
   onSelectSlots: (slots: string[]) => void
   isLoading?: boolean
+  /** When set, shows this message instead of slots (availability could not be loaded). */
+  loadError?: string | null
 }
 
-export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoading = false }: TimeSlotPickerProps) {
+export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoading = false, loadError = null }: TimeSlotPickerProps) {
   const toggleSlot = (slot: string) => {
     const current = selectedSlots
     if (current.includes(slot)) {
@@ -38,6 +40,14 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
             />
           ))}
         </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-700 font-medium">{loadError}</p>
       </div>
     )
   }
@@ -68,7 +78,7 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
                   unavailableClass = 'bg-orange-50 text-orange-300 cursor-not-allowed border border-orange-100'
                   icon = <Lock className="w-3.5 h-3.5 shrink-0" />
                 } else {
-                  unavailableClass = 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                  unavailableClass = `bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200${slot.reason === 'rule' ? ' h-auto min-h-11 py-1' : ''}`
                   icon = <Ban className="w-3.5 h-3.5 shrink-0" />
                 }
               }
@@ -90,9 +100,14 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
                   `}
                 >
                   {icon ? (
-                    <span className="flex items-center justify-center gap-1.5">
-                      {icon}
-                      {slot.time}
+                    <span className="flex flex-col items-center leading-tight">
+                      <span className="flex items-center justify-center gap-1.5">
+                        {icon}
+                        {slot.time}
+                      </span>
+                      {slot.reason === 'rule' && slot.label && (
+                        <span className="text-[11px] font-normal text-gray-500">{slot.label}</span>
+                      )}
                     </span>
                   ) : slot.time}
                 </Button>

@@ -45,7 +45,9 @@ export interface Booking {
 export interface TimeSlot {
   time: string
   available: boolean
-  reason?: 'past' | 'booked' | 'disabled'
+  reason?: 'past' | 'booked' | 'disabled' | 'rule'
+  /** For reason 'rule': the rule's label ("Blocked" when the rule has none). */
+  label?: string
 }
 
 export interface BookingFormData {
