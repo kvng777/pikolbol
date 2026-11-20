@@ -9,13 +9,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { MAX_RULE_LABEL } from '@/lib/slotRulesSchema'
-import { WEEKDAY_SHORT, describeRule, describeTimeSlots, formatRuleDate } from '@/lib/slotRules'
+import { RULE_OVERLAP_LIMIT, WEEKDAY_SHORT, describeRule, describeTimeSlots, formatRuleDate } from '@/lib/slotRules'
 import {
   RULE_SLOTS,
   WEEKDAY_SHORTCUTS,
   applySlotDrag,
   initialSlotRuleFormValues,
   overlapSummary,
+  reactivatesRule,
   slotLabel,
   toggleSlot,
   toggleWeekday,
@@ -90,8 +91,8 @@ export function SlotRuleForm({ initial, onClose }: Props) {
 
   // ---- Slot grid: tap to toggle, drag to select a range (pointer events: mouse, pen and touch) ----
   const drag = useRef<{ anchor: string; adding: boolean; base: string[]; last: string } | null>(null)
-  // Set when a pointer press already toggled the slot, so the click that follows is ignored.
-  const pointerHandled = useRef(false)
+  // Pointer type of the latest press on a slot: mouse/pen presses toggle on pointerdown, touch taps on click.
+  const lastPointerType = useRef<string>('')
 
   useEffect(() => {
     const stop = () => {
@@ -109,31 +110,34 @@ export function SlotRuleForm({ initial, onClose }: Props) {
     (document.elementFromPoint(x, y) as HTMLElement | null)?.closest<HTMLElement>('[data-slot]')?.dataset.slot
 
   const onSlotPointerDown = (e: React.PointerEvent<HTMLButtonElement>, slot: string) => {
+    lastPointerType.current = e.pointerType
+    // Touch taps toggle in onClick; a swipe that scrolls fires pointercancel and no click.
+    if (e.pointerType === 'touch') return
     if (e.pointerType === 'mouse' && e.button !== 0) return
-    // Touch captures the pointer to this button; release it so moves report the slot under the finger.
-    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
     const base = getValues('timeSlots')
     const adding = !base.includes(slot)
     drag.current = { anchor: slot, adding, base, last: slot }
-    pointerHandled.current = true
     setSlots(applySlotDrag(base, slot, slot, adding))
   }
 
   const onGridPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current
     if (!d) return
+    // The button was released outside the window (no pointerup reached us): stop dragging.
+    if (e.buttons === 0) {
+      drag.current = null
+      return
+    }
     const slot = slotAt(e.clientX, e.clientY)
     if (!slot || slot === d.last) return
     d.last = slot
     setSlots(applySlotDrag(d.base, d.anchor, slot, d.adding))
   }
 
-  // Keyboard (Enter/Space) and assistive tech arrive here as a click without a pointer press.
-  const onSlotClick = (slot: string) => {
-    if (pointerHandled.current) {
-      pointerHandled.current = false
-      return
-    }
+  // Keyboard (Enter/Space) and assistive tech arrive as a click with detail 0; touch taps toggle here too.
+  // Mouse/pen clicks were already handled on pointerdown.
+  const onSlotClick = (e: React.MouseEvent<HTMLButtonElement>, slot: string) => {
+    if (e.detail !== 0 && lastPointerType.current !== 'touch') return
     setSlots(toggleSlot(getValues('timeSlots'), slot))
   }
 
@@ -292,11 +296,8 @@ export function SlotRuleForm({ initial, onClose }: Props) {
           Tap a slot to pick it, or press and drag across slots to pick a range.
         </p>
         <div
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 touch-none select-none"
+          className="grid grid-cols-3 lg:grid-cols-4 gap-2 touch-pan-y select-none"
           onPointerMove={onGridPointerMove}
-          onKeyDown={() => {
-            pointerHandled.current = false
-          }}
         >
           {RULE_SLOTS.map((slot) => {
             const on = timeSlots.includes(slot)
@@ -307,8 +308,8 @@ export function SlotRuleForm({ initial, onClose }: Props) {
                 data-slot={slot}
                 aria-pressed={on}
                 onPointerDown={(e) => onSlotPointerDown(e, slot)}
-                onClick={() => onSlotClick(slot)}
-                className={`min-h-10 px-2 py-2 rounded-lg text-sm font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                onClick={(e) => onSlotClick(e, slot)}
+                className={`min-h-10 px-1 sm:px-2 py-2 rounded-lg text-xs sm:text-sm text-center font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                   on ? 'bg-red-100 border-red-300 text-red-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-400'
                 }`}
               >
@@ -432,7 +433,10 @@ export function SlotRuleForm({ initial, onClose }: Props) {
             <p className={review.overlaps.length > 0 ? 'font-medium text-amber-800' : 'text-gray-600'}>
               {overlapSummary(review.overlaps.length, review.truncated)}
             </p>
-            {review.truncated && <p className="text-xs text-amber-800">Showing the first 1,000.</p>}
+            {initial && reactivatesRule(initial, review.input, manilaNow().date) && (
+              <p className="font-medium text-gray-900">This reactivates the rule.</p>
+            )}
+            {review.truncated && <p className="text-xs text-amber-800">Showing the first {RULE_OVERLAP_LIMIT.toLocaleString('en-US')}.</p>}
             {review.overlaps.length > 0 && (
               <ul className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100" aria-label="Existing bookings in these slots">
                 {review.overlaps.map((b, i) => (

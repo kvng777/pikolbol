@@ -12,7 +12,9 @@ import { useCreateAdminBooking, useUpdateAdminBooking } from '@/hooks/useBooking
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { calculatePaymentAmount, isEquipmentChargeable, isSamePricedSelection } from '@/lib/pricing'
 import { usePricingForDate } from '@/hooks/usePricing'
-import { useSlotRules } from '@/hooks/useSlotRules'
+import { useSlotRules, SLOT_RULES_QUERY_KEY } from '@/hooks/useSlotRules'
+import { isSameSlotSelection } from '@/lib/slotRules'
+import { useQueryClient } from '@tanstack/react-query'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { toast } from 'sonner'
 
@@ -49,6 +51,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
   const [needsBalls, setNeedsBalls] = useState(initialValues?.needsBalls ?? false)
   const [trainingBalls, setTrainingBalls] = useState(initialValues?.trainingBalls ?? false)
 
+  const queryClient = useQueryClient()
   const createBooking = useCreateAdminBooking()
   const updateBooking = useUpdateAdminBooking()
   const isSubmitting = createBooking.isPending || updateBooking.isPending
@@ -80,10 +83,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
   const isOverridable = (reason?: string) => reason === 'rule' || reason === 'disabled'
   // Editing with the same date and slots never needs an override (the server skips the check too)
   const slotsUnchanged =
-    !!initialValues &&
-    initialValues.date === date &&
-    initialValues.timeSlots.length === selectedSlots.length &&
-    initialValues.timeSlots.every((t) => selectedSlots.includes(t))
+    !!initialValues && isSameSlotSelection(initialValues.date, initialValues.timeSlots, date, selectedSlots)
   const blockedSelected = slotsUnchanged
     ? []
     : availableSlots.filter((s) => selectedSlots.includes(s.time) && isOverridable(s.reason))
@@ -138,6 +138,9 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
         toast.success(`${isEdit ? 'Booking updated' : 'Booking created'}${amountText}`)
         onClose()
       } else {
+        // A rejection may mean our rules or one-day blocks are stale: refetch them for this date.
+        queryClient.invalidateQueries({ queryKey: SLOT_RULES_QUERY_KEY })
+        queryClient.invalidateQueries({ queryKey: ['disabledSlots', date] })
         toast.error(result.error || 'Failed to save booking')
       }
     } catch {

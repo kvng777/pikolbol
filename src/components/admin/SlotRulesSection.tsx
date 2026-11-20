@@ -8,7 +8,7 @@ import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { SlotRuleForm } from './SlotRuleForm'
 import { useAdminSlotRules, useEndSlotRule, useDeleteSlotRule } from '@/hooks/useSlotRules'
 import { describeRuleDates, describeTimeSlots, describeWeekdays, ruleLabel, ruleStatus } from '@/lib/slotRules'
-import { endRuleDescription, ruleStatusText, sortRulesForList } from '@/lib/slotRuleForm'
+import { canEndRule, deleteRuleDescription, endRuleDescription, ruleStatusText, sortRulesForList } from '@/lib/slotRuleForm'
 import { manilaNow } from '@/lib/agent/dates'
 import type { SlotRule, SlotRuleStatus } from '@/types/slotRules'
 
@@ -144,7 +144,7 @@ export function SlotRulesSection() {
                   <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(rule)} aria-label={`Edit rule: ${name}`}>
                     <Pencil aria-hidden /> Edit
                   </Button>
-                  {status !== 'ended' && (
+                  {canEndRule(rule, today) && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -182,7 +182,7 @@ export function SlotRulesSection() {
             ? ''
             : pending.action === 'end'
               ? endRuleDescription(pending.rule, today)
-              : 'The rule is removed completely, including its history, and its slots open up again.'
+              : deleteRuleDescription(pending.rule, today)
         }
         confirmText={pending?.action === 'end' ? 'End rule' : 'Delete rule'}
         cancelText="Keep it"

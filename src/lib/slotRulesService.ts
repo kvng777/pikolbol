@@ -4,7 +4,7 @@
  */
 import { supabase } from './supabase-server'
 import { slotRuleInputSchema } from './slotRulesSchema'
-import { isoWeekday, ruleAppliesOnDate } from './slotRules'
+import { isoWeekday, ruleAppliesOnDate, RULE_OVERLAP_LIMIT } from './slotRules'
 import { manilaNow, isRealDate } from './agent/dates'
 import { addDaysIso } from './pricing'
 import type { SlotRule, PublicSlotRule, SlotRuleInput, RuleOverlapResult } from '@/types/slotRules'
@@ -26,7 +26,7 @@ const COLUMNS = 'id, label, start_date, end_date, weekdays, time_slots, created_
 /** Same as COLUMNS without audit fields; safe for customer-facing reads. */
 const PUBLIC_COLUMNS = 'id, label, start_date, end_date, weekdays, time_slots, created_at, updated_at'
 /** Max overlapping bookings returned by the overlap check. */
-const OVERLAP_LIMIT = 1000
+const OVERLAP_LIMIT = RULE_OVERLAP_LIMIT
 /** How far ahead the overlap check looks for rules without an end date. */
 const OVERLAP_HORIZON_DAYS = 366
 

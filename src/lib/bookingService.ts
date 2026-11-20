@@ -28,6 +28,7 @@ import {
   sendRescheduleRejectedEmail,
 } from './emailService'
 import { getPaymentSettings } from './paymentSettingsService'
+import { isSameSlotSelection } from './slotRules'
 import { findBlockedSlots, blocksForAdmin, describeBlocked, SLOTS_UNAVAILABLE, AVAILABILITY_UNAVAILABLE } from './slotAvailability'
 
 // Payment statuses that indicate a slot is occupied (pending or confirmed)
@@ -385,11 +386,12 @@ export async function updateAdminBooking(
   }
 
   // The booking already holds its current slots, so only a changed date or slot set needs the block check
-  const sameSlots =
-    existing[0].date === payload.date &&
-    existing.length === payload.timeSlots.length &&
-    new Set(payload.timeSlots).size === payload.timeSlots.length &&
-    existing.every((b) => payload.timeSlots.includes(b.time_slot))
+  const sameSlots = isSameSlotSelection(
+    existing[0].date,
+    existing.map((b) => b.time_slot),
+    payload.date,
+    payload.timeSlots
+  )
   if (!sameSlots) {
     const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks)
     if (blockedError) return { success: false, error: blockedError }

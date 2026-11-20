@@ -7,6 +7,21 @@ import { formatHour } from './pricing'
 import type { SlotRuleLike, SlotRuleStatus } from '@/types/slotRules'
 
 export const DEFAULT_RULE_LABEL = 'Blocked'
+/** Most bookings the rule-overlap check reads (the review dialog says "Showing the first N"). */
+export const RULE_OVERLAP_LIMIT = 1000
+
+/** Same date and the same slots, ignoring order. Duplicates in either list make them different. */
+export function isSameSlotSelection(
+  prevDate: string,
+  prevSlots: readonly string[],
+  date: string,
+  slots: readonly string[]
+): boolean {
+  if (prevDate !== date) return false
+  if (new Set(prevSlots).size !== prevSlots.length || new Set(slots).size !== slots.length) return false
+  return prevSlots.length === slots.length && prevSlots.every((s) => slots.includes(s))
+}
+
 export const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
 /** ISO weekday of a 'YYYY-MM-DD' date: 1 = Monday … 7 = Sunday. The date must be a valid zero-padded YYYY-MM-DD. */

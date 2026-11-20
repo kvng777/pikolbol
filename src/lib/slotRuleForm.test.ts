@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   RULE_SLOTS,
+  canEndRule,
+  deleteRuleDescription,
+  reactivatesRule,
   applySlotDrag,
   endRuleDescription,
   formValuesToInput,
@@ -213,5 +216,57 @@ describe('sortRulesForList', () => {
       { id: 'd', start_date: '2026-11-01', end_date: null },
     ]
     expect(sortRulesForList(rules, TODAY).map((r) => r.id)).toEqual(['b', 'd', 'a', 'c'])
+  })
+})
+
+describe('No end date with a junk endDate', () => {
+  it('passes validation and drops the end date', () => {
+    const r = validateSlotRuleForm(form({ noEnd: true, endDate: 'garbage' }))
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.input.endDate).toBeNull()
+  })
+})
+
+describe('endRuleDescription boundary', () => {
+  it('start = today removes the rule', () => {
+    expect(endRuleDescription({ start_date: TODAY }, TODAY)).toMatch(/starts today/)
+  })
+  it('start = yesterday keeps it as ended', () => {
+    expect(endRuleDescription({ start_date: '2026-11-19' }, TODAY)).toMatch(/stays in the list as ended/)
+  })
+  it('start = tomorrow says it has not started', () => {
+    expect(endRuleDescription({ start_date: '2026-11-21' }, TODAY)).toMatch(/hasn't started yet/)
+  })
+})
+
+describe('canEndRule', () => {
+  it('only for active rules that started before today', () => {
+    expect(canEndRule({ start_date: '2026-11-19', end_date: null }, TODAY)).toBe(true)
+    expect(canEndRule({ start_date: TODAY, end_date: null }, TODAY)).toBe(false)
+    expect(canEndRule({ start_date: '2026-11-21', end_date: null }, TODAY)).toBe(false)
+    expect(canEndRule({ start_date: '2026-11-01', end_date: '2026-11-19' }, TODAY)).toBe(false)
+  })
+})
+
+describe('deleteRuleDescription', () => {
+  it('mentions slots opening only for active or upcoming rules', () => {
+    expect(deleteRuleDescription({ start_date: '2026-11-01', end_date: null }, TODAY)).toMatch(/slots open up again/)
+    expect(deleteRuleDescription({ start_date: '2026-11-25', end_date: null }, TODAY)).toMatch(/slots open up again/)
+    const ended = deleteRuleDescription({ start_date: '2026-11-01', end_date: '2026-11-10' }, TODAY)
+    expect(ended).toMatch(/removed from the list/)
+    expect(ended).not.toMatch(/open up/)
+  })
+})
+
+describe('reactivatesRule', () => {
+  const ended = { start_date: '2026-11-01', end_date: '2026-11-10' }
+  it('is true when an ended rule becomes active or upcoming', () => {
+    expect(reactivatesRule(ended, { startDate: '2026-11-01', endDate: null }, TODAY)).toBe(true)
+    expect(reactivatesRule(ended, { startDate: '2026-11-25', endDate: '2026-11-30' }, TODAY)).toBe(true)
+  })
+  it('is false when still ended, for create, or for a non-ended rule', () => {
+    expect(reactivatesRule(ended, { startDate: '2026-11-01', endDate: '2026-11-12' }, TODAY)).toBe(false)
+    expect(reactivatesRule(null, { startDate: TODAY, endDate: null }, TODAY)).toBe(false)
+    expect(reactivatesRule({ start_date: '2026-11-01', end_date: null }, { startDate: TODAY, endDate: null }, TODAY)).toBe(false)
   })
 })

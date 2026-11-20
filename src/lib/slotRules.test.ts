@@ -9,6 +9,8 @@ import {
   describeTimeSlots,
   describeRule,
   DEFAULT_RULE_LABEL,
+  isSameSlotSelection,
+  RULE_OVERLAP_LIMIT,
 } from './slotRules'
 import type { SlotRuleLike } from '@/types/slotRules'
 
@@ -93,5 +95,26 @@ describe('wording', () => {
     expect(describeRule({ ...openPlay, label: null, end_date: '2026-12-07', weekdays: [6, 7] })).toBe(
       'Blocked: 7 AM - 9 AM, weekends, Nov 20, 2026 – Dec 7, 2026'
     )
+  })
+})
+
+describe('isSameSlotSelection', () => {
+  const a = '07:00-08:00'
+  const b = '08:00-09:00'
+  it('matches same date and slots in any order', () => {
+    expect(isSameSlotSelection('2026-11-20', [a, b], '2026-11-20', [b, a])).toBe(true)
+  })
+  it('differs on date, length, membership or duplicates', () => {
+    expect(isSameSlotSelection('2026-11-20', [a], '2026-11-21', [a])).toBe(false)
+    expect(isSameSlotSelection('2026-11-20', [a], '2026-11-20', [a, b])).toBe(false)
+    expect(isSameSlotSelection('2026-11-20', [a, b], '2026-11-20', [a])).toBe(false)
+    expect(isSameSlotSelection('2026-11-20', [a, b], '2026-11-20', [a, '09:00-10:00'])).toBe(false)
+    expect(isSameSlotSelection('2026-11-20', [a, b], '2026-11-20', [a, a])).toBe(false)
+  })
+  it('treats two empty selections on one date as the same', () => {
+    expect(isSameSlotSelection('2026-11-20', [], '2026-11-20', [])).toBe(true)
+  })
+  it('exports the overlap cap', () => {
+    expect(RULE_OVERLAP_LIMIT).toBeGreaterThan(0)
   })
 })

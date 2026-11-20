@@ -139,6 +139,28 @@ export function endRuleDescription(rule: Pick<SlotRuleLike, 'start_date'>, today
   return 'Its slots open up again from today. The rule stays in the list as ended (its last day becomes yesterday).'
 }
 
+/** End only makes sense for a rule that already started: otherwise it would just delete it (use Delete). */
+export function canEndRule(rule: Pick<SlotRuleLike, 'start_date' | 'end_date'>, today: string): boolean {
+  return ruleStatus(rule, today) === 'active' && rule.start_date < today
+}
+
+/** Delete confirmation wording: ended rules no longer block anything. */
+export function deleteRuleDescription(rule: Pick<SlotRuleLike, 'start_date' | 'end_date'>, today: string): string {
+  return ruleStatus(rule, today) === 'ended'
+    ? 'The rule is removed from the list, including its history.'
+    : 'The rule is removed completely, including its history, and its slots open up again.'
+}
+
+/** True when saving these values turns an ended rule back into an active or upcoming one. */
+export function reactivatesRule(
+  initial: Pick<SlotRuleLike, 'start_date' | 'end_date'> | null | undefined,
+  input: Pick<SlotRuleInput, 'startDate' | 'endDate'>,
+  today: string
+): boolean {
+  if (!initial || ruleStatus(initial, today) !== 'ended') return false
+  return ruleStatus({ start_date: input.startDate, end_date: input.endDate }, today) !== 'ended'
+}
+
 /** Heading for the overlapping-bookings list in the save review. */
 export function overlapSummary(count: number, truncated: boolean): string {
   if (count === 0) return 'No existing bookings fall in these slots.'
