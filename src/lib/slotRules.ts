@@ -102,3 +102,21 @@ export function describeRuleDates(rule: Pick<SlotRuleLike, 'start_date' | 'end_d
 export function describeRule(rule: SlotRuleLike): string {
   return `${ruleLabel(rule)}: ${describeTimeSlots(rule.time_slots)}, ${describeWeekdays(rule.weekdays)}, ${describeRuleDates(rule)}`
 }
+
+/**
+ * Slot start hours (e.g. 5 for '05:00-06:00') that a rule hides from customers on every day, with no
+ * end: hidden, all 7 weekdays, no end_date, started on or before `today`. Used for informational
+ * screens (Rates) only; the server still enforces availability.
+ */
+export function permanentlyHiddenSlots(rules: readonly SlotRuleLike[], today: string): Set<number> {
+  const hours = new Set<number>()
+  for (const rule of rules) {
+    if (!isRuleHidden(rule) || rule.end_date !== null || rule.start_date > today) continue
+    if (new Set(rule.weekdays).size < 7 || ![1, 2, 3, 4, 5, 6, 7].every((d) => rule.weekdays.includes(d))) continue
+    for (const slot of rule.time_slots) {
+      const hour = Number(slot.slice(0, 2))
+      if (Number.isInteger(hour)) hours.add(hour)
+    }
+  }
+  return hours
+}

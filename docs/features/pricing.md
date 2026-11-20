@@ -9,12 +9,12 @@ Admin-managed, versioned court prices applied by play date; customers pay exactl
 - `src/actions/pricing.ts` — public `getPricingVersionsAction` (no `created_by`), `getPriceQuoteAction`; admin create/cancel
 - `src/hooks/usePricing.ts` — `usePricingVersions`, `usePricingForDate`, `usePriceQuote`, admin mutations
 - `src/components/admin/PricingSettings.tsx` + `src/lib/pricingForm.ts` — admin Pricing tab
-- `src/components/home/RatesPolicies.tsx` — public rates + "new rates from…" banner
+- `src/components/home/RatesPolicies.tsx` — public rates + "new rates from…" banner; leaves out hours hidden from customers on every day (`permanentlyHiddenSlots`), hides a tier with no visible hours, shows all hours if slot rules fail to load
 - `src/lib/agent/pricingNote.ts` — per-request price note for the assistant
 - `sql/pricing-schedules-migration.sql` — table, seed row, `bookings.pricing_snapshot`
 
 ## How it works
-1. A version = `PricingRules`: 3 tier prices, tier of each of the 19 hours (index 0 = 05:00), extra-player charge, players included, paddle / ball set / training balls prices, equipment charge start date (null = always), cancellation fee per slot, free-cancellation window hours.
+1. A version = `PricingRules`: 3 tier prices (Daytime, Off-peak, Evening; the Evening tier's data key is still `latenight`, stored in rules JSON and booking snapshots, so never rename it; only `RATE_TIER_LABELS` shows "Evening"), tier of each of the 19 hours (index 0 = 05:00), extra-player charge, players included, paddle / ball set / training balls prices, equipment charge start date (null = always), cancellation fee per slot, free-cancellation window hours.
 2. Price for a play date = newest non-cancelled version with `effective_from <= date` (Manila); same-day tie → newest `created_at`.
 3. Admin Pricing tab: edit all fields, "Apply now" (server decides Manila today) or "Schedule" (tomorrow … +2 years), old → new confirmation, cancel upcoming versions. Effective rows are never edited.
 4. Payment screen: `getPriceQuoteAction` returns `{ amount, versionId, expiresAt, token }` (60 min; screen refreshes at 50 min and toasts if the amount changes). `submitPaymentAction` verifies signature, details and expiry, then saves `quote.amount` + `pricing_snapshot = { version_id, rules }`. Invalid/expired → `code: 'quote_invalid'`, UI fetches a new quote.

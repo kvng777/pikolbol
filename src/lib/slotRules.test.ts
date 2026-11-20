@@ -13,6 +13,7 @@ import {
   isSameSlotSelection,
   RULE_OVERLAP_LIMIT,
 } from './slotRules'
+import { permanentlyHiddenSlots } from './slotRules'
 import type { SlotRuleLike } from '@/types/slotRules'
 
 const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7]
@@ -125,5 +126,29 @@ describe('isRuleHidden', () => {
     expect(isRuleHidden({ hide_from_customers: true })).toBe(true)
     expect(isRuleHidden({ hide_from_customers: false })).toBe(false)
     expect(isRuleHidden({})).toBe(false)
+  })
+})
+
+describe('permanentlyHiddenSlots', () => {
+  const all = [1, 2, 3, 4, 5, 6, 7]
+  const rule = (o: Partial<SlotRuleLike>): SlotRuleLike => ({
+    label: null, start_date: '2026-01-01', end_date: null, weekdays: all, time_slots: ['05:00-06:00'], hide_from_customers: true, ...o,
+  })
+  const T = '2026-11-20'
+  it('collects hours of an every-day, open-ended, hidden rule already started', () => {
+    expect([...permanentlyHiddenSlots([rule({ time_slots: ['05:00-06:00', '23:00-00:00'] })], T)].sort((a, b) => a - b)).toEqual([5, 23])
+  })
+  it('accepts a rule starting today', () => {
+    expect(permanentlyHiddenSlots([rule({ start_date: T })], T).has(5)).toBe(true)
+  })
+  it('ignores rules that are not permanent or not hidden', () => {
+    expect(permanentlyHiddenSlots([rule({ hide_from_customers: false })], T).size).toBe(0)
+    expect(permanentlyHiddenSlots([rule({ hide_from_customers: undefined })], T).size).toBe(0)
+    expect(permanentlyHiddenSlots([rule({ weekdays: [1, 2, 3, 4, 5, 6] })], T).size).toBe(0)
+    expect(permanentlyHiddenSlots([rule({ end_date: '2026-12-31' })], T).size).toBe(0)
+    expect(permanentlyHiddenSlots([rule({ start_date: '2026-11-21' })], T).size).toBe(0)
+  })
+  it('returns an empty set for no rules', () => {
+    expect(permanentlyHiddenSlots([], T).size).toBe(0)
   })
 })

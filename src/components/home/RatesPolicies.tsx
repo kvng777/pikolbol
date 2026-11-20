@@ -1,37 +1,39 @@
 'use client'
 
-import type { CSSProperties } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw, CalendarClock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { usePricingVersions } from '@/hooks/usePricing'
 import { describeTierHours, pickPricingVersion, upcomingPricingVersions, diffPricingRules, formatPeso, RATE_TIERS, RATE_TIER_LABELS } from '@/lib/pricing'
+import { useSlotRules } from '@/hooks/useSlotRules'
+import { permanentlyHiddenSlots } from '@/lib/slotRules'
 import { manilaNow } from '@/lib/agent/dates'
 import type { PricingRules, RateTier } from '@/types/pricing'
 
 const TIER_CARDS: { tier: RateTier; title: string; icon: LucideIcon; gradient: string; iconClass: string; iconStyle: CSSProperties }[] = [
   { tier: 'daytime', title: 'Daytime Rate', icon: Sun, gradient: 'from-emerald-500 to-teal-600', iconClass: 'animate-spin', iconStyle: { animationDuration: '6s' } },
   { tier: 'offpeak', title: 'Off-Peak Rate', icon: Moon, gradient: 'from-emerald-600 to-teal-700', iconClass: 'animate-pulse', iconStyle: { animationDuration: '3s' } },
-  { tier: 'latenight', title: 'Late Night Rate', icon: Stars, gradient: 'from-emerald-700 to-teal-900', iconClass: 'animate-pulse', iconStyle: { animationDuration: '3s' } },
+  { tier: 'latenight', title: 'Evening Rate', icon: Stars, gradient: 'from-emerald-700 to-teal-900', iconClass: 'animate-pulse', iconStyle: { animationDuration: '3s' } },
 ]
 
 const formatDate = (d: string) => format(parseISO(d), 'MMMM d, yyyy')
 
 /**
  * Banner wording. When slot prices or hours change, list each tier the next version uses with its
- * price and hours (so a customer sees e.g. that 6–10 PM moved to late-night); otherwise a short summary.
+ * price and hours (so a customer sees e.g. that 6–10 PM moved to the evening rate); otherwise a short summary.
  */
-function describeNextRates(current: PricingRules | undefined, next: PricingRules): { title: string; lines: string[] } {
+function describeNextRates(current: PricingRules | undefined, next: PricingRules, hiddenHours: ReadonlySet<number>): { title: string; lines: string[] } {
   const usedTiers = RATE_TIERS.filter((t) => next.hour_tiers.includes(t))
   const ratesChanged =
     !current ||
     usedTiers.some((t) => current.tier_prices[t] !== next.tier_prices[t]) ||
     current.hour_tiers.some((t, i) => t !== next.hour_tiers[i])
   if (ratesChanged) {
-    const hours = describeTierHours(next)
+    const hours = describeTierHours(next, hiddenHours)
     return {
       title: 'New rates for play dates from',
-      lines: usedTiers.map((t) => `${RATE_TIER_LABELS[t]} ${formatPeso(next.tier_prices[t])}/hr (${hours[t]})`),
+      lines: usedTiers.filter((t) => hours[t]).map((t) => `${RATE_TIER_LABELS[t]} ${formatPeso(next.tier_prices[t])}/hr (${hours[t]})`),
     }
   }
   const labels = diffPricingRules(current, next).map((c) => c.label)
@@ -49,11 +51,14 @@ export default function RatesPolicies() {
   // The version that will actually apply on the first upcoming date (newest wins a same-date tie).
   const nextDate = versions ? upcomingPricingVersions(versions, today)[0]?.effective_from : undefined
   const next = versions && nextDate ? pickPricingVersion(versions, nextDate) : null
-  const nextBanner = next ? describeNextRates(current?.rules, next.rules) : null
+  // Informational only: if slot rules fail to load, show all hours (booking fails closed elsewhere).
+  const { data: slotRules } = useSlotRules()
+  const hiddenHours = useMemo(() => permanentlyHiddenSlots(slotRules ?? [], today), [slotRules, today])
+  const nextBanner = next ? describeNextRates(current?.rules, next.rules, hiddenHours) : null
   const rules = current?.rules
   // Loaded but nothing in effect is also "unavailable": never invent a price.
   const unavailable = isError || (!!versions && !current)
-  const tierHours = rules ? describeTierHours(rules) : null
+  const tierHours = rules ? describeTierHours(rules, hiddenHours) : null
   const amount = (n: number | undefined) => (n === undefined ? (unavailable ? '—' : '…') : n.toLocaleString())
   const equipmentStart = rules?.equipment_charge_start_date
 

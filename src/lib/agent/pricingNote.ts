@@ -7,7 +7,7 @@ function describeRules(rules: PricingRules): string {
     [
       ['daytime', 'daytime'],
       ['offpeak', 'off-peak'],
-      ['latenight', 'late-night'],
+      ['latenight', 'evening'] // data key 'latenight', shown as "Evening",
     ] as const
   )
     .filter(([tier]) => hours[tier])
