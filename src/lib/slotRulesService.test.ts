@@ -50,6 +50,8 @@ describe('slotRulesService', () => {
     expect(rules.map((r) => r.id)).toEqual(['r1'])
     expect(calls).toContainEqual({ method: 'lte', args: ['start_date', '2026-11-21'] })
     expect(calls).toContainEqual({ method: 'or', args: ['end_date.is.null,end_date.gte.2026-11-21'] })
+    expect(calls).toContainEqual({ method: 'order', args: ['created_at', { ascending: true }] })
+    expect(calls).toContainEqual({ method: 'order', args: ['id', { ascending: true }] })
   })
 
   it('fails closed when rules cannot be read', async () => {
