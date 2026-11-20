@@ -19,6 +19,8 @@ vi.mock('@/lib/noticeService')
 vi.mock('@/lib/emailService')
 vi.mock('@/lib/pricingService')
 vi.mock('@/lib/priceQuote')
+vi.mock('@/lib/slotAvailability')
+vi.mock('@/lib/slotRulesService')
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
 import * as bookings from './bookings'
@@ -35,6 +37,8 @@ import * as emailService from '@/lib/emailService'
 import * as pricingActions from './pricing'
 import * as pricingService from '@/lib/pricingService'
 import * as priceQuote from '@/lib/priceQuote'
+import * as slotAvailability from '@/lib/slotAvailability'
+import * as slotRulesService from '@/lib/slotRulesService'
 import { SEED_PRICING_RULES } from '@/lib/pricing'
 import type { Profile } from '@/types/profile'
 
@@ -43,7 +47,7 @@ const realPriceQuote = await vi.importActual<typeof import('@/lib/priceQuote')>(
 
 type Call = [name: string, call: (token: string) => Promise<unknown>]
 
-const automockedModules = [bookingService, paymentService, paymentSettingsService, noticeService, emailService, pricingService, priceQuote]
+const automockedModules = [bookingService, paymentService, paymentSettingsService, noticeService, emailService, pricingService, priceQuote, slotAvailability, slotRulesService]
 
 /** Every function exported by the automocked service modules that was called at least once. */
 function calledServiceFunctions(): string[] {
@@ -133,6 +137,7 @@ describe('submitPaymentAction', () => {
     vi.mocked(bookingService.isDateClosed).mockResolvedValue(false)
     vi.mocked(pricingService.getPricingVersionById).mockResolvedValue(version)
     vi.mocked(paymentService.createBookingWithPendingPayment).mockResolvedValue({ success: false, error: 'x' })
+    vi.mocked(slotAvailability.findBlockedSlots).mockResolvedValue([])
   })
   afterEach(() => vi.unstubAllEnvs())
 
@@ -323,6 +328,26 @@ describe('submitPaymentAction', () => {
     const quote = priceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
     const result = await payment.submitPaymentAction(null, body, quote)
     expect(result.success).toBe(false)
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+    err.mockRestore()
+  })
+
+  it('rejects a blocked slot before checking the quote and creates nothing', async () => {
+    vi.mocked(slotAvailability.findBlockedSlots).mockResolvedValue([{ slot: '08:00-09:00', source: 'rule', label: 'Open Play' }])
+    const quote = realPriceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const res = await payment.submitPaymentAction(null, body, quote)
+    expect(res).toEqual({ success: false, error: 'One or more selected slots are no longer available.' })
+    expect(slotAvailability.findBlockedSlots).toHaveBeenCalledWith(body.date, body.timeSlots)
+    expect(priceQuote.verifyPriceQuote).not.toHaveBeenCalled()
+    expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when availability cannot be checked', async () => {
+    vi.mocked(slotAvailability.findBlockedSlots).mockRejectedValue(new Error('down'))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const quote = realPriceQuote.createPriceQuote(quoteInput, SEED_PRICING_RULES, 'v1')
+    const res = await payment.submitPaymentAction(null, body, quote)
+    expect(res).toEqual({ success: false, error: 'Availability is unavailable right now. Please try again in a moment.' })
     expect(paymentService.createBookingWithPendingPayment).not.toHaveBeenCalled()
     err.mockRestore()
   })

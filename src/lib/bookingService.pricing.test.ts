@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SEED_PRICING_RULES, calculatePaymentAmount } from './pricing'
 import type { PricingRules } from '@/types/pricing'
 
-const { from, getPricingForDate } = vi.hoisted(() => ({ from: vi.fn(), getPricingForDate: vi.fn() }))
+const { from, getPricingForDate, findBlockedSlots } = vi.hoisted(() => ({ from: vi.fn(), getPricingForDate: vi.fn(), findBlockedSlots: vi.fn() }))
 vi.mock('@/lib/supabase-server', () => ({ supabase: { from } }))
 vi.mock('./supabase-server', () => ({ supabase: { from } }))
 vi.mock('./pricingService', () => ({ getPricingForDate }))
@@ -18,8 +18,12 @@ vi.mock('./emailService', () => ({
   sendRescheduleRejectedEmail: vi.fn(),
 }))
 vi.mock('./paymentSettingsService', () => ({ getPaymentSettings: vi.fn() }))
+vi.mock('./slotAvailability', async (orig) => ({
+  ...(await orig<typeof import('./slotAvailability')>()),
+  findBlockedSlots,
+}))
 
-import { createAdminBooking, updateAdminBooking, approveRescheduleRequest, cancelBookingGroup } from './bookingService'
+import { createAdminBooking, updateAdminBooking, approveRescheduleRequest, cancelBookingGroup, createRescheduleRequest } from './bookingService'
 
 const DATE = '2026-12-01'
 const RULES: PricingRules = { ...SEED_PRICING_RULES, tier_prices: { ...SEED_PRICING_RULES.tier_prices, daytime: 999 } }
@@ -34,7 +38,7 @@ function setup(selectData: unknown[], extra: Record<string, unknown> = {}) {
   from.mockImplementation((table: string) => {
     const q: Record<string, any> = {} // eslint-disable-line @typescript-eslint/no-explicit-any
     let mode: 'select' | 'insert' | 'delete' = 'select'
-    for (const m of ['select', 'eq', 'in', 'order', 'update']) q[m] = vi.fn(() => q)
+    for (const m of ['select', 'eq', 'in', 'order', 'update', 'or', 'limit', 'gte', 'lte']) q[m] = vi.fn(() => q)
     q.insert = vi.fn((rows: Record<string, unknown>[]) => { mode = 'insert'; ops.inserted = rows; return q })
     q.delete = vi.fn(() => { mode = 'delete'; ops.deleted = true; return q })
     q.single = vi.fn(() => Promise.resolve({ data: extra[table] ?? null, error: null }))
@@ -57,7 +61,7 @@ const existingRow = (over: Record<string, unknown> = {}) => ({
 })
 
 describe('admin bookings pricing', () => {
-  beforeEach(() => { from.mockReset(); getPricingForDate.mockReset() })
+  beforeEach(() => { from.mockReset(); getPricingForDate.mockReset(); findBlockedSlots.mockReset(); findBlockedSlots.mockResolvedValue([]) })
 
   it('createAdminBooking prices from the schedule and saves the snapshot', async () => {
     getPricingForDate.mockResolvedValue(VERSION)
@@ -208,7 +212,7 @@ describe('cancelBookingGroup uses the booking snapshot', () => {
   }
   const rows = (snap: unknown) => [existingRow({ user_id: 'u1', pricing_snapshot: snap, payment_amount: 450, time_slot: '10:00' })]
 
-  beforeEach(() => { from.mockReset(); vi.useFakeTimers() })
+  beforeEach(() => { from.mockReset(); findBlockedSlots.mockReset(); findBlockedSlots.mockResolvedValue([]); vi.useFakeTimers() })
   afterEach(() => vi.useRealTimers())
 
   it('applies the snapshot fee inside its window (30h out, 48h window)', async () => {
@@ -247,5 +251,109 @@ describe('cancelBookingGroup uses the booking snapshot', () => {
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/pricing/i)
     expect(updates).toHaveLength(0)
+  })
+})
+
+describe('blocked slots are enforced', () => {
+  const ruleBlock = [{ slot: '10:00', source: 'rule' as const, label: 'Open Play' }]
+  beforeEach(() => {
+    from.mockReset(); getPricingForDate.mockReset(); findBlockedSlots.mockReset()
+    getPricingForDate.mockResolvedValue(VERSION)
+  })
+
+  it('createAdminBooking rejects a blocked slot and saves nothing', async () => {
+    findBlockedSlots.mockResolvedValue(ruleBlock)
+    const ops = setup([])
+    const res = await createAdminBooking({ name: 'Ann', date: DATE, timeSlots: ['10:00'] })
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/no longer available.*10:00 \(Open Play\)/)
+    expect(findBlockedSlots).toHaveBeenCalledWith(DATE, ['10:00'])
+    expect(ops.inserted).toHaveLength(0)
+  })
+
+  it('createAdminBooking books a blocked slot when the admin overrides', async () => {
+    findBlockedSlots.mockResolvedValue([...ruleBlock, { slot: '11:00', source: 'disabled' as const, label: 'Blocked' }])
+    const ops = setup([])
+    const res = await createAdminBooking({ name: 'Ann', date: DATE, timeSlots: ['10:00', '11:00'], overrideBlocks: true })
+    expect(res.success).toBe(true)
+    expect(ops.inserted).toHaveLength(2)
+  })
+
+  it('an override never books a closed date', async () => {
+    findBlockedSlots.mockResolvedValue([{ slot: '10:00', source: 'closed', label: 'Holiday' }])
+    const ops = setup([])
+    const res = await createAdminBooking({ name: 'Ann', date: DATE, timeSlots: ['10:00'], overrideBlocks: true })
+    expect(res.success).toBe(false)
+    expect(ops.inserted).toHaveLength(0)
+  })
+
+  it('updateAdminBooking rejects a blocked slot before deleting', async () => {
+    // The group's own slot is not a booking conflict, but the block still applies
+    findBlockedSlots.mockResolvedValue(ruleBlock)
+    const ops = setup([existingRow()])
+    const res = await updateAdminBooking('g1', { name: 'Bob', date: DATE, timeSlots: ['10:00'] })
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/10:00 \(Open Play\)/)
+    expect(ops.deleted).toBe(false)
+    expect(ops.inserted).toHaveLength(0)
+  })
+
+  it('updateAdminBooking saves over a block when the admin overrides', async () => {
+    findBlockedSlots.mockResolvedValue(ruleBlock)
+    const ops = setup([existingRow()])
+    const res = await updateAdminBooking('g1', { name: 'Bob', date: DATE, timeSlots: ['10:00'], overrideBlocks: true })
+    expect(res.success).toBe(true)
+    expect(ops.inserted).toHaveLength(1)
+  })
+
+  it('fails closed when availability cannot be checked', async () => {
+    findBlockedSlots.mockRejectedValue(new Error('down'))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const ops = setup([])
+    const res = await createAdminBooking({ name: 'Ann', date: DATE, timeSlots: ['10:00'] })
+    expect(res).toEqual({ success: false, error: 'Availability is unavailable right now. Please try again in a moment.' })
+    expect(ops.inserted).toHaveLength(0)
+    err.mockRestore()
+  })
+
+  it('approveRescheduleRequest rejects new slots that are now blocked', async () => {
+    findBlockedSlots.mockResolvedValue([{ slot: '12:00', source: 'rule', label: 'Tournament' }])
+    const ops = setup([existingRow({ is_manual: false })], {
+      reschedule_requests: {
+        id: 'r1', status: 'pending', booking_group_id: 'g1', new_date: '2026-12-05', new_time_slots: ['12:00'],
+        original_date: DATE, original_time_slots: ['10:00'], customer_email: 'a@b.c', customer_name: 'Ann',
+      },
+    })
+    const res = await approveRescheduleRequest('r1')
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/12:00 \(Tournament\)/)
+    expect(findBlockedSlots).toHaveBeenCalledWith('2026-12-05', ['12:00'])
+    expect(ops.deleted).toBe(false)
+    expect(ops.inserted).toHaveLength(0)
+  })
+
+  describe('createRescheduleRequest', () => {
+    beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-20T09:00:00+08:00')) })
+    afterEach(() => vi.useRealTimers())
+
+    it('rejects a blocked new slot and saves no request', async () => {
+      findBlockedSlots.mockResolvedValue([{ slot: '12:00', source: 'rule', label: 'Tournament' }])
+      const ops = setup([existingRow({ is_manual: false, user_id: 'u1' })])
+      const res = await createRescheduleRequest('g1', null, 'u1', '2026-12-05', ['12:00'])
+      expect(res.success).toBe(false)
+      expect(res.error).toMatch(/12:00 \(Tournament\)/)
+      expect(findBlockedSlots).toHaveBeenCalledWith('2026-12-05', ['12:00'])
+      expect(ops.inserted).toHaveLength(0)
+    })
+
+    it('fails closed when availability cannot be checked', async () => {
+      findBlockedSlots.mockRejectedValue(new Error('down'))
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const ops = setup([existingRow({ is_manual: false, user_id: 'u1' })])
+      const res = await createRescheduleRequest('g1', null, 'u1', '2026-12-05', ['12:00'])
+      expect(res).toEqual({ success: false, error: 'Availability is unavailable right now. Please try again in a moment.' })
+      expect(ops.inserted).toHaveLength(0)
+      err.mockRestore()
+    })
   })
 })

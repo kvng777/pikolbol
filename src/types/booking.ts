@@ -136,6 +136,8 @@ export interface AdminBookingPayload {
   paddles?: number
   needsBalls?: boolean
   trainingBalls?: boolean
+  /** Admin confirmed booking slots blocked by a rule or one-day block (never overrides closed dates). */
+  overrideBlocks?: boolean
 }
 
 // Payload for editing an existing manual booking (identified by its group)

@@ -28,6 +28,7 @@ import {
   sendRescheduleRejectedEmail,
 } from './emailService'
 import { getPaymentSettings } from './paymentSettingsService'
+import { findBlockedSlots, blocksForAdmin, describeBlocked, SLOTS_UNAVAILABLE, AVAILABILITY_UNAVAILABLE } from './slotAvailability'
 
 // Payment statuses that indicate a slot is occupied (pending or confirmed)
 const ACTIVE_PAYMENT_STATUSES = [...HELD_PAYMENT_STATUSES, ...CONFIRMED_PAYMENT_STATUSES]
@@ -251,6 +252,20 @@ async function loadPricing(
 }
 
 /**
+ * Error message if any slot can't be booked, or null. Admins may override rules and one-day blocks
+ * (never closed dates). Fails closed when availability can't be read.
+ */
+async function checkSlotsBookable(date: string, slots: string[], overrideBlocks = false): Promise<string | null> {
+  try {
+    const blocked = blocksForAdmin(await findBlockedSlots(date, slots), overrideBlocks)
+    return blocked.length > 0 ? `${SLOTS_UNAVAILABLE} Blocked: ${describeBlocked(blocked)}.` : null
+  } catch (error) {
+    console.error('Availability check failed:', error)
+    return AVAILABILITY_UNAVAILABLE
+  }
+}
+
+/**
  * Create a manual booking on behalf of a player (admin only).
  * Created as a single confirmed group, flagged is_manual, with no emails sent.
  */
@@ -263,6 +278,9 @@ export async function createAdminBooking(
   if (!payload.timeSlots || payload.timeSlots.length === 0) {
     return { success: false, error: 'Please select at least one time slot' }
   }
+
+  const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks ?? false)
+  if (blockedError) return { success: false, error: blockedError }
 
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
   const needsBalls = payload.needsBalls ?? false
@@ -357,6 +375,9 @@ export async function updateAdminBooking(
   if (conflict) {
     return { success: false, error: `Time slot ${conflict.time_slot} is already booked.` }
   }
+
+  const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks ?? false)
+  if (blockedError) return { success: false, error: blockedError }
 
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
   const needsBalls = payload.needsBalls ?? false
@@ -555,12 +576,9 @@ export async function createRescheduleRequest(
     return { success: false, error: `Time slot ${conflict} is already booked.` }
   }
 
-  // 8. Check disabled slots
-  const disabledOnNewDate = await getDisabledSlotsByDate(newDate)
-  const disabledConflict = disabledOnNewDate.find((s) => newTimeSlots.includes(s.time_slot))
-  if (disabledConflict) {
-    return { success: false, error: `Time slot ${disabledConflict.time_slot} is disabled by admin.` }
-  }
+  // 8. Check rules, one-day blocks and closed dates
+  const blockedError = await checkSlotsBookable(newDate, newTimeSlots)
+  if (blockedError) return { success: false, error: blockedError }
 
   // 9. Insert the request
   const first = bookings[0]
@@ -662,6 +680,8 @@ export async function approveRescheduleRequest(
   if (conflict) {
     return { success: false, error: `Time slot ${conflict.time_slot} is no longer available.` }
   }
+  const blockedError = await checkSlotsBookable(request.new_date, request.new_time_slots)
+  if (blockedError) return { success: false, error: blockedError }
 
   // 4. Replace-group: delete old rows, insert new ones
   const first = bookings[0]

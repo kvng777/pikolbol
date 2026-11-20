@@ -18,6 +18,7 @@ import { generateConfirmToken } from '@/lib/adminTokens'
 import { verifyPriceQuote } from '@/lib/priceQuote'
 import { getPricingVersionById } from '@/lib/pricingService'
 import { quoteInputSchema } from '@/lib/pricingSchema'
+import { findBlockedSlots, SLOTS_UNAVAILABLE, AVAILABILITY_UNAVAILABLE } from '@/lib/slotAvailability'
 import type { PriceQuote, PricingSnapshot } from '@/types/pricing'
 
 const COURT_NUMBER = 1
@@ -64,6 +65,15 @@ export async function submitPaymentAction(
   const isClosed = await isDateClosed(payload.date)
   if (isClosed) {
     return { success: false, error: 'The court is closed on this date.' }
+  }
+
+  // Rules, one-day blocks and closed dates are enforced here too (not just in the UI)
+  try {
+    const blocked = await findBlockedSlots(parsed.data.date, parsed.data.timeSlots)
+    if (blocked.length > 0) return { success: false, error: SLOTS_UNAVAILABLE }
+  } catch (error) {
+    console.error('Availability check failed:', error)
+    return { success: false, error: AVAILABILITY_UNAVAILABLE }
   }
 
   // Honour the price the customer was shown (signed quote), or ask them to review
