@@ -40,7 +40,7 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const dateStr = format(selectedDate, 'yyyy-MM-dd')
 
-  const [selectedSlots, setSelectedSlots] = useState<string[]>([])
+  const [rawSelectedSlots, setSelectedSlots] = useState<string[]>([])
   const [submitted, setSubmitted] = useState(false)
 
   // Data for slot availability
@@ -48,7 +48,7 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
   const { data: disabledSlots = [], isLoading: slotsLoading } = useDisabledSlotsByDate(dateStr)
   const { data: closedDates = [] } = useClosedDates()
   const { data: heldSlots = [], isLoading: heldLoading } = useHeldRescheduleSlotsByDate(dateStr)
-  const { data: slotRules, isLoading: rulesLoading, isError: rulesError } = useSlotRules()
+  const { data: slotRules, isPending: rulesPending, isError: rulesError } = useSlotRules()
 
   // On the same date as the original booking, keep own group's slots as "booked"
   // so the user can't re-select the same time. On a different date, exclude them.
@@ -69,7 +69,13 @@ export function RescheduleModal({ group, onConfirm, onClose, isSubmitting }: Res
     [filteredBookings, dateStr, disabledSlots, heldSlots, slotRules]
   )
 
-  const isLoadingSlots = bookingsLoading || slotsLoading || heldLoading || rulesLoading
+  // Derived: drop selections that are no longer available (e.g. newly blocked after a refetch)
+  const selectedSlots = useMemo(() => {
+    const open = new Set(availableSlots.filter((s) => s.available).map((s) => s.time))
+    return rawSelectedSlots.filter((s) => open.has(s))
+  }, [rawSelectedSlots, availableSlots])
+
+  const isLoadingSlots = bookingsLoading || slotsLoading || heldLoading || rulesPending
 
   // Free-flow slot selection: auto-replace oldest when at max count
   const handleSelectSlots = (slots: string[]) => {

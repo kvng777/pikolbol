@@ -78,7 +78,7 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
                   unavailableClass = 'bg-orange-50 text-orange-300 cursor-not-allowed border border-orange-100'
                   icon = <Lock className="w-3.5 h-3.5 shrink-0" />
                 } else {
-                  unavailableClass = `bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200${slot.reason === 'rule' ? ' h-auto min-h-11 py-1' : ''}`
+                  unavailableClass = `bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200${slot.reason === 'rule' ? ' h-auto min-h-11 max-w-full py-1 whitespace-normal break-words text-center disabled:opacity-100 text-gray-500' : ''}`
                   icon = <Ban className="w-3.5 h-3.5 shrink-0" />
                 }
               }
@@ -100,13 +100,13 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
                   `}
                 >
                   {icon ? (
-                    <span className="flex flex-col items-center leading-tight">
+                    <span className="flex max-w-full flex-col items-center text-center leading-tight">
                       <span className="flex items-center justify-center gap-1.5">
                         {icon}
                         {slot.time}
                       </span>
                       {slot.reason === 'rule' && slot.label && (
-                        <span className="text-[11px] font-normal text-gray-500">{slot.label}</span>
+                        <span className="max-w-full whitespace-normal break-words text-center text-[11px] font-medium text-gray-700">{slot.label}</span>
                       )}
                     </span>
                   ) : slot.time}

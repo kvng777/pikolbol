@@ -18,9 +18,9 @@ describe('getAvailableSlotsForCourt with rules', () => {
 
   it('booked and one-day blocks win over rules', () => {
     const booked = [{ date: DATE, time_slot: '07:00-08:00', court_number: 1 }]
-    expect(getAvailableSlotsForCourt(booked, DATE, 1, [], { rules: [rule] })[2].reason).toBe('booked')
+    expect(getAvailableSlotsForCourt(booked, DATE, 1, [], { rules: [rule] }).find((s) => s.time === '07:00-08:00')?.reason).toBe('booked')
     const disabled = [{ id: 'd', date: DATE, time_slot: '07:00-08:00', created_at: '' }]
-    expect(getAvailableSlotsForCourt([], DATE, 1, disabled, { rules: [rule] })[2].reason).toBe('disabled')
+    expect(getAvailableSlotsForCourt([], DATE, 1, disabled, { rules: [rule] }).find((s) => s.time === '07:00-08:00')?.reason).toBe('disabled')
   })
 
   it('does not block on other weekdays', () => {

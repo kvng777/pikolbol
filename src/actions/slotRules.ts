@@ -42,7 +42,8 @@ export async function listSlotRulesAction(accessToken: string): Promise<SlotRule
   await requireAdmin(accessToken)
   try {
     return { success: true, rules: await listSlotRules() }
-  } catch {
+  } catch (err) {
+    console.error('listSlotRulesAction failed:', err)
     return { success: false, error: AVAILABILITY_UNAVAILABLE }
   }
 }
