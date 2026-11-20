@@ -37,9 +37,12 @@ function stub(...results: Result[]) {
 
 const row = (over: Record<string, unknown> = {}) => ({
   id: 'r1', label: 'Open Play', start_date: '2026-11-20', end_date: null, weekdays: [1, 2, 3, 4, 5, 6, 7],
-  time_slots: ['07:00-08:00'], created_by: 'a1', created_at: 'x', updated_at: 'x', ...over,
+  time_slots: ['07:00-08:00'], hide_from_customers: false, created_by: 'a1', created_at: 'x', updated_at: 'x', ...over,
 })
-const input = { label: 'Open Play', startDate: '2026-11-20', endDate: null, weekdays: [1, 2, 3, 4, 5, 6, 7], timeSlots: ['07:00-08:00'] }
+const input = {
+  label: 'Open Play', startDate: '2026-11-20', endDate: null, weekdays: [1, 2, 3, 4, 5, 6, 7], timeSlots: ['07:00-08:00'],
+  hideFromCustomers: false,
+}
 const NOW = new Date('2026-11-21T04:00:00Z') // Manila 2026-11-21 12:00
 
 describe('slotRulesService', () => {
@@ -86,8 +89,15 @@ describe('slotRulesService', () => {
     const calls = stub({ data: [], error: null })
     await listCurrentSlotRules('2026-11-21')
     const select = calls.find((c) => c.method === 'select')!
-    expect(select.args[0]).not.toContain('created_by')
-    expect(select.args[0]).toContain('time_slots')
+    expect(select.args[0]).toBe('id, label, start_date, end_date, weekdays, time_slots, hide_from_customers, created_at, updated_at')
+  })
+
+  it('admin reads select every column including hide_from_customers', async () => {
+    const calls = stub({ data: [], error: null })
+    await listSlotRules()
+    expect(calls.find((c) => c.method === 'select')!.args[0]).toBe(
+      'id, label, start_date, end_date, weekdays, time_slots, hide_from_customers, created_by, created_at, updated_at'
+    )
   })
 
   it('createSlotRule validates, sorts and records the creator', async () => {
@@ -97,8 +107,24 @@ describe('slotRulesService', () => {
     const insert = calls.find((c) => c.method === 'insert')!
     expect(insert.args[0]).toEqual({
       label: 'Open Play', start_date: '2026-11-20', end_date: null, weekdays: [1, 3],
-      time_slots: ['07:00-08:00', '08:00-09:00'], created_by: 'a1',
+      time_slots: ['07:00-08:00', '08:00-09:00'], hide_from_customers: false, created_by: 'a1',
     })
+  })
+
+  it('createSlotRule saves hide_from_customers', async () => {
+    const calls = stub({ data: row({ hide_from_customers: true }), error: null })
+    await createSlotRule({ ...input, hideFromCustomers: true }, 'a1')
+    expect((calls.find((c) => c.method === 'insert')!.args[0] as Record<string, unknown>).hide_from_customers).toBe(true)
+  })
+
+  it('updateSlotRule maps hide_from_customers (absent → false)', async () => {
+    let calls = stub({ data: row(), error: null })
+    await updateSlotRule('r1', { ...input, hideFromCustomers: true })
+    expect((calls.find((c) => c.method === 'update')!.args[0] as Record<string, unknown>).hide_from_customers).toBe(true)
+    calls = stub({ data: row(), error: null })
+    const { hideFromCustomers: _omit, ...withoutFlag } = input // eslint-disable-line @typescript-eslint/no-unused-vars
+    await updateSlotRule('r1', withoutFlag)
+    expect((calls.find((c) => c.method === 'update')!.args[0] as Record<string, unknown>).hide_from_customers).toBe(false)
   })
 
   it('createSlotRule rejects invalid input without touching the DB', async () => {

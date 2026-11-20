@@ -43,6 +43,11 @@ export function findBlockingRule<R extends SlotRuleLike>(rules: R[], date: strin
   return rules.find((r) => r.time_slots.includes(slot) && ruleAppliesOnDate(r, date)) ?? null
 }
 
+/** True only when the rule explicitly hides its slots from customers (missing → false). */
+export function isRuleHidden(rule: Pick<SlotRuleLike, 'hide_from_customers'>): boolean {
+  return rule.hide_from_customers === true
+}
+
 export function ruleLabel(rule: Pick<SlotRuleLike, 'label'>): string {
   return rule.label?.trim() || DEFAULT_RULE_LABEL
 }

@@ -118,6 +118,13 @@ describe('summarizeAvailability', () => {
     expect(result.available).not.toContain('07:00-08:00')
   })
 
+  it('still reports slots of a rule hidden from customers, flagged hidden', () => {
+    const rule = { label: 'Closed', start_date: '2026-10-01', end_date: null, weekdays: [1, 2, 3, 4, 5, 6, 7], time_slots: ['05:00-06:00'], hide_from_customers: true }
+    const result = summarizeAvailability('2026-10-20', [], [], [], [rule], FUTURE)
+    expect(result.blockedByRule).toEqual([{ time: '05:00-06:00', label: 'Closed', hidden: true }])
+    expect(result.available).not.toContain('05:00-06:00')
+  })
+
   it('labels an unlabelled rule "Blocked"', () => {
     const rule = { label: null, start_date: '2026-10-01', end_date: null, weekdays: [1, 2, 3, 4, 5, 6, 7], time_slots: ['07:00-08:00'] }
     expect(summarizeAvailability('2026-10-20', [], [], [], [rule], FUTURE).blockedByRule).toEqual([{ time: '07:00-08:00', label: 'Blocked' }])

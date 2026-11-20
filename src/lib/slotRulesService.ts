@@ -22,9 +22,9 @@ export class AvailabilityUnavailableError extends Error {
 export type SlotRuleResult = { success: true; rule: SlotRule } | { success: false; error: string }
 export type EndSlotRuleResult = { success: true; deleted: boolean } | { success: false; error: string }
 
-const COLUMNS = 'id, label, start_date, end_date, weekdays, time_slots, created_by, created_at, updated_at'
+const COLUMNS = 'id, label, start_date, end_date, weekdays, time_slots, hide_from_customers, created_by, created_at, updated_at'
 /** Same as COLUMNS without audit fields; safe for customer-facing reads. */
-const PUBLIC_COLUMNS = 'id, label, start_date, end_date, weekdays, time_slots, created_at, updated_at'
+const PUBLIC_COLUMNS = 'id, label, start_date, end_date, weekdays, time_slots, hide_from_customers, created_at, updated_at'
 /** Max overlapping bookings returned by the overlap check. */
 const OVERLAP_LIMIT = RULE_OVERLAP_LIMIT
 /** How far ahead the overlap check looks for rules without an end date. */
@@ -48,6 +48,7 @@ function toRow(input: SlotRuleInput) {
     end_date: input.endDate,
     weekdays: [...input.weekdays].sort((a, b) => a - b),
     time_slots: [...input.timeSlots].sort(),
+    hide_from_customers: input.hideFromCustomers,
   }
 }
 

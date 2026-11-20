@@ -5,7 +5,7 @@
  */
 import { slotRuleInputSchema } from './slotRulesSchema'
 import { generateTimeSlots } from './timeSlotGenerator'
-import { formatRuleDate, ruleStatus } from './slotRules'
+import { formatRuleDate, isRuleHidden, ruleStatus } from './slotRules'
 import { formatHour } from './pricing'
 import type { SlotRule, SlotRuleInput, SlotRuleLike } from '@/types/slotRules'
 
@@ -25,12 +25,21 @@ export interface SlotRuleFormValues {
   endDate: string
   weekdays: number[]
   timeSlots: string[]
+  hideFromCustomers: boolean
 }
 
 /** New rule: no label, every day, starting today, no end, no slots picked. Edit: the rule's values. */
 export function initialSlotRuleFormValues(rule: SlotRuleLike | null | undefined, today: string): SlotRuleFormValues {
   if (!rule) {
-    return { label: '', startDate: today, noEnd: true, endDate: '', weekdays: [...ALL_WEEKDAYS], timeSlots: [] }
+    return {
+      label: '',
+      startDate: today,
+      noEnd: true,
+      endDate: '',
+      weekdays: [...ALL_WEEKDAYS],
+      timeSlots: [],
+      hideFromCustomers: false,
+    }
   }
   return {
     label: rule.label ?? '',
@@ -39,6 +48,7 @@ export function initialSlotRuleFormValues(rule: SlotRuleLike | null | undefined,
     endDate: rule.end_date ?? '',
     weekdays: sortWeekdays(rule.weekdays),
     timeSlots: sortSlots(rule.time_slots),
+    hideFromCustomers: isRuleHidden(rule),
   }
 }
 
@@ -62,6 +72,7 @@ export function formValuesToInput(values: SlotRuleFormValues): SlotRuleInput {
     endDate: values.noEnd ? null : values.endDate,
     weekdays: sortWeekdays(values.weekdays),
     timeSlots: sortSlots(values.timeSlots),
+    hideFromCustomers: values.hideFromCustomers === true,
   }
 }
 

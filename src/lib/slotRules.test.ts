@@ -3,6 +3,7 @@ import {
   isoWeekday,
   ruleAppliesOnDate,
   findBlockingRule,
+  isRuleHidden,
   ruleLabel,
   ruleStatus,
   describeWeekdays,
@@ -116,5 +117,13 @@ describe('isSameSlotSelection', () => {
   })
   it('exports the overlap cap', () => {
     expect(RULE_OVERLAP_LIMIT).toBeGreaterThan(0)
+  })
+})
+
+describe('isRuleHidden', () => {
+  it('is true only for an explicit true (missing or false → visible)', () => {
+    expect(isRuleHidden({ hide_from_customers: true })).toBe(true)
+    expect(isRuleHidden({ hide_from_customers: false })).toBe(false)
+    expect(isRuleHidden({})).toBe(false)
   })
 })

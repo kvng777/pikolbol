@@ -592,7 +592,7 @@ describe('slot rule actions', () => {
   beforeEach(() => vi.resetAllMocks())
 
   const publicRule = {
-    id: 'r1', label: null, start_date: '2026-12-01', end_date: null, weekdays: [1], time_slots: ['07:00-08:00'],
+    id: 'r1', label: null, start_date: '2026-12-01', end_date: null, weekdays: [1], time_slots: ['07:00-08:00'], hide_from_customers: false,
     created_at: 'x', updated_at: 'x',
   }
   const rule = { ...publicRule, created_by: 'admin-1' }

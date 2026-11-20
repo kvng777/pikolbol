@@ -117,6 +117,9 @@ export function summarizeAvailability(
     available: closed ? [] : slots.filter(s => s.available && !isPast(s.time)).map(s => s.time),
     booked: slots.filter(s => s.reason === 'booked').map(s => s.time),
     disabled: slots.filter(s => s.reason === 'disabled').map(s => s.time),
-    blockedByRule: slots.filter(s => s.reason === 'rule').map(s => ({ time: s.time, label: s.label ?? DEFAULT_RULE_LABEL })),
+    // Hidden-rule slots are still reported (the admin should know); `hidden` marks them.
+    blockedByRule: slots
+      .filter(s => s.reason === 'rule')
+      .map(s => ({ time: s.time, label: s.label ?? DEFAULT_RULE_LABEL, ...(s.hidden ? { hidden: true } : {}) })),
   }
 }

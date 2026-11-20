@@ -1,6 +1,6 @@
 import { format } from 'date-fns'
 import { Booking, TimeSlot, DisabledSlot } from '@/types/booking'
-import { findBlockingRule, ruleLabel } from './slotRules'
+import { findBlockingRule, isRuleHidden, ruleLabel } from './slotRules'
 import type { SlotRuleLike } from '@/types/slotRules'
 
 const OPERATING_HOURS = { start: 5, end: 24 }
@@ -25,7 +25,11 @@ export interface SlotAvailabilityOptions {
   bufferMinutes?: number
   /** Additional slots held by pending reschedule requests (shown as "booked"). */
   heldSlots?: string[]
-  /** Slot rules (active/upcoming). Rule-blocked slots get reason 'rule' and the rule's label. */
+  /**
+   * Slot rules (active/upcoming). Rule-blocked slots get reason 'rule' and the rule's label, plus
+   * `hidden: true` when the blocking rule has hide_from_customers. If several rules cover a slot, only
+   * the one findBlockingRule picks (the first in list order) decides the label and whether it is hidden.
+   */
   rules?: SlotRuleLike[]
 }
 
@@ -78,6 +82,7 @@ export function getAvailableSlotsForCourt(
 
     let reason: TimeSlot['reason']
     let label: string | undefined
+    let hidden = false
     if (isPastOrTooSoon) reason = 'past'
     else if (bookedSlots.includes(slot) || heldSlots.includes(slot)) reason = 'booked'
     else if (disabledTimeSlots.includes(slot)) reason = 'disabled'
@@ -86,6 +91,7 @@ export function getAvailableSlotsForCourt(
       if (rule) {
         reason = 'rule'
         label = ruleLabel(rule)
+        hidden = isRuleHidden(rule)
       }
     }
 
@@ -94,8 +100,14 @@ export function getAvailableSlotsForCourt(
       available: !reason,
       reason,
       label,
+      ...(hidden ? { hidden: true } : {}),
     }
   })
+}
+
+/** Customer screens only: drop slots hidden by a rule. Admin screens show every slot. */
+export function customerVisibleSlots(slots: TimeSlot[]): TimeSlot[] {
+  return slots.filter((s) => !s.hidden)
 }
 
 export function getAllCourts(): number[] {

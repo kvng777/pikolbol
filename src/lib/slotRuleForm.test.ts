@@ -44,6 +44,7 @@ describe('initialSlotRuleFormValues', () => {
       endDate: '',
       weekdays: [1, 2, 3, 4, 5, 6, 7],
       timeSlots: [],
+      hideFromCustomers: false,
     })
   })
 
@@ -55,17 +56,25 @@ describe('initialSlotRuleFormValues', () => {
       endDate: '2026-12-31',
       weekdays: [1, 3],
       timeSlots: ['07:00-08:00', '08:00-09:00'],
+      hideFromCustomers: false,
     })
   })
 
+  it('prefills hideFromCustomers from the rule (missing → false)', () => {
+    expect(initialSlotRuleFormValues(rule({ hide_from_customers: true }), TODAY).hideFromCustomers).toBe(true)
+    expect(initialSlotRuleFormValues(rule({ hide_from_customers: false }), TODAY).hideFromCustomers).toBe(false)
+    expect(initialSlotRuleFormValues(rule(), TODAY).hideFromCustomers).toBe(false)
+  })
+
   it('round-trips through formValuesToInput', () => {
-    const values = initialSlotRuleFormValues(rule({ end_date: '2026-12-31' }), TODAY)
+    const values = initialSlotRuleFormValues(rule({ end_date: '2026-12-31', hide_from_customers: true }), TODAY)
     expect(formValuesToInput(values)).toEqual({
       label: 'Open Play',
       startDate: '2026-11-01',
       endDate: '2026-12-31',
       weekdays: [1, 3],
       timeSlots: ['07:00-08:00', '08:00-09:00'],
+      hideFromCustomers: true,
     })
   })
 })
@@ -89,11 +98,16 @@ describe('formValuesToInput', () => {
 })
 
 describe('validateSlotRuleForm', () => {
+  it('passes hideFromCustomers through', () => {
+    const result = validateSlotRuleForm(form({ hideFromCustomers: true }))
+    expect(result.ok && result.input.hideFromCustomers).toBe(true)
+  })
+
   it('accepts a valid form', () => {
     const result = validateSlotRuleForm(form({ label: 'Open Play' }))
     expect(result).toEqual({
       ok: true,
-      input: { label: 'Open Play', startDate: TODAY, endDate: null, weekdays: [1, 2, 3, 4, 5, 6, 7], timeSlots: ['07:00-08:00'] },
+      input: { label: 'Open Play', startDate: TODAY, endDate: null, weekdays: [1, 2, 3, 4, 5, 6, 7], timeSlots: ['07:00-08:00'], hideFromCustomers: false },
     })
   })
 

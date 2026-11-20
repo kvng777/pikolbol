@@ -27,6 +27,8 @@ export const slotRuleInputSchema = z
       .array(z.string().refine((s) => SLOTS.has(s), 'Unknown time slot'))
       .min(1, 'Pick at least one time slot')
       .refine(unique, 'Time slots must be unique'),
+    /** Hide the blocked slots from customers entirely (absent → false). */
+    hideFromCustomers: z.boolean().default(false),
   })
   .refine((v) => v.endDate === null || v.endDate >= v.startDate, {
     path: ['endDate'],

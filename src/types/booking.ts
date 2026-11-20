@@ -48,6 +48,8 @@ export interface TimeSlot {
   reason?: 'past' | 'booked' | 'disabled' | 'rule'
   /** For reason 'rule': the rule's label ("Blocked" when the rule has none). */
   label?: string
+  /** For reason 'rule': the blocking rule hides it, so customer screens don't render it. */
+  hidden?: boolean
 }
 
 export interface BookingFormData {
