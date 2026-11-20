@@ -4,6 +4,7 @@
  */
 import { supabase } from './supabase-server'
 import { getSlotRulesForDate, AvailabilityUnavailableError } from './slotRulesService'
+import { isRealDate } from './agent/dates'
 import { findBlockingRule, ruleLabel, DEFAULT_RULE_LABEL } from './slotRules'
 
 export const SLOTS_UNAVAILABLE = 'One or more selected slots are no longer available.'
@@ -17,6 +18,10 @@ export interface BlockedSlot {
 
 /** Requested slots that can't be booked on `date`. Throws AvailabilityUnavailableError if data can't be read. */
 export async function findBlockedSlots(date: string, slots: string[]): Promise<BlockedSlot[]> {
+  if (!isRealDate(date)) {
+    console.error('Availability check: invalid date', date)
+    throw new AvailabilityUnavailableError()
+  }
   const [closed, disabled, rules] = await Promise.all([
     supabase.from('closed_dates').select('reason').lte('start_date', date).gte('end_date', date).limit(1),
     supabase.from('disabled_slots').select('time_slot').eq('date', date),

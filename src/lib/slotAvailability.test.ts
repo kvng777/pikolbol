@@ -53,6 +53,15 @@ describe('findBlockedSlots', () => {
   })
 })
 
+describe('findBlockedSlots date validation', () => {
+  it('fails closed on invalid or non-padded dates', async () => {
+    tables({})
+    for (const d of ['garbage', '2026-02-30', '2026-2-3', '']) {
+      await expect(findBlockedSlots(d, ['09:00-10:00'])).rejects.toBeInstanceOf(AvailabilityUnavailableError)
+    }
+  })
+})
+
 describe('blocksForAdmin / describeBlocked', () => {
   const blocked = [
     { slot: '07:00-08:00', source: 'rule' as const, label: 'Open Play' },

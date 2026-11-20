@@ -9,13 +9,14 @@ import type { SlotRuleLike, SlotRuleStatus } from '@/types/slotRules'
 export const DEFAULT_RULE_LABEL = 'Blocked'
 export const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
-/** ISO weekday of a 'YYYY-MM-DD' date: 1 = Monday … 7 = Sunday. */
+/** ISO weekday of a 'YYYY-MM-DD' date: 1 = Monday … 7 = Sunday. The date must be a valid zero-padded YYYY-MM-DD. */
 export function isoWeekday(date: string): number {
   const [y, m, d] = date.split('-').map(Number)
   const day = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
   return day === 0 ? 7 : day
 }
 
+/** Date must be a valid zero-padded YYYY-MM-DD. */
 export function ruleAppliesOnDate(rule: Pick<SlotRuleLike, 'start_date' | 'end_date' | 'weekdays'>, date: string): boolean {
   if (date < rule.start_date) return false
   if (rule.end_date !== null && date > rule.end_date) return false

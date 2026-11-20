@@ -58,6 +58,8 @@ export async function listCurrentSlotRules(today: string): Promise<SlotRule[]> {
     .select(COLUMNS)
     .or(`end_date.is.null,end_date.gte.${today}`)
     .order('start_date', { ascending: true })
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
   if (error) readFailed('list current', error)
   return (data ?? []) as SlotRule[]
 }
@@ -69,6 +71,8 @@ export async function getSlotRulesForDate(date: string): Promise<SlotRule[]> {
     .select(COLUMNS)
     .lte('start_date', date)
     .or(`end_date.is.null,end_date.gte.${date}`)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
   if (error) readFailed('rules for date', error)
   return ((data ?? []) as SlotRule[]).filter((r) => ruleAppliesOnDate(r, date))
 }
