@@ -39,6 +39,7 @@ import * as pricingService from '@/lib/pricingService'
 import * as priceQuote from '@/lib/priceQuote'
 import * as slotAvailability from '@/lib/slotAvailability'
 import * as slotRulesService from '@/lib/slotRulesService'
+import * as slotRuleActions from './slotRules'
 import { SEED_PRICING_RULES } from '@/lib/pricing'
 import type { Profile } from '@/types/profile'
 
@@ -59,6 +60,8 @@ function calledServiceFunctions(): string[] {
   }
   return called
 }
+
+const ruleInput = { label: null, startDate: '2026-12-01', endDate: null, weekdays: [1], timeSlots: ['07:00-08:00'] }
 
 const payload = { name: 'X', date: '2026-12-01', timeSlots: ['08:00 - 09:00'] }
 
@@ -86,6 +89,12 @@ const ADMIN_ACTIONS: Call[] = [
   ['updateNoticeAction', (t) => notice.updateNoticeAction(t, {})],
   ['createPricingVersionAction', (t) => pricingActions.createPricingVersionAction(t, { mode: 'scheduled', effectiveFrom: '2026-12-01', rules: SEED_PRICING_RULES })],
   ['cancelPricingVersionAction', (t) => pricingActions.cancelPricingVersionAction(t, 'v1')],
+  ['listSlotRulesAction', (t) => slotRuleActions.listSlotRulesAction(t)],
+  ['createSlotRuleAction', (t) => slotRuleActions.createSlotRuleAction(t, ruleInput)],
+  ['updateSlotRuleAction', (t) => slotRuleActions.updateSlotRuleAction(t, 'r1', ruleInput)],
+  ['endSlotRuleAction', (t) => slotRuleActions.endSlotRuleAction(t, 'r1')],
+  ['deleteSlotRuleAction', (t) => slotRuleActions.deleteSlotRuleAction(t, 'r1')],
+  ['previewSlotRuleOverlapAction', (t) => slotRuleActions.previewSlotRuleOverlapAction(t, ruleInput)],
 ]
 
 describe('admin actions', () => {
@@ -576,5 +585,54 @@ describe('pricing actions', () => {
         date: '2026-12-01', timeSlots: ['08:00-09:00'], players: 2, paddles: 0, needsBalls: false, trainingBalls: false,
       })
     ).resolves.toEqual({ success: true, quote })
+  })
+})
+
+describe('slot rule actions', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  const publicRule = {
+    id: 'r1', label: null, start_date: '2026-12-01', end_date: null, weekdays: [1], time_slots: ['07:00-08:00'],
+    created_at: 'x', updated_at: 'x',
+  }
+  const rule = { ...publicRule, created_by: 'admin-1' }
+  const asAdmin = () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'admin-1' } }, error: null })
+    getProfileByUserId.mockResolvedValue({ role: 'admin' })
+  }
+
+  it('the public list returns rules without audit fields', async () => {
+    vi.mocked(slotRulesService.listCurrentSlotRules).mockResolvedValue([publicRule])
+    const res = await slotRuleActions.getCurrentSlotRulesAction()
+    expect(res).toEqual({ success: true, rules: [publicRule] })
+    expect(JSON.stringify(res)).not.toContain('created_by')
+  })
+
+  it('the public list reports unavailability instead of throwing', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(slotRulesService.listCurrentSlotRules).mockRejectedValue(new Error('down'))
+    const res = await slotRuleActions.getCurrentSlotRulesAction()
+    expect(res.success).toBe(false)
+  })
+
+  it('create records the verified admin as creator', async () => {
+    asAdmin()
+    vi.mocked(slotRulesService.createSlotRule).mockResolvedValue({ success: true, rule })
+    await slotRuleActions.createSlotRuleAction('tok', ruleInput)
+    expect(slotRulesService.createSlotRule).toHaveBeenCalledWith(ruleInput, 'admin-1')
+  })
+
+  it('preview validates input before querying', async () => {
+    asAdmin()
+    const res = await slotRuleActions.previewSlotRuleOverlapAction('tok', { ...ruleInput, weekdays: [] })
+    expect(res).toEqual({ success: false, error: 'Pick at least one day' })
+    expect(slotRulesService.findBookingsOverlappingRule).not.toHaveBeenCalled()
+  })
+
+  it('preview passes through the truncated flag', async () => {
+    asAdmin()
+    vi.mocked(slotRulesService.findBookingsOverlappingRule).mockResolvedValue({ bookings: [], truncated: true })
+    const res = await slotRuleActions.previewSlotRuleOverlapAction('tok', ruleInput)
+    expect(res).toEqual({ success: true, bookings: [], truncated: true })
   })
 })
