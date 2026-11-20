@@ -381,6 +381,22 @@ export function SlotRuleForm({ initial, onClose }: Props) {
         </div>
       </div>
 
+      {/* Customer visibility */}
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-emerald-600"
+            aria-describedby="rule-hide-hint"
+            {...register('hideFromCustomers')}
+          />
+          Hide these slots from customers
+        </label>
+        <p id="rule-hide-hint" className="text-xs text-gray-500 pl-6">
+          Use for closed hours. Leave off to show the label, e.g. Open Play.
+        </p>
+      </div>
+
       {errors.root?.message && <p className="text-sm text-red-600">{errors.root.message}</p>}
       {hasErrors && submitCount > 0 && (
         <p role="alert" className="flex items-center gap-2 text-sm text-red-600">
@@ -430,6 +446,11 @@ export function SlotRuleForm({ initial, onClose }: Props) {
       >
         {review && (
           <div className="space-y-2 text-sm text-gray-700">
+            <p className="text-gray-600">
+              {review.input.hideFromCustomers
+                ? 'Hidden from customers: these slots won\'t appear on the booking page.'
+                : 'Shown to customers as greyed-out slots with the label.'}
+            </p>
             <p className={review.overlaps.length > 0 ? 'font-medium text-amber-800' : 'text-gray-600'}>
               {overlapSummary(review.overlaps.length, review.truncated)}
             </p>

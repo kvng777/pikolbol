@@ -4,7 +4,9 @@ import React from 'react'
 import { Clock, Lock, Ban } from 'lucide-react'
 import { TimeSlot } from '@/types/booking'
 import { Button } from '@/components/ui/button'
+import { customerVisibleSlots } from '@/lib/timeSlotGenerator'
 
+/** Customer-only picker (booking page, reschedule modal): slots hidden by a rule are not rendered. */
 interface TimeSlotPickerProps {
   slots: TimeSlot[]
   selectedSlots: string[]
@@ -14,7 +16,7 @@ interface TimeSlotPickerProps {
   loadError?: string | null
 }
 
-export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoading = false, loadError = null }: TimeSlotPickerProps) {
+export function TimeSlotPicker({ slots: allSlots, selectedSlots = [], onSelectSlots, isLoading = false, loadError = null }: TimeSlotPickerProps) {
   const toggleSlot = (slot: string) => {
     const current = selectedSlots
     if (current.includes(slot)) {
@@ -52,13 +54,14 @@ export function TimeSlotPicker({ slots, selectedSlots = [], onSelectSlots, isLoa
     )
   }
 
+  const slots = customerVisibleSlots(allSlots)
   const availableCount = slots.filter(s => s.available).length
 
   return (
     <div>
       {availableCount === 0 ? (
         <div className="text-center py-8">
-          <p className="text-gray-500">No available slots for this date</p>
+          <p className="text-gray-500">No times available for this date</p>
           <p className="text-sm text-gray-400 mt-1">Please select a different date</p>
         </div>
       ) : (

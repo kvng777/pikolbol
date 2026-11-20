@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { CalendarRange, Loader2, Pencil, Plus, Square, Trash2 } from 'lucide-react'
+import { CalendarRange, EyeOff, Loader2, Pencil, Plus, Square, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { SlotRuleForm } from './SlotRuleForm'
 import { useAdminSlotRules, useEndSlotRule, useDeleteSlotRule } from '@/hooks/useSlotRules'
-import { describeRuleDates, describeTimeSlots, describeWeekdays, ruleLabel, ruleStatus } from '@/lib/slotRules'
+import { describeRuleDates, describeTimeSlots, describeWeekdays, isRuleHidden, ruleLabel, ruleStatus } from '@/lib/slotRules'
 import { canEndRule, deleteRuleDescription, endRuleDescription, ruleStatusText, sortRulesForList } from '@/lib/slotRuleForm'
 import { manilaNow } from '@/lib/agent/dates'
 import type { SlotRule, SlotRuleStatus } from '@/types/slotRules'
@@ -134,6 +134,15 @@ export function SlotRulesSection() {
                   <p className="flex flex-wrap items-center gap-2 font-medium text-gray-900">
                     <span className="break-words">{name}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[status]}`}>{ruleStatusText(rule, today)}</span>
+                    {isRuleHidden(rule) && (
+                      <span
+                        className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-700"
+                        title="Hidden from customers"
+                      >
+                        <EyeOff className="w-3 h-3" aria-hidden />
+                        Hidden
+                      </span>
+                    )}
                   </p>
                   <p className="text-sm text-gray-700">
                     {describeTimeSlots(rule.time_slots)} · {capitalize(describeWeekdays(rule.weekdays))}
