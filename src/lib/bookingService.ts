@@ -376,8 +376,16 @@ export async function updateAdminBooking(
     return { success: false, error: `Time slot ${conflict.time_slot} is already booked.` }
   }
 
-  const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks ?? false)
-  if (blockedError) return { success: false, error: blockedError }
+  // The booking already holds its current slots, so only a changed date or slot set needs the block check
+  const sameSlots =
+    existing[0].date === payload.date &&
+    existing.length === payload.timeSlots.length &&
+    new Set(payload.timeSlots).size === payload.timeSlots.length &&
+    existing.every((b) => payload.timeSlots.includes(b.time_slot))
+  if (!sameSlots) {
+    const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks ?? false)
+    if (blockedError) return { success: false, error: blockedError }
+  }
 
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
   const needsBalls = payload.needsBalls ?? false

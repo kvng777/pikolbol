@@ -11,6 +11,9 @@ export interface SlotRule {
   updated_at: string
 }
 
+/** A rule as returned to public callers (no audit fields such as created_by). */
+export type PublicSlotRule = Omit<SlotRule, 'created_by'>
+
 /** What the rule logic needs (lets client code pass rules without audit fields). */
 export type SlotRuleLike = Pick<SlotRule, 'label' | 'start_date' | 'end_date' | 'weekdays' | 'time_slots'>
 
@@ -30,6 +33,12 @@ export interface RuleOverlapBooking {
   timeSlot: string
   name: string
   status: string
+}
+
+/** Overlap check result; `truncated` means the row cap was hit, so more bookings may exist. */
+export interface RuleOverlapResult {
+  bookings: RuleOverlapBooking[]
+  truncated: boolean
 }
 
 export type SlotRuleStatus = 'active' | 'upcoming' | 'ended'

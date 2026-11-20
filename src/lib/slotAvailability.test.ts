@@ -10,10 +10,13 @@ vi.mock('./slotRulesService', async (orig) => ({
 import { findBlockedSlots, blocksForAdmin, describeBlocked } from './slotAvailability'
 import { AvailabilityUnavailableError } from './slotRulesService'
 
+let calls: { table: string; method: string; args: unknown[] }[] = []
+
 function tables(byTable: Record<string, { data: unknown; error: unknown }>) {
+  calls = []
   from.mockImplementation((table: string) => {
     const q: Record<string, any> = {} // eslint-disable-line @typescript-eslint/no-explicit-any
-    for (const m of ['select', 'eq', 'lte', 'gte', 'limit']) q[m] = vi.fn(() => q)
+    for (const m of ['select', 'eq', 'lte', 'gte', 'limit']) q[m] = vi.fn((...args: unknown[]) => { calls.push({ table, method: m, args }); return q })
     q.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
       Promise.resolve(byTable[table] ?? { data: [], error: null }).then(res, rej)
     return q
@@ -28,6 +31,15 @@ describe('findBlockedSlots', () => {
   it('returns nothing when slots are free', async () => {
     tables({})
     expect(await findBlockedSlots('2026-11-21', ['09:00-10:00'])).toEqual([])
+  })
+
+  it('queries closed dates and one-day blocks for the requested date', async () => {
+    tables({})
+    await findBlockedSlots('2026-11-21', ['09:00-10:00'])
+    expect(calls).toContainEqual({ table: 'closed_dates', method: 'lte', args: ['start_date', '2026-11-21'] })
+    expect(calls).toContainEqual({ table: 'closed_dates', method: 'gte', args: ['end_date', '2026-11-21'] })
+    expect(calls).toContainEqual({ table: 'disabled_slots', method: 'eq', args: ['date', '2026-11-21'] })
+    expect(getSlotRulesForDate).toHaveBeenCalledWith('2026-11-21')
   })
 
   it('reports one-day blocks and rule blocks with labels', async () => {

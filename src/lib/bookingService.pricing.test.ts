@@ -291,11 +291,20 @@ describe('blocked slots are enforced', () => {
     // The group's own slot is not a booking conflict, but the block still applies
     findBlockedSlots.mockResolvedValue(ruleBlock)
     const ops = setup([existingRow()])
-    const res = await updateAdminBooking('g1', { name: 'Bob', date: DATE, timeSlots: ['10:00'] })
+    const res = await updateAdminBooking('g1', { name: 'Bob', date: DATE, timeSlots: ['11:00'] })
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/10:00 \(Open Play\)/)
     expect(ops.deleted).toBe(false)
     expect(ops.inserted).toHaveLength(0)
+  })
+
+  it('updateAdminBooking skips the block check for a name-only edit on a blocked slot', async () => {
+    findBlockedSlots.mockResolvedValue(ruleBlock)
+    const ops = setup([existingRow()])
+    const res = await updateAdminBooking('g1', { name: 'Bob', date: DATE, timeSlots: ['10:00'] })
+    expect(res.success).toBe(true)
+    expect(findBlockedSlots).not.toHaveBeenCalled()
+    expect(ops.inserted).toHaveLength(1)
   })
 
   it('updateAdminBooking saves over a block when the admin overrides', async () => {

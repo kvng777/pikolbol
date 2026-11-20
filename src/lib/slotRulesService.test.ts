@@ -6,6 +6,7 @@ vi.mock('./supabase-server', () => ({ supabase: { from } }))
 import {
   getSlotRulesForDate,
   listSlotRules,
+  listCurrentSlotRules,
   createSlotRule,
   updateSlotRule,
   endSlotRule,
@@ -60,6 +61,35 @@ describe('slotRulesService', () => {
     await expect(listSlotRules()).rejects.toBeInstanceOf(AvailabilityUnavailableError)
   })
 
+  it('getSlotRulesForDate fails closed on an invalid date without querying', async () => {
+    stub({ data: [], error: null })
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    for (const d of ['garbage', '2026-02-30', '2026-12-1', '']) {
+      await expect(getSlotRulesForDate(d)).rejects.toBeInstanceOf(AvailabilityUnavailableError)
+    }
+    expect(from).not.toHaveBeenCalled()
+    err.mockRestore()
+  })
+
+  it('listSlotRules orders newest first with deterministic tiebreakers', async () => {
+    const calls = stub({ data: [], error: null })
+    await listSlotRules()
+    const orders = calls.filter((c) => c.method === 'order')
+    expect(orders.map((c) => c.args)).toEqual([
+      ['start_date', { ascending: false }],
+      ['created_at', { ascending: false }],
+      ['id'],
+    ])
+  })
+
+  it('listCurrentSlotRules selects public columns without created_by', async () => {
+    const calls = stub({ data: [], error: null })
+    await listCurrentSlotRules('2026-11-21')
+    const select = calls.find((c) => c.method === 'select')!
+    expect(select.args[0]).not.toContain('created_by')
+    expect(select.args[0]).toContain('time_slots')
+  })
+
   it('createSlotRule validates, sorts and records the creator', async () => {
     const calls = stub({ data: row(), error: null })
     const res = await createSlotRule({ ...input, weekdays: [3, 1], timeSlots: ['08:00-09:00', '07:00-08:00'] }, 'a1')
@@ -84,16 +114,33 @@ describe('slotRulesService', () => {
   })
 
   it('endSlotRule sets end_date to Manila yesterday for a rule that already started', async () => {
-    const calls = stub({ data: { start_date: '2026-11-01', end_date: null }, error: null }, { data: null, error: null })
+    const calls = stub({ data: { start_date: '2026-11-01', end_date: null }, error: null }, { data: [{ id: 'r1' }], error: null })
     expect(await endSlotRule('r1', NOW)).toEqual({ success: true, deleted: false })
     const update = calls.find((c) => c.method === 'update')!
     expect((update.args[0] as Record<string, unknown>).end_date).toBe('2026-11-20')
   })
 
   it('endSlotRule deletes a rule that has not started before today', async () => {
-    const calls = stub({ data: { start_date: '2026-11-21', end_date: null }, error: null }, { data: null, error: null })
+    const calls = stub({ data: { start_date: '2026-11-21', end_date: null }, error: null }, { data: [{ id: 'r1' }], error: null })
     expect(await endSlotRule('r1', NOW)).toEqual({ success: true, deleted: true })
     expect(calls.some((c) => c.method === 'delete')).toBe(true)
+  })
+
+  it('endSlotRule logs and reports update and delete errors', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    stub({ data: { start_date: '2026-11-01', end_date: null }, error: null }, { data: null, error: { message: 'x' } })
+    expect(await endSlotRule('r1', NOW)).toEqual({ success: false, error: 'Failed to end the rule' })
+    stub({ data: { start_date: '2026-11-21', end_date: null }, error: null }, { data: null, error: { message: 'x' } })
+    expect(await endSlotRule('r1', NOW)).toEqual({ success: false, error: 'Failed to end the rule' })
+    expect(err).toHaveBeenCalledTimes(2)
+    err.mockRestore()
+  })
+
+  it('endSlotRule reports Rule not found when nothing was updated or deleted', async () => {
+    stub({ data: { start_date: '2026-11-01', end_date: null }, error: null }, { data: [], error: null })
+    expect(await endSlotRule('r1', NOW)).toEqual({ success: false, error: 'Rule not found' })
+    stub({ data: { start_date: '2026-11-21', end_date: null }, error: null }, { data: [], error: null })
+    expect(await endSlotRule('r1', NOW)).toEqual({ success: false, error: 'Rule not found' })
   })
 
   it('endSlotRule refuses an already-ended rule', async () => {
@@ -116,8 +163,31 @@ describe('slotRulesService', () => {
       error: null,
     })
     const res = await findBookingsOverlappingRule({ ...input, startDate: '2026-11-01', weekdays: [1] }, NOW)
-    expect(res).toEqual([{ shortId: 'A1', date: '2026-11-23', timeSlot: '07:00-08:00', name: 'Ann', status: 'confirmed' }])
+    expect(res).toEqual({
+      bookings: [{ shortId: 'A1', date: '2026-11-23', timeSlot: '07:00-08:00', name: 'Ann', status: 'confirmed' }],
+      truncated: false,
+    })
     expect(calls).toContainEqual({ method: 'gte', args: ['date', '2026-11-21'] }) // clamped to today
     expect(calls).toContainEqual({ method: 'in', args: ['payment_status', ['pending', 'confirmed']] })
+    expect(calls).toContainEqual({ method: 'in', args: ['time_slot', ['07:00-08:00']] })
+    expect(calls).toContainEqual({ method: 'lte', args: ['date', '2027-11-22'] }) // open-ended: today + 366
+    expect(calls).toContainEqual({ method: 'limit', args: [1000] })
+  })
+
+  it('findBookingsOverlappingRule flags truncation when the cap is hit', async () => {
+    const data = Array.from({ length: 1000 }, (_, i) => ({
+      short_id: `S${i}`, date: '2026-11-23', time_slot: '07:00-08:00', name: 'X', payment_status: 'confirmed',
+    }))
+    stub({ data, error: null })
+    const res = await findBookingsOverlappingRule({ ...input, weekdays: [1] }, NOW)
+    expect(res.truncated).toBe(true)
+    expect(res.bookings).toHaveLength(1000)
+  })
+
+  it('findBookingsOverlappingRule returns nothing without querying when the rule already ended', async () => {
+    stub({ data: [], error: null })
+    const res = await findBookingsOverlappingRule({ ...input, startDate: '2026-10-01', endDate: '2026-11-10' }, NOW)
+    expect(res).toEqual({ bookings: [], truncated: false })
+    expect(from).not.toHaveBeenCalled()
   })
 })

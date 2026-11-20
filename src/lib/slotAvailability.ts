@@ -3,12 +3,12 @@
  * Combines closed dates, one-day blocks (disabled_slots) and slot rules. Fails closed.
  */
 import { supabase } from './supabase-server'
-import { getSlotRulesForDate, AvailabilityUnavailableError } from './slotRulesService'
+import { getSlotRulesForDate, AvailabilityUnavailableError, AVAILABILITY_UNAVAILABLE } from './slotRulesService'
 import { isRealDate } from './agent/dates'
 import { findBlockingRule, ruleLabel, DEFAULT_RULE_LABEL } from './slotRules'
 
 export const SLOTS_UNAVAILABLE = 'One or more selected slots are no longer available.'
-export const AVAILABILITY_UNAVAILABLE = 'Availability is unavailable right now. Please try again in a moment.'
+export { AVAILABILITY_UNAVAILABLE }
 
 export interface BlockedSlot {
   slot: string

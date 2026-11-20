@@ -5,13 +5,16 @@
 import { supabase } from './supabase-server'
 import { slotRuleInputSchema } from './slotRulesSchema'
 import { isoWeekday, ruleAppliesOnDate } from './slotRules'
-import { manilaNow } from './agent/dates'
+import { manilaNow, isRealDate } from './agent/dates'
 import { addDaysIso } from './pricing'
-import type { SlotRule, SlotRuleInput, RuleOverlapBooking } from '@/types/slotRules'
+import type { SlotRule, PublicSlotRule, SlotRuleInput, RuleOverlapResult } from '@/types/slotRules'
+
+/** Shown when availability can't be read (the single source of this message). */
+export const AVAILABILITY_UNAVAILABLE = 'Availability is unavailable right now. Please try again in a moment.'
 
 export class AvailabilityUnavailableError extends Error {
   constructor() {
-    super('Availability is unavailable right now. Please try again in a moment.')
+    super(AVAILABILITY_UNAVAILABLE)
     this.name = 'AvailabilityUnavailableError'
   }
 }
@@ -20,6 +23,10 @@ export type SlotRuleResult = { success: true; rule: SlotRule } | { success: fals
 export type EndSlotRuleResult = { success: true; deleted: boolean } | { success: false; error: string }
 
 const COLUMNS = 'id, label, start_date, end_date, weekdays, time_slots, created_by, created_at, updated_at'
+/** Same as COLUMNS without audit fields; safe for customer-facing reads. */
+const PUBLIC_COLUMNS = 'id, label, start_date, end_date, weekdays, time_slots, created_at, updated_at'
+/** Max overlapping bookings returned by the overlap check. */
+const OVERLAP_LIMIT = 1000
 /** How far ahead the overlap check looks for rules without an end date. */
 const OVERLAP_HORIZON_DAYS = 366
 
@@ -47,25 +54,28 @@ function toRow(input: SlotRuleInput) {
 /** All rules, newest start first (admin list). */
 export async function listSlotRules(): Promise<SlotRule[]> {
   const { data, error } = await supabase.from('slot_rules').select(COLUMNS).order('start_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .order('id')
   if (error) readFailed('list', error)
   return (data ?? []) as SlotRule[]
 }
 
 /** Rules that are active or upcoming on/after `today` (what customer screens need). */
-export async function listCurrentSlotRules(today: string): Promise<SlotRule[]> {
+export async function listCurrentSlotRules(today: string): Promise<PublicSlotRule[]> {
   const { data, error } = await supabase
     .from('slot_rules')
-    .select(COLUMNS)
+    .select(PUBLIC_COLUMNS)
     .or(`end_date.is.null,end_date.gte.${today}`)
     .order('start_date', { ascending: true })
     .order('created_at', { ascending: true })
     .order('id', { ascending: true })
   if (error) readFailed('list current', error)
-  return (data ?? []) as SlotRule[]
+  return (data ?? []) as PublicSlotRule[]
 }
 
 /** Rules that block something on `date`. */
 export async function getSlotRulesForDate(date: string): Promise<SlotRule[]> {
+  if (!isRealDate(date)) readFailed('rules for date: invalid date', date)
   const { data, error } = await supabase
     .from('slot_rules')
     .select(COLUMNS)
@@ -125,15 +135,24 @@ export async function endSlotRule(id: string, now: Date = new Date()): Promise<E
   if (rule.end_date !== null && rule.end_date < today) return { success: false, error: 'This rule has already ended.' }
 
   if (rule.start_date > yesterday) {
-    const { error: delError } = await supabase.from('slot_rules').delete().eq('id', id)
-    if (delError) return { success: false, error: 'Failed to end the rule' }
+    const { data: gone, error: delError } = await supabase.from('slot_rules').delete().eq('id', id).select('id')
+    if (delError) {
+      console.error('Slot rules: end (delete)', delError)
+      return { success: false, error: 'Failed to end the rule' }
+    }
+    if (!gone || gone.length === 0) return { success: false, error: 'Rule not found' }
     return { success: true, deleted: true }
   }
-  const { error: upError } = await supabase
+  const { data: updated, error: upError } = await supabase
     .from('slot_rules')
     .update({ end_date: yesterday, updated_at: now.toISOString() })
     .eq('id', id)
-  if (upError) return { success: false, error: 'Failed to end the rule' }
+    .select('id')
+  if (upError) {
+    console.error('Slot rules: end (update)', upError)
+    return { success: false, error: 'Failed to end the rule' }
+  }
+  if (!updated || updated.length === 0) return { success: false, error: 'Rule not found' }
   return { success: true, deleted: false }
 }
 
@@ -149,13 +168,16 @@ export async function deleteSlotRule(id: string): Promise<{ success: boolean; er
 /**
  * Active (pending/confirmed) bookings a rule would cover, from today (Manila) onward.
  * Rules without an end date are checked up to OVERLAP_HORIZON_DAYS ahead.
+ * `input` must already be parsed with `slotRuleInputSchema` (not re-validated here).
+ * At most OVERLAP_LIMIT bookings are read; `truncated` is true when that cap was hit, so the list may be
+ * incomplete (the weekday filter runs after the cap).
  */
-export async function findBookingsOverlappingRule(input: SlotRuleInput, now: Date = new Date()): Promise<RuleOverlapBooking[]> {
+export async function findBookingsOverlappingRule(input: SlotRuleInput, now: Date = new Date()): Promise<RuleOverlapResult> {
   const today = manilaNow(now).date
   const horizon = addDaysIso(today, OVERLAP_HORIZON_DAYS)
   const fromDate = input.startDate > today ? input.startDate : today
   const toDate = input.endDate === null || input.endDate > horizon ? horizon : input.endDate
-  if (toDate < fromDate) return []
+  if (toDate < fromDate) return { bookings: [], truncated: false }
 
   const { data, error } = await supabase
     .from('bookings')
@@ -166,9 +188,12 @@ export async function findBookingsOverlappingRule(input: SlotRuleInput, now: Dat
     .in('time_slot', input.timeSlots)
     .order('date', { ascending: true })
     .order('time_slot', { ascending: true })
+    .limit(OVERLAP_LIMIT)
   if (error) readFailed('overlap', error)
 
-  return (data ?? [])
+  const rows = data ?? []
+  const bookings = rows
     .filter((b) => input.weekdays.includes(isoWeekday(b.date)))
     .map((b) => ({ shortId: b.short_id, date: b.date, timeSlot: b.time_slot, name: b.name, status: b.payment_status }))
+  return { bookings, truncated: rows.length >= OVERLAP_LIMIT }
 }

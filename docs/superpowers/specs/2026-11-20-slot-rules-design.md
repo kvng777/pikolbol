@@ -31,7 +31,7 @@ New table `slot_rules` (`sql/slot-rules-migration.sql`, additive, RLS on with no
 | `created_by` | uuid null | Admin user id; never returned to public callers |
 | `created_at`, `updated_at` | timestamptz | |
 
-A slot on date D is blocked by a rule if `start_date ≤ D`, (`end_date` is null or `D ≤ end_date`), weekday(D) ∈ `weekdays`, and the slot ∈ `time_slots`. Rules can be edited (all fields), ended (`end_date` = Manila yesterday; rows kept) or deleted. Rules carry no money, so unlike pricing versions they are mutable.
+A slot on date D is blocked by a rule if `start_date ≤ D`, (`end_date` is null or `D ≤ end_date`), weekday(D) ∈ `weekdays`, and the slot ∈ `time_slots`. Rules can be edited (all fields), ended ("End" on a rule that starts today or later deletes it, since the DB requires end ≥ start; otherwise it sets `end_date` to Manila yesterday and keeps the row) or deleted. Rules carry no money, so unlike pricing versions they are mutable.
 
 Examples:
 - Recurring: "Open Play", every day, 07:00–11:00, from Nov 20, no end.
