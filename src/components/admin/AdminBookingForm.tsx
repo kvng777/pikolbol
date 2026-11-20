@@ -13,7 +13,7 @@ import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { calculatePaymentAmount, isEquipmentChargeable, isSamePricedSelection } from '@/lib/pricing'
 import { usePricingForDate } from '@/hooks/usePricing'
 import { useSlotRules, SLOT_RULES_QUERY_KEY } from '@/hooks/useSlotRules'
-import { isSameSlotSelection } from '@/lib/slotRules'
+import { isSameSlotSelection, DEFAULT_RULE_LABEL } from '@/lib/slotRules'
 import { useQueryClient } from '@tanstack/react-query'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { toast } from 'sonner'
@@ -244,7 +244,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
                   >
                     <span className="flex flex-col items-center leading-tight">
                       {slot.time}
-                      {blocked && <span className="text-[11px] font-normal">{slot.label ?? 'Blocked'}</span>}
+                      {blocked && <span className="text-[11px] font-normal">{slot.label ?? DEFAULT_RULE_LABEL}</span>}
                     </span>
                   </button>
                 )
@@ -327,7 +327,7 @@ export function AdminBookingForm({ onClose, initialValues }: AdminBookingFormPro
         <ul className="text-sm text-gray-700 space-y-1">
           {blockedSelected.map((s) => (
             <li key={s.time}>
-              {s.time}: {s.label ? `blocked by "${s.label}"` : 'Blocked'}
+              {s.time}: {s.label && s.label !== DEFAULT_RULE_LABEL ? `blocked by "${s.label}"` : DEFAULT_RULE_LABEL}
             </li>
           ))}
         </ul>

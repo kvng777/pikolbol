@@ -13,6 +13,7 @@ import {
 } from '@/lib/financeUtils'
 import { getAvailableSlotsForCourt } from '@/lib/timeSlotGenerator'
 import { manilaNow } from './dates'
+import { DEFAULT_RULE_LABEL } from '@/lib/slotRules'
 
 /** Max booking groups returned to the model per call (token budget). */
 export const MAX_GROUPS = 100
@@ -116,6 +117,6 @@ export function summarizeAvailability(
     available: closed ? [] : slots.filter(s => s.available && !isPast(s.time)).map(s => s.time),
     booked: slots.filter(s => s.reason === 'booked').map(s => s.time),
     disabled: slots.filter(s => s.reason === 'disabled').map(s => s.time),
-    blockedByRule: slots.filter(s => s.reason === 'rule').map(s => ({ time: s.time, label: s.label ?? 'Blocked' })),
+    blockedByRule: slots.filter(s => s.reason === 'rule').map(s => ({ time: s.time, label: s.label ?? DEFAULT_RULE_LABEL })),
   }
 }
