@@ -255,10 +255,18 @@ async function loadPricing(
  * Error message if any slot can't be booked, or null. Admins may override rules and one-day blocks
  * (never closed dates). Fails closed when availability can't be read.
  */
-async function checkSlotsBookable(date: string, slots: string[], overrideBlocks = false): Promise<string | null> {
+async function checkSlotsBookable(
+  date: string,
+  slots: string[],
+  overrideBlocks: unknown = false,
+  audience: 'admin' | 'customer' = 'admin'
+): Promise<string | null> {
   try {
     const blocked = blocksForAdmin(await findBlockedSlots(date, slots), overrideBlocks)
-    return blocked.length > 0 ? `${SLOTS_UNAVAILABLE} Blocked: ${describeBlocked(blocked)}.` : null
+    if (blocked.length === 0) return null
+    return audience === 'customer'
+      ? `Some of the slots you picked aren't available: ${describeBlocked(blocked)}.`
+      : `${SLOTS_UNAVAILABLE} Blocked: ${describeBlocked(blocked)}.`
   } catch (error) {
     console.error('Availability check failed:', error)
     return AVAILABILITY_UNAVAILABLE
@@ -279,7 +287,7 @@ export async function createAdminBooking(
     return { success: false, error: 'Please select at least one time slot' }
   }
 
-  const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks ?? false)
+  const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks)
   if (blockedError) return { success: false, error: blockedError }
 
   const paddlesCount = Math.max(0, payload.paddles ?? 0)
@@ -383,7 +391,7 @@ export async function updateAdminBooking(
     new Set(payload.timeSlots).size === payload.timeSlots.length &&
     existing.every((b) => payload.timeSlots.includes(b.time_slot))
   if (!sameSlots) {
-    const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks ?? false)
+    const blockedError = await checkSlotsBookable(payload.date, payload.timeSlots, payload.overrideBlocks)
     if (blockedError) return { success: false, error: blockedError }
   }
 
@@ -585,7 +593,7 @@ export async function createRescheduleRequest(
   }
 
   // 8. Check rules, one-day blocks and closed dates
-  const blockedError = await checkSlotsBookable(newDate, newTimeSlots)
+  const blockedError = await checkSlotsBookable(newDate, newTimeSlots, false, 'customer')
   if (blockedError) return { success: false, error: blockedError }
 
   // 9. Insert the request
@@ -689,7 +697,11 @@ export async function approveRescheduleRequest(
     return { success: false, error: `Time slot ${conflict.time_slot} is no longer available.` }
   }
   const blockedError = await checkSlotsBookable(request.new_date, request.new_time_slots)
-  if (blockedError) return { success: false, error: blockedError }
+  if (blockedError) {
+    // Only a real block gets the guidance; an unreadable-availability error is just a retry
+    const guidance = blockedError === AVAILABILITY_UNAVAILABLE ? '' : ' Remove the block or reject the request.'
+    return { success: false, error: `${blockedError}${guidance}` }
+  }
 
   // 4. Replace-group: delete old rows, insert new ones
   const first = bookings[0]

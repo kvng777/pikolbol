@@ -335,8 +335,61 @@ describe('blocked slots are enforced', () => {
     })
     const res = await approveRescheduleRequest('r1')
     expect(res.success).toBe(false)
-    expect(res.error).toMatch(/12:00 \(Tournament\)/)
+    expect(res.error).toMatch(/12:00 \(Tournament\).*Remove the block or reject the request\.$/)
     expect(findBlockedSlots).toHaveBeenCalledWith('2026-12-05', ['12:00'])
+    expect(ops.deleted).toBe(false)
+    expect(ops.inserted).toHaveLength(0)
+  })
+
+  it('a string "false" does not override', async () => {
+    findBlockedSlots.mockResolvedValue(ruleBlock)
+    const ops = setup([])
+    const res = await createAdminBooking({ name: 'Ann', date: DATE, timeSlots: ['10:00'], overrideBlocks: 'false' as unknown as boolean })
+    expect(res.success).toBe(false)
+    expect(ops.inserted).toHaveLength(0)
+  })
+
+  it('updateAdminBooking fails closed when the check runs and availability cannot be read', async () => {
+    findBlockedSlots.mockRejectedValue(new Error('down'))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const ops = setup([existingRow()])
+    const res = await updateAdminBooking('g1', { name: 'Bob', date: DATE, timeSlots: ['11:00'] })
+    expect(res).toEqual({ success: false, error: 'Availability is unavailable right now. Please try again in a moment.' })
+    expect(ops.deleted).toBe(false)
+    expect(ops.inserted).toHaveLength(0)
+    err.mockRestore()
+  })
+
+  it('approveRescheduleRequest fails closed when availability cannot be read', async () => {
+    findBlockedSlots.mockRejectedValue(new Error('down'))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const ops = setup([existingRow({ is_manual: false })], {
+      reschedule_requests: {
+        id: 'r1', status: 'pending', booking_group_id: 'g1', new_date: '2026-12-05', new_time_slots: ['12:00'],
+        original_date: DATE, original_time_slots: ['10:00'], customer_email: 'a@b.c', customer_name: 'Ann',
+      },
+    })
+    const res = await approveRescheduleRequest('r1')
+    expect(res).toEqual({ success: false, error: 'Availability is unavailable right now. Please try again in a moment.' })
+    expect(ops.deleted).toBe(false)
+    expect(ops.inserted).toHaveLength(0)
+    err.mockRestore()
+  })
+
+  it('approveRescheduleRequest reports a closed date once', async () => {
+    findBlockedSlots.mockResolvedValue([
+      { slot: '12:00', source: 'closed', label: 'Holiday' },
+      { slot: '13:00', source: 'closed', label: 'Holiday' },
+    ])
+    const ops = setup([existingRow({ is_manual: false })], {
+      reschedule_requests: {
+        id: 'r1', status: 'pending', booking_group_id: 'g1', new_date: '2026-12-05', new_time_slots: ['12:00'],
+        original_date: DATE, original_time_slots: ['10:00'], customer_email: 'a@b.c', customer_name: 'Ann',
+      },
+    })
+    const res = await approveRescheduleRequest('r1')
+    expect(res.success).toBe(false)
+    expect(res.error).toBe('One or more selected slots are no longer available. Blocked: the court is closed (Holiday). Remove the block or reject the request.')
     expect(ops.deleted).toBe(false)
     expect(ops.inserted).toHaveLength(0)
   })
@@ -350,8 +403,19 @@ describe('blocked slots are enforced', () => {
       const ops = setup([existingRow({ is_manual: false, user_id: 'u1' })])
       const res = await createRescheduleRequest('g1', null, 'u1', '2026-12-05', ['12:00'])
       expect(res.success).toBe(false)
-      expect(res.error).toMatch(/12:00 \(Tournament\)/)
+      expect(res.error).toMatch(/^Some of the slots you picked aren't available: 12:00 \(Tournament\)/)
       expect(findBlockedSlots).toHaveBeenCalledWith('2026-12-05', ['12:00'])
+      expect(ops.inserted).toHaveLength(0)
+    })
+
+    it('reports a closed date once for a customer', async () => {
+      findBlockedSlots.mockResolvedValue([
+        { slot: '12:00', source: 'closed', label: 'Holiday' },
+        { slot: '13:00', source: 'closed', label: 'Holiday' },
+      ])
+      const ops = setup([existingRow({ is_manual: false, user_id: 'u1' })])
+      const res = await createRescheduleRequest('g1', null, 'u1', '2026-12-05', ['12:00'])
+      expect(res).toEqual({ success: false, error: "Some of the slots you picked aren't available: the court is closed (Holiday)." })
       expect(ops.inserted).toHaveLength(0)
     })
 

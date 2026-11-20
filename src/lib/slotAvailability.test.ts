@@ -87,7 +87,21 @@ describe('blocksForAdmin / describeBlocked', () => {
     expect(blocksForAdmin(blocked, true)).toEqual([blocked[2]])
     expect(blocksForAdmin(blocked, false)).toEqual(blocked)
   })
+  it('only a literal true overrides', () => {
+    expect(blocksForAdmin(blocked, 'false')).toEqual(blocked)
+    expect(blocksForAdmin(blocked, 'true')).toEqual(blocked)
+    expect(blocksForAdmin(blocked, 1)).toEqual(blocked)
+    expect(blocksForAdmin(blocked, undefined)).toEqual(blocked)
+  })
   it('describes blocks for messages', () => {
     expect(describeBlocked(blocked.slice(0, 1))).toBe('07:00-08:00 (Open Play)')
+  })
+  it('shows just the slot for unlabeled blocks', () => {
+    expect(describeBlocked([blocked[1]])).toBe('08:00-09:00')
+  })
+  it('mentions a closed date once', () => {
+    const closed = ['09:00-10:00', '10:00-11:00', '11:00-12:00'].map((slot) => ({ slot, source: 'closed' as const, label: 'Holiday' }))
+    expect(describeBlocked(closed)).toBe('the court is closed (Holiday)')
+    expect(describeBlocked([{ slot: '09:00-10:00', source: 'closed', label: 'Closed' }])).toBe('the court is closed')
   })
 })

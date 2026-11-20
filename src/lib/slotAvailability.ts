@@ -50,11 +50,20 @@ export async function findBlockedSlots(date: string, slots: string[]): Promise<B
   return blocked
 }
 
-/** Blocks that still apply for an admin booking: overriding skips rules and one-day blocks, never closed dates. */
-export function blocksForAdmin(blocked: BlockedSlot[], overrideBlocks: boolean): BlockedSlot[] {
-  return overrideBlocks ? blocked.filter((b) => b.source === 'closed') : blocked
+/** Blocks that still apply for an admin booking (only a literal `true` overrides): overriding skips rules and one-day blocks, never closed dates. */
+export function blocksForAdmin(blocked: BlockedSlot[], overrideBlocks: unknown): BlockedSlot[] {
+  return overrideBlocks === true ? blocked.filter((b) => b.source === 'closed') : blocked
 }
 
+/**
+ * Human-readable list of blocks. Unlabeled blocks show just the slot, rule blocks add their label,
+ * and a closed date is mentioned once (it blocks every slot for the same reason).
+ */
 export function describeBlocked(blocked: BlockedSlot[]): string {
-  return blocked.map((b) => `${b.slot} (${b.label})`).join(', ')
+  const parts = blocked
+    .filter((b) => b.source !== 'closed')
+    .map((b) => (b.label === DEFAULT_RULE_LABEL ? b.slot : `${b.slot} (${b.label})`))
+  const closed = blocked.find((b) => b.source === 'closed')
+  if (closed) parts.push(closed.label === 'Closed' ? 'the court is closed' : `the court is closed (${closed.label})`)
+  return parts.join(', ')
 }
