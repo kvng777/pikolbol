@@ -3,7 +3,7 @@
  * A slot on date D is blocked by a rule when D is within [start_date, end_date],
  * D's ISO weekday is in weekdays, and the slot is in time_slots.
  */
-import { formatHour } from './pricing'
+import { formatHour, FIRST_SLOT_HOUR, SLOT_COUNT } from './pricing'
 import type { SlotRuleLike, SlotRuleStatus } from '@/types/slotRules'
 
 export const DEFAULT_RULE_LABEL = 'Blocked'
@@ -119,4 +119,30 @@ export function permanentlyHiddenSlots(rules: readonly SlotRuleLike[], today: st
     }
   }
   return hours
+}
+
+/** "6:00 AM" style clock time for a whole hour (24 = midnight). */
+function clockTime(hour: number): string {
+  const h = hour % 24
+  const suffix = h < 12 ? 'AM' : 'PM'
+  return `${h % 12 === 0 ? 12 : h % 12}:00 ${suffix}`
+}
+
+/**
+ * Opening hours for the Contact section, e.g. "Open daily: 6:00 AM — 12:00 AM (midnight)".
+ * Uses the bookable window minus slots hidden every day (see permanentlyHiddenSlots); gaps in the
+ * middle of the day are listed as closed. Returns "Closed" if every slot is hidden.
+ */
+export function describeOpeningHours(hiddenHours: ReadonlySet<number>): string {
+  const open: number[] = []
+  for (let h = FIRST_SLOT_HOUR; h < FIRST_SLOT_HOUR + SLOT_COUNT; h++) if (!hiddenHours.has(h)) open.push(h)
+  if (open.length === 0) return 'Closed'
+  const first = open[0]
+  const last = open[open.length - 1] + 1
+  const end = last === 24 ? '12:00 AM (midnight)' : clockTime(last)
+  const gaps: string[] = []
+  for (let i = 1; i < open.length; i++) {
+    if (open[i] !== open[i - 1] + 1) gaps.push(`${formatHour(open[i - 1] + 1)} - ${formatHour(open[i])}`)
+  }
+  return `Open daily: ${clockTime(first)} — ${end}${gaps.length ? ` (closed ${gaps.join(', ')})` : ''}`
 }

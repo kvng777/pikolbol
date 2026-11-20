@@ -13,7 +13,7 @@ import {
   isSameSlotSelection,
   RULE_OVERLAP_LIMIT,
 } from './slotRules'
-import { permanentlyHiddenSlots } from './slotRules'
+import { permanentlyHiddenSlots, describeOpeningHours } from './slotRules'
 import type { SlotRuleLike } from '@/types/slotRules'
 
 const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7]
@@ -150,5 +150,23 @@ describe('permanentlyHiddenSlots', () => {
   })
   it('returns an empty set for no rules', () => {
     expect(permanentlyHiddenSlots([], T).size).toBe(0)
+  })
+})
+
+describe('describeOpeningHours', () => {
+  it('shows the full window when nothing is hidden', () => {
+    expect(describeOpeningHours(new Set())).toBe('Open daily: 5:00 AM — 12:00 AM (midnight)')
+  })
+  it('starts later when early hours are hidden', () => {
+    expect(describeOpeningHours(new Set([5]))).toBe('Open daily: 6:00 AM — 12:00 AM (midnight)')
+  })
+  it('ends earlier when late hours are hidden', () => {
+    expect(describeOpeningHours(new Set([22, 23]))).toBe('Open daily: 5:00 AM — 10:00 PM')
+  })
+  it('lists a midday gap as closed', () => {
+    expect(describeOpeningHours(new Set([5, 12]))).toBe('Open daily: 6:00 AM — 12:00 AM (midnight) (closed 12 PM - 1 PM)')
+  })
+  it('says Closed when every hour is hidden', () => {
+    expect(describeOpeningHours(new Set(Array.from({ length: 19 }, (_, i) => i + 5)))).toBe('Closed')
   })
 })
