@@ -52,13 +52,15 @@ export default function RatesPolicies() {
   const nextDate = versions ? upcomingPricingVersions(versions, today)[0]?.effective_from : undefined
   const next = versions && nextDate ? pickPricingVersion(versions, nextDate) : null
   // Informational only: if slot rules fail to load, show all hours (booking fails closed elsewhere).
-  const { data: slotRules } = useSlotRules()
+  // Wait for rules (or their failure) before drawing tiers, so a hidden tier never flashes on load.
+  const { data: slotRules, isPending: slotRulesPending } = useSlotRules()
   const hiddenHours = useMemo(() => permanentlyHiddenSlots(slotRules ?? [], today), [slotRules, today])
-  const nextBanner = next ? describeNextRates(current?.rules, next.rules, hiddenHours) : null
+  const nextBanner = next && !slotRulesPending ? describeNextRates(current?.rules, next.rules, hiddenHours) : null
   const rules = current?.rules
   // Loaded but nothing in effect is also "unavailable": never invent a price.
   const unavailable = isError || (!!versions && !current)
   const tierHours = rules ? describeTierHours(rules, hiddenHours) : null
+  const tiersLoading = (!versions && !isError) || slotRulesPending
   const amount = (n: number | undefined) => (n === undefined ? (unavailable ? '—' : '…') : n.toLocaleString())
   const equipmentStart = rules?.equipment_charge_start_date
 
@@ -90,7 +92,15 @@ export default function RatesPolicies() {
               </div>
             )}
 
-            {TIER_CARDS.filter(({ tier }) => !tierHours || tierHours[tier]).map(({ tier, title, icon: Icon, gradient, iconClass, iconStyle }) => (
+            {tiersLoading && (
+              <div className="space-y-4" aria-busy="true" aria-label="Loading rates">
+                {[0, 1].map((i) => (
+                  <div key={i} className="h-[104px] rounded-2xl bg-emerald-100/70 animate-pulse" />
+                ))}
+              </div>
+            )}
+
+            {!tiersLoading && TIER_CARDS.filter(({ tier }) => !tierHours || tierHours[tier]).map(({ tier, title, icon: Icon, gradient, iconClass, iconStyle }) => (
               <div key={tier} className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
                 <div className={`bg-gradient-to-br ${gradient} p-5 text-white flex-1 flex items-center`}>
                   <div className="flex gap-4 items-center w-full">
