@@ -75,17 +75,23 @@ function EventRentalsCard({ className }: { className: string }) {
         </span>
       </div>
 
-      {/* A plain price list (one strip, thin dividers) so packages don't read as selectable options */}
-      <dl className="grid grid-cols-3 divide-x divide-emerald-200 rounded-xl bg-emerald-50/60 py-4">
+      {/* A plain price list (one strip, thin dividers) so packages don't read as selectable options.
+          Stacked rows on phones, three columns from sm up. */}
+      <dl className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-emerald-200 rounded-xl bg-emerald-50/60 px-4 sm:px-0 sm:py-4">
         {EVENT_PACKAGES.map(({ hours, price, bestValue }) => (
-          <div key={hours} className="flex flex-col items-center px-2 text-center">
-            <dt className="text-sm font-medium text-gray-600">{hours} hours</dt>
-            <dd className="mt-1 font-bold text-emerald-600">
+          <div key={hours} className="flex items-center justify-between py-3 sm:flex-col sm:justify-start sm:py-0 sm:px-2 sm:text-center">
+            <dt className="text-sm font-medium text-gray-600">
+              {hours} hours
+              {bestValue && (
+                <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-amber-600 sm:hidden">Best value</span>
+              )}
+            </dt>
+            <dd className="font-bold text-emerald-600 sm:mt-1">
               <span className="text-sm">Php</span>
-              <span className="text-2xl sm:text-3xl ml-0.5">{price.toLocaleString()}</span>
+              <span className="text-xl sm:text-3xl ml-0.5">{price.toLocaleString()}</span>
             </dd>
             {bestValue && (
-              <dd className="mt-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">Best value</dd>
+              <dd className="hidden sm:block mt-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">Best value</dd>
             )}
           </div>
         ))}
