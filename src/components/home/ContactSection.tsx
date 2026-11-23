@@ -8,8 +8,9 @@ import { manilaNow } from '@/lib/agent/dates'
 
 export default function ContactSection() {
   // Hours follow slot rules that hide the same slots every day (e.g. closed 5–6 AM); full window if rules can't load
-  const { data: slotRules } = useSlotRules()
-  const hours = describeOpeningHours(permanentlyHiddenSlots(slotRules ?? [], manilaNow().date))
+  const { data: slotRules, isPending } = useSlotRules()
+  // Wait for rules so the hours never flash the full window first
+  const hours = isPending ? '…' : describeOpeningHours(permanentlyHiddenSlots(slotRules ?? [], manilaNow().date))
 
   return (
     <section id="contact" className="mt-12">

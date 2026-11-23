@@ -2,7 +2,7 @@
 
 import { useMemo, type CSSProperties } from 'react'
 import { format, parseISO } from 'date-fns'
-import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw, CalendarClock } from 'lucide-react'
+import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw, CalendarClock, PartyPopper, Users, Plus, Phone } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { usePricingVersions } from '@/hooks/usePricing'
 import { describeTierHours, pickPricingVersion, upcomingPricingVersions, diffPricingRules, formatPeso, RATE_TIERS, RATE_TIER_LABELS } from '@/lib/pricing'
@@ -16,6 +16,17 @@ const TIER_CARDS: { tier: RateTier; title: string; icon: LucideIcon; gradient: s
   { tier: 'offpeak', title: 'Off-Peak Rate', icon: Moon, gradient: 'from-emerald-600 to-teal-700', iconClass: 'animate-pulse', iconStyle: { animationDuration: '3s' } },
   { tier: 'latenight', title: 'Evening Rate', icon: Stars, gradient: 'from-emerald-700 to-teal-900', iconClass: 'animate-pulse', iconStyle: { animationDuration: '3s' } },
 ]
+
+// Event packages are quoted by hand (not booked online), so they live here rather than in pricing_schedules.
+const EVENT_PACKAGES = [
+  { hours: 3, price: 3500 },
+  { hours: 4, price: 4000 },
+  { hours: 5, price: 4500, bestValue: true },
+]
+const EVENT_EXTRA_HOUR_PRICE = 800
+const EVENT_MAX_GUESTS = 25
+const EVENT_PHONE_TEL = '+639064514819'
+const EVENT_PHONE_DISPLAY = '0906 451 4819'
 
 const formatDate = (d: string) => format(parseISO(d), 'MMMM d, yyyy')
 
@@ -44,6 +55,69 @@ function describeNextRates(current: PricingRules | undefined, next: PricingRules
   }
 }
 
+/** Events & Private Rentals. Rendered twice: after the rate tiers on mobile, full width at the bottom on desktop. */
+function EventRentalsCard({ className }: { className: string }) {
+  return (
+    <div className={`rounded-xl border-2 border-emerald-500 bg-white p-5 shadow-sm ${className}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="p-2.5 bg-emerald-50 rounded-full flex items-center justify-center h-11 w-11 shrink-0">
+            <PartyPopper className="w-6 h-6 text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Events & Private Rentals</h3>
+            <p className="text-sm text-gray-600">Event facilities and court rental</p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1.5 self-start sm:self-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+          <Users className="w-4 h-4" />
+          Up to {EVENT_MAX_GUESTS} guests
+        </span>
+      </div>
+
+      {/* A plain price list (one strip, thin dividers) so packages don't read as selectable options.
+          Stacked rows on phones, three columns from sm up. */}
+      <dl className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-emerald-200 rounded-xl bg-emerald-50/60 px-4 sm:px-0 sm:py-4">
+        {EVENT_PACKAGES.map(({ hours, price, bestValue }) => (
+          <div key={hours} className="flex items-center justify-between py-3 sm:flex-col sm:justify-start sm:py-0 sm:px-2 sm:text-center">
+            <dt className="text-sm font-medium text-gray-600">
+              {hours} hours
+              {bestValue && (
+                <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-amber-600 sm:hidden">Best value</span>
+              )}
+            </dt>
+            <dd className="font-bold text-emerald-600 sm:mt-1">
+              <span className="text-sm">Php</span>
+              <span className="text-xl sm:text-3xl ml-0.5">{price.toLocaleString()}</span>
+            </dd>
+            {bestValue && (
+              <dd className="hidden sm:block mt-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">Best value</dd>
+            )}
+          </div>
+        ))}
+      </dl>
+
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+        <p className="inline-flex items-center gap-2 text-sm text-gray-700">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 shrink-0">
+            <Plus className="w-4 h-4 text-emerald-600" />
+          </span>
+          Additional hours: <span className="font-semibold text-emerald-600">Php{EVENT_EXTRA_HOUR_PRICE.toLocaleString()}/hour</span>
+        </p>
+        <p className="inline-flex items-center gap-2 text-sm text-gray-700">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 shrink-0">
+            <Phone className="w-3.5 h-3.5 text-emerald-600" />
+          </span>
+          To book, call
+          <a href={`tel:${EVENT_PHONE_TEL}`} className="font-semibold text-emerald-600 underline underline-offset-2 hover:text-emerald-700">
+            {EVENT_PHONE_DISPLAY}
+          </a>
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default function RatesPolicies() {
   const { data: versions, isError } = usePricingVersions()
   const today = manilaNow().date
@@ -52,13 +126,15 @@ export default function RatesPolicies() {
   const nextDate = versions ? upcomingPricingVersions(versions, today)[0]?.effective_from : undefined
   const next = versions && nextDate ? pickPricingVersion(versions, nextDate) : null
   // Informational only: if slot rules fail to load, show all hours (booking fails closed elsewhere).
-  const { data: slotRules } = useSlotRules()
+  // Wait for rules (or their failure) before drawing tiers, so a hidden tier never flashes on load.
+  const { data: slotRules, isPending: slotRulesPending } = useSlotRules()
   const hiddenHours = useMemo(() => permanentlyHiddenSlots(slotRules ?? [], today), [slotRules, today])
-  const nextBanner = next ? describeNextRates(current?.rules, next.rules, hiddenHours) : null
+  const nextBanner = next && !slotRulesPending ? describeNextRates(current?.rules, next.rules, hiddenHours) : null
   const rules = current?.rules
   // Loaded but nothing in effect is also "unavailable": never invent a price.
   const unavailable = isError || (!!versions && !current)
   const tierHours = rules ? describeTierHours(rules, hiddenHours) : null
+  const tiersLoading = (!versions && !isError) || slotRulesPending
   const amount = (n: number | undefined) => (n === undefined ? (unavailable ? '—' : '…') : n.toLocaleString())
   const equipmentStart = rules?.equipment_charge_start_date
 
@@ -90,7 +166,15 @@ export default function RatesPolicies() {
               </div>
             )}
 
-            {TIER_CARDS.filter(({ tier }) => !tierHours || tierHours[tier]).map(({ tier, title, icon: Icon, gradient, iconClass, iconStyle }) => (
+            {tiersLoading && (
+              <div className="space-y-4" aria-busy="true" aria-label="Loading rates">
+                {[0, 1].map((i) => (
+                  <div key={i} className="h-[104px] rounded-2xl bg-emerald-100/70 animate-pulse" />
+                ))}
+              </div>
+            )}
+
+            {!tiersLoading && TIER_CARDS.filter(({ tier }) => !tierHours || tierHours[tier]).map(({ tier, title, icon: Icon, gradient, iconClass, iconStyle }) => (
               <div key={tier} className="rounded-2xl overflow-hidden shadow-lg flex flex-col flex-1">
                 <div className={`bg-gradient-to-br ${gradient} p-5 text-white flex-1 flex items-center`}>
                   <div className="flex gap-4 items-center w-full">
@@ -110,6 +194,9 @@ export default function RatesPolicies() {
                 </div>
               </div>
             ))}
+
+            {/* Mobile: right after the rate tiers */}
+            <EventRentalsCard className="md:hidden" />
 
             {/* Equipment Rental Card */}
             <div className="rounded-xl border-2 border-emerald-500 bg-white p-5 shadow-sm">
@@ -218,6 +305,9 @@ export default function RatesPolicies() {
             </div>
           </div>
         </div>
+
+        {/* Desktop: full width under both columns */}
+        <EventRentalsCard className="hidden md:block mt-6" />
 
         <p className="text-xs text-gray-500 text-center mt-6">
           Prices and policies are subject to change. For group bookings or special requests, please contact us.
