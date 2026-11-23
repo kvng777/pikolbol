@@ -2,7 +2,7 @@
 
 import { useMemo, type CSSProperties } from 'react'
 import { format, parseISO } from 'date-fns'
-import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw, CalendarClock } from 'lucide-react'
+import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw, CalendarClock, PartyPopper, Users, Plus, ArrowRight } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { usePricingVersions } from '@/hooks/usePricing'
 import { describeTierHours, pickPricingVersion, upcomingPricingVersions, diffPricingRules, formatPeso, RATE_TIERS, RATE_TIER_LABELS } from '@/lib/pricing'
@@ -16,6 +16,15 @@ const TIER_CARDS: { tier: RateTier; title: string; icon: LucideIcon; gradient: s
   { tier: 'offpeak', title: 'Off-Peak Rate', icon: Moon, gradient: 'from-emerald-600 to-teal-700', iconClass: 'animate-pulse', iconStyle: { animationDuration: '3s' } },
   { tier: 'latenight', title: 'Evening Rate', icon: Stars, gradient: 'from-emerald-700 to-teal-900', iconClass: 'animate-pulse', iconStyle: { animationDuration: '3s' } },
 ]
+
+// Event packages are quoted by hand (not booked online), so they live here rather than in pricing_schedules.
+const EVENT_PACKAGES = [
+  { hours: 3, price: 3500 },
+  { hours: 4, price: 4000 },
+  { hours: 5, price: 4500, bestValue: true },
+]
+const EVENT_EXTRA_HOUR_PRICE = 800
+const EVENT_MAX_GUESTS = 25
 
 const formatDate = (d: string) => format(parseISO(d), 'MMMM d, yyyy')
 
@@ -226,6 +235,65 @@ export default function RatesPolicies() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Events & Private Rentals */}
+        <div className="mt-6 rounded-xl border-2 border-emerald-500 bg-white p-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="p-2.5 bg-emerald-50 rounded-full flex items-center justify-center h-11 w-11 shrink-0">
+                <PartyPopper className="w-6 h-6 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Events & Private Rentals</h3>
+                <p className="text-sm text-gray-600">Event facilities and court rental</p>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1.5 self-start sm:self-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+              <Users className="w-4 h-4" />
+              Up to {EVENT_MAX_GUESTS} guests
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {EVENT_PACKAGES.map(({ hours, price, bestValue }) => (
+              <div
+                key={hours}
+                className={
+                  bestValue
+                    ? 'relative rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 px-3 py-4 text-center text-white shadow-md'
+                    : 'relative rounded-xl bg-emerald-50/60 px-3 py-4 text-center'
+                }
+              >
+                {bestValue && (
+                  <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950">
+                    Best value
+                  </span>
+                )}
+                <p className={`text-sm font-medium ${bestValue ? 'text-white/80' : 'text-gray-600'}`}>{hours} hours</p>
+                <p className={`mt-1 font-bold ${bestValue ? 'text-white' : 'text-emerald-600'}`}>
+                  <span className="text-sm">Php</span>
+                  <span className="text-2xl sm:text-3xl ml-0.5">{price.toLocaleString()}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+            <p className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 shrink-0">
+                <Plus className="w-4 h-4 text-emerald-600" />
+              </span>
+              Additional hours: <span className="font-semibold text-emerald-600">Php{EVENT_EXTRA_HOUR_PRICE.toLocaleString()}/hour</span>
+            </p>
+            <a
+              href="#contact"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+            >
+              Contact us to book
+              <ArrowRight className="w-4 h-4" />
+            </a>
           </div>
         </div>
 
