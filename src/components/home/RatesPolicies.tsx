@@ -2,7 +2,7 @@
 
 import { useMemo, type CSSProperties } from 'react'
 import { format, parseISO } from 'date-fns'
-import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw, CalendarClock, PartyPopper, Users, Plus, ArrowRight } from 'lucide-react'
+import { Sun, Moon, Stars, CalendarX2, UserX, Package, Clock, RefreshCw, CalendarClock, PartyPopper, Users, Plus, Phone } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { usePricingVersions } from '@/hooks/usePricing'
 import { describeTierHours, pickPricingVersion, upcomingPricingVersions, diffPricingRules, formatPeso, RATE_TIERS, RATE_TIER_LABELS } from '@/lib/pricing'
@@ -25,6 +25,8 @@ const EVENT_PACKAGES = [
 ]
 const EVENT_EXTRA_HOUR_PRICE = 800
 const EVENT_MAX_GUESTS = 25
+const EVENT_PHONE_TEL = '+639064514819'
+const EVENT_PHONE_DISPLAY = '0906 451 4819'
 
 const formatDate = (d: string) => format(parseISO(d), 'MMMM d, yyyy')
 
@@ -73,29 +75,21 @@ function EventRentalsCard({ className }: { className: string }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      {/* A plain price list (one strip, thin dividers) so packages don't read as selectable options */}
+      <dl className="grid grid-cols-3 divide-x divide-emerald-200 rounded-xl bg-emerald-50/60 py-4">
         {EVENT_PACKAGES.map(({ hours, price, bestValue }) => (
-          <div
-            key={hours}
-            className={
-              bestValue
-                ? 'relative rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 px-3 py-4 text-center text-white shadow-md'
-                : 'relative rounded-xl bg-emerald-50/60 px-3 py-4 text-center'
-            }
-          >
-            {bestValue && (
-              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950">
-                Best value
-              </span>
-            )}
-            <p className={`text-sm font-medium ${bestValue ? 'text-white/80' : 'text-gray-600'}`}>{hours} hours</p>
-            <p className={`mt-1 font-bold ${bestValue ? 'text-white' : 'text-emerald-600'}`}>
+          <div key={hours} className="flex flex-col items-center px-2 text-center">
+            <dt className="text-sm font-medium text-gray-600">{hours} hours</dt>
+            <dd className="mt-1 font-bold text-emerald-600">
               <span className="text-sm">Php</span>
               <span className="text-2xl sm:text-3xl ml-0.5">{price.toLocaleString()}</span>
-            </p>
+            </dd>
+            {bestValue && (
+              <dd className="mt-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">Best value</dd>
+            )}
           </div>
         ))}
-      </div>
+      </dl>
 
       <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
         <p className="inline-flex items-center gap-2 text-sm text-gray-700">
@@ -104,13 +98,15 @@ function EventRentalsCard({ className }: { className: string }) {
           </span>
           Additional hours: <span className="font-semibold text-emerald-600">Php{EVENT_EXTRA_HOUR_PRICE.toLocaleString()}/hour</span>
         </p>
-        <a
-          href="#contact"
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
-        >
-          Contact us to book
-          <ArrowRight className="w-4 h-4" />
-        </a>
+        <p className="inline-flex items-center gap-2 text-sm text-gray-700">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 shrink-0">
+            <Phone className="w-3.5 h-3.5 text-emerald-600" />
+          </span>
+          To book, call
+          <a href={`tel:${EVENT_PHONE_TEL}`} className="font-semibold text-emerald-600 underline underline-offset-2 hover:text-emerald-700">
+            {EVENT_PHONE_DISPLAY}
+          </a>
+        </p>
       </div>
     </div>
   )
